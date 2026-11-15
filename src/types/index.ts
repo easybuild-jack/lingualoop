@@ -66,8 +66,15 @@ export interface RootItem {
 // 2. 词库与单元模型
 // ==========================================
 
+/**
+ * 云模式下自定义内容的归属：null = 共享（所有已登录账号可见、可改、可删），
+ * 非空 = 该账号的个人内容。undefined 表示未指定（本地模式，或写入时不改归属）。
+ */
+export type ContentAccountId = string | null;
+
 export interface VocabularyBook {
   id: string;
+  accountId?: ContentAccountId;
   name: string;                                 // 词库名 (如 "CET-4 核心词库")
   description: string;                          // 词库描述
   category: 'exam' | 'developer' | 'custom' | 'daily';
@@ -238,6 +245,7 @@ export interface TranslationSentenceItem {
 
 export interface TranslationBook {
   id: string;
+  accountId?: ContentAccountId;
   name: string;                  // 句库名称 (如 "经典五大基础句型", "日常高频情景交流")
   description?: string;
   category: 'core' | 'daily' | 'business' | 'custom' | string;
