@@ -1,5 +1,13 @@
 # Supabase 数据库脚本修订方案（v2 建议稿）
 
+> **⚠ 本文已被取代，仅作历史参考。**
+> 作者后来确定了账号模型（`account_id`：进度表必填，内容表可空，NULL 表示共享），并要求直接修改脚本。
+> 最终结果以这两份为准：
+> - 数据库脚本：`supabase/schema.sql`（schema_version = 2，已包含账号模型和下文的全部库层修复，并支持从 v1 原地升级）
+> - 开发计划：`docs/supabase-dev-plan.md`（需求、已定规则、库表改动、后续代码改造、不做的事、验收标准、待确认项）
+>
+> 下文中凡是与这两份冲突的内容（没有账号字段、`app_state` 保留 `id = 1` 和 `book_mode_progress`、单独的升级 SQL 等），都以新脚本和开发计划为准。
+
 > 基准：`supabase/schema.sql`（v1，dev2 分支现状）、`docs/update.md`、上一轮报告 `docs/supabase-review-report.md`。
 > 前提（作者已定）：
 > 1. 官方词库（CET4、考研等）不入库，以 JSON 放在 `public/dicts/` 本地；**官方词库的学习进度入库**。
