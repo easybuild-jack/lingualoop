@@ -21,6 +21,7 @@ create table if not exists vocab_books (
   name         text        not null,
   description  text        not null default '',
   category     text        not null default 'custom',
+  is_custom    boolean     not null default true,
   unit_size    integer     not null default 20,
   total_words  integer     not null default 0,
   words        jsonb       not null default '[]'::jsonb,  -- WordItem[]
@@ -122,9 +123,27 @@ create table if not exists reading_articles (
   id          text primary key,
   title       text   not null,
   paragraphs  jsonb  not null default '[]'::jsonb,         -- ReadingSentence[][]
+  is_custom   boolean not null default true,
   created_at  bigint not null,
   updated_at  bigint not null
 );
+
+-- -----------------------------------------------------------------------------
+-- 7.1 外部工具收词收件箱
+--     外部翻译小工具直接 insert 一行（word 必填，word_item 可留空由本应用补全），
+--     本应用在云模式下轮询 pulled_at is null 的记录并收进生词本 / 「翻译工具收藏」词库。
+--     未配置数据库时不收词，本表也不参与任何本地逻辑。
+-- -----------------------------------------------------------------------------
+create table if not exists collected_words (
+  id          bigserial primary key,
+  word        text   not null,
+  meaning     text,
+  source      text,
+  word_item   jsonb,
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  pulled_at   bigint
+);
+create index if not exists collected_words_pending_idx on collected_words (id) where pulled_at is null;
 
 -- -----------------------------------------------------------------------------
 -- 8. 学习位置与累计进度（单行表，原来存在 localStorage 的进度类字段）
@@ -164,6 +183,7 @@ alter table unit_progress    enable row level security;
 alter table word_overrides   enable row level security;
 alter table translate_books  enable row level security;
 alter table reading_articles enable row level security;
+alter table collected_words    enable row level security;
 alter table app_state        enable row level security;
 alter table translate_state  enable row level security;
 
@@ -188,6 +208,9 @@ create policy anon_all on translate_books  for all to anon using (true) with che
 drop policy if exists anon_all on reading_articles;
 create policy anon_all on reading_articles for all to anon using (true) with check (true);
 
+drop policy if exists anon_all on collected_words;
+create policy anon_all on collected_words  for all to anon using (true) with check (true);
+
 drop policy if exists anon_all on app_state;
 create policy anon_all on app_state        for all to anon using (true) with check (true);
 
@@ -198,5 +221,5 @@ create policy anon_all on translate_state  for all to anon using (true) with che
 grant usage on schema public to anon;
 grant select, insert, update, delete on
   vocab_books, vocab_units, word_records, unit_progress, word_overrides,
-  translate_books, reading_articles, app_state, translate_state
+  translate_books, reading_articles, collected_words, app_state, translate_state
 to anon;

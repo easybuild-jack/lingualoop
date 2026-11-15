@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { BUILTIN_BOOKS } from '@/resources/books'
-import { db, getBookUnitProgressRecords, reconcileUnitProgressRecord, getCustomBooks } from '@/db'
+import { getBookUnitProgressRecords, reconcileUnitProgressRecord, getCustomBooks } from '@/db'
 import { buildFixedUnitId, dictionaryLoader } from '@/core/dictionaryLoader'
 import { startRouteProgressBar } from '@/components/layout/RouteProgressBar'
 import { SkinPicker } from '@/components/layout/SkinPicker'

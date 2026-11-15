@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import {
   type ReadingArticle,
@@ -11,6 +11,8 @@ import { ReadingHeader } from '@/components/reading/ReadingHeader'
 import { ReadingArticleList } from '@/components/reading/ReadingArticleList'
 import { ReadingReaderView } from '@/components/reading/ReadingReaderView'
 import { ReadingUploadModal } from '@/components/reading/ReadingUploadModal'
+import { isCloudMode } from '@/core/cloud/config'
+import { getRepositories } from '@/db/repository'
 
 const STORAGE_KEY = 'lingualoop_reading_articles_v1'
 
@@ -45,11 +47,61 @@ export default function ReadingPage() {
 
   // 搜索与上传弹窗状态
   const [searchQuery, setSearchQuery] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
 
-  // 持久化文章列表
+  // 云模式下用数据库里的文章（内置示例文章仍以代码为准）
+  useEffect(() => {
+    if (!isCloudMode()) return
+    let cancelled = false
+    getRepositories()
+      .reading.getArticles()
+      .then((remote) => {
+        if (cancelled) return
+        const remoteIds = new Set(remote.map((article) => article.id))
+        const merged = [
+          ...remote,
+          ...DEFAULT_READING_ARTICLES.filter((article) => !remoteIds.has(article.id)),
+        ]
+        setArticles(merged)
+        setCurrentId((prev) => prev || merged[0]?.id || '')
+      })
+      .catch((error) => {
+        console.warn('[reading] failed to load cloud articles:', error)
+        if (!cancelled) {
+          setLoadError('云数据库读取失败，暂时只能看到本地示例文章。')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 持久化文章列表：云模式写数据库，本地模式写 localStorage
   const persistArticles = (nextList: ReadingArticle[]) => {
+    const previous = articles
     setArticles(nextList)
+
+    if (isCloudMode()) {
+      const repositories = getRepositories()
+      const nextIds = new Set(nextList.map((article) => article.id))
+      nextList
+        .filter((article) => article.isCustom)
+        .forEach((article) => {
+          void repositories.reading.putArticle(article).catch((error) => {
+            console.warn('[reading] failed to save article:', error)
+          })
+        })
+      previous
+        .filter((article) => article.isCustom && !nextIds.has(article.id))
+        .forEach((article) => {
+          void repositories.reading.deleteArticle(article.id).catch((error) => {
+            console.warn('[reading] failed to delete article:', error)
+          })
+        })
+      return
+    }
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextList))
     } catch {
@@ -96,6 +148,12 @@ export default function ReadingPage() {
           totalCount={articles.length}
           onOpenUpload={() => setIsUploadOpen(true)}
         />
+
+        {loadError && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
+            {loadError}
+          </div>
+        )}
 
         {/* 二级 Tab 导航：文章列表 | 阅读页 */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-border">

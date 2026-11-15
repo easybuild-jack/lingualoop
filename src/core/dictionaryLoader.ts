@@ -1,7 +1,7 @@
 import type { DictUnit, DictUnitCatalog, WordEtymology, WordExample, WordItem } from '@/types'
 import { splitIntoSyllables, isUsableSyllableSplit } from '@/lib/syllables'
 import { buildWordId } from '@/lib/wordId'
-import { db } from '@/db'
+import { getWordOverride, getWordOverridesBulk } from '@/db'
 
 /** 导入时由用户提供的字段，填了就跳过对应的自动推导 */
 export interface WordEnrichOverrides {
@@ -344,7 +344,7 @@ class DictionaryLoader {
     // 5. 检查本地 DB 中的用户修改覆盖
     if (typeof window !== 'undefined' && !customSyllables && !customEtymology) {
       try {
-        const savedOverride = await db.wordOverrides.get(wordId)
+        const savedOverride = await getWordOverride(wordId)
         if (savedOverride) {
           if (savedOverride.syllables?.length) syllables = savedOverride.syllables
           if (savedOverride.etymology !== undefined) etymology = savedOverride.etymology
@@ -449,7 +449,7 @@ class DictionaryLoader {
   private async applyUserOverrides(words: WordItem[]): Promise<WordItem[]> {
     if (typeof window === 'undefined' || words.length === 0) return words
     try {
-      const overrides = await db.wordOverrides.bulkGet(words.map((w) => w.id))
+      const overrides = await getWordOverridesBulk(words.map((w) => w.id))
       for (let i = 0; i < words.length; i++) {
         const override = overrides[i]
         if (!override) continue

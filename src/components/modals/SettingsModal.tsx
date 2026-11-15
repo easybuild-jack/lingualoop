@@ -29,6 +29,7 @@ import {
 import { db } from '@/db'
 import { DICT_CACHE_VERSION_KEY } from '@/core/offlineDictionaryInitializer'
 import { useWorkspaceStore, type SettingsTabId } from '@/store/useWorkspaceStore'
+import { CloudSyncPanel } from '@/components/settings/CloudSyncPanel'
 import {
   useAiAssistantStore,
   AI_PROVIDER_PRESETS,
@@ -38,7 +39,6 @@ import { testAiConnection } from '@/lib/aiClient'
 import { MECHANICAL_SWITCHES, audioEngine } from '@/core/audioEngine'
 import { SHORTCUT_DEFINITIONS, eventToShortcutString, formatShortcutDisplay } from '@/lib/shortcuts'
 import { SKINS } from '@/lib/skins'
-import { isAuthorSyncToken } from '@/lib/permissions'
 import type { ShortcutConfig } from '@/types'
 import { SpeakingTtsPanel } from './settings/SpeakingTtsPanel'
 import { SpeakingAsrPanel } from './settings/SpeakingAsrPanel'
@@ -312,7 +312,7 @@ export function SettingsModal() {
               }`}
             >
               <Link2 className="size-4 shrink-0" />
-              <span>外部工具同步</span>
+              <span>数据与云同步</span>
             </button>
 
             <button
@@ -1108,22 +1108,17 @@ export function SettingsModal() {
 
             {activeTab === 'sync' && (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">外部小工具生词收集 (External Sync)</h3>
-                  <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                    在您的 AI 翻译小工具中点击收藏，即可通过 HTTP 接口实时将单词列表推送到 LinguaLoop 生错词本。
-                  </p>
-                </div>
+                <CloudSyncPanel />
 
-                {/* 专属同步密钥 */}
-                <div className="p-6 rounded-lg border border-border space-y-4">
+                {/* 作者身份密钥：仅用于解锁官方词库的音节切分维护权限，与数据同步无关 */}
+                <div className="p-6 rounded-lg border border-border space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <label className="text-base font-semibold text-foreground block">
-                        专属同步密钥 (Token)
+                      <label className="text-sm font-semibold text-foreground block">
+                        作者身份密钥（可选）
                       </label>
                       <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                        系统仅在配置了同步密钥后才会启动自动同步拉取；留空时将保持静默，不进行数据拉取。若服务端设置了 <code className="text-primary font-mono font-bold">COLLECT_TOKEN</code> 作为通信暗号，请在此填入相同密钥。
+                        仅用于解锁官方词库的音节切分与词根构词维护权限，留空不影响任何学习功能。
                       </p>
                     </div>
                     <span
@@ -1133,21 +1128,16 @@ export function SettingsModal() {
                           : 'bg-transparent text-muted-foreground border-border'
                       }`}
                     >
-                      {syncToken.trim() ? '● 已启动同步拉取' : '○ 未配置（未启动同步）'}
+                      {syncToken.trim() ? '● 已识别' : '○ 未配置'}
                     </span>
                   </div>
                   <input
                     type="text"
                     value={syncToken}
                     onChange={(e) => handleUpdateToken(e.target.value)}
-                    placeholder="请输入同步密钥以启动实时同步拉取（未配置时不拉取）"
+                    placeholder="留空即可，仅作者本人需要填写"
                     className="w-full bg-transparent border border-border rounded-md px-4 py-3 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
                   />
-                  {isAuthorSyncToken(syncToken) && (
-                    <div className="flex items-center gap-2 p-3.5 rounded-xl bg-primary/10 border border-primary/25 text-sm text-primary font-medium">
-                                            <span>已识别为系统作者身份（享有官方词库音节切分与词根构词维护权限）</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}

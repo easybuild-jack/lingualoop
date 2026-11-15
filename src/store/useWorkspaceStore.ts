@@ -4,7 +4,7 @@ import type { DictUnit, DictationCueMode, PracticeMode, WordItem, VocabularyBook
 import { isAutoAudioMuted, isMeaningStepActive } from '@/lib/dictationCue'
 import { BUILTIN_BOOKS, INITIAL_SAMPLE_WORDS } from '@/resources/books'
 import { BUILTIN_ROOTS, ROOT_DATA_MAP, type RootTabType } from '@/resources/roots'
-import { db, recordWordAttempt, toggleStarWord, eliminateErrorWord, saveWordOverride, deleteCustomVocabularyBook, reconcileUnitProgressRecord, markUnitWordCompleted, markUnitWordForRetry, clearUnitProgress } from '@/db'
+import { getVocabularyBookById, deleteVocabularyBookById, getAllWordRecords, recordWordAttempt, toggleStarWord, eliminateErrorWord, saveWordOverride, deleteCustomVocabularyBook, reconcileUnitProgressRecord, markUnitWordCompleted, markUnitWordForRetry, clearUnitProgress } from '@/db'
 import { audioEngine } from '@/core/audioEngine'
 import { buildFixedUnitId, dictionaryLoader } from '@/core/dictionaryLoader'
 import { DEFAULT_SHORTCUTS } from '@/lib/shortcuts'
@@ -818,10 +818,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           const dynamicTotal = await dictionaryLoader.getBookTotalWords(builtin.id)
           book = { ...builtin, totalWords: dynamicTotal > 0 ? dynamicTotal : builtin.totalWords }
           try {
-            await db.books.delete(bookId)
+            await deleteVocabularyBookById(bookId)
           } catch {}
         } else {
-          const custom = await db.books.get(bookId)
+          const custom = await getVocabularyBookById(bookId)
           book = custom || BUILTIN_BOOKS[0]
         }
         if (actionSequence !== latestPracticeActionSequence) return
@@ -912,7 +912,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           const dynamicTotal = await dictionaryLoader.getBookTotalWords(builtin.id)
           book = { ...builtin, totalWords: dynamicTotal > 0 ? dynamicTotal : builtin.totalWords }
         } else {
-          const custom = await db.books.get(bookId)
+          const custom = await getVocabularyBookById(bookId)
           book = custom || BUILTIN_BOOKS[0]
         }
         if (actionSequence !== latestPracticeActionSequence) return
@@ -1561,7 +1561,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       syncStarredWordIds: async () => {
         try {
-          const records = await db.wordRecords.toArray()
+          const records = await getAllWordRecords()
           const starredIds = records.filter((r) => r.isStarred).map((r) => r.wordId)
           set({ starredWordIds: starredIds })
         } catch (err) {

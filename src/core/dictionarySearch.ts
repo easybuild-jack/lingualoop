@@ -1,6 +1,7 @@
 import type { WordItem, WordEtymology } from '@/types'
 import { dictionaryLoader, OFFICIAL_BOOK_FILE_MAP } from '@/core/dictionaryLoader'
-import { db, getWordFromAiCache, searchWordsInAiCache } from '@/db'
+import { getVocabularyBookById, getWordFromAiCache, searchWordsInAiCache } from '@/db'
+import { getRepositories } from '@/db/repository'
 import { queryAiWordCore } from '@/lib/aiWordCore'
 import type { AiClientConfig } from '@/lib/aiClient'
 import { isLikelyEnglishWord } from '@/lib/wordValidation'
@@ -105,7 +106,7 @@ async function searchExactWordInBooks(
   // ---- 阶段 1：优先检索当前词库 ----
   if (currentBookId.startsWith('book_custom_')) {
     try {
-      const customBook = await db.books.get(currentBookId)
+      const customBook = await getVocabularyBookById(currentBookId)
       if (customBook?.words?.length) {
         const found = customBook.words.find((w) => w.name.toLowerCase() === clean)
         if (found) {
@@ -154,7 +155,9 @@ async function searchExactWordInBooks(
 
   // ---- 阶段 3：从其他自定义词库检索 ----
   try {
-    const customBooks = await db.books.filter((b) => Boolean(b.isCustom && b.id !== currentBookId)).toArray()
+    const customBooks = (await getRepositories().books.getCustom()).filter(
+      (b) => b.id !== currentBookId
+    )
     for (const book of customBooks) {
       if (book.words?.length) {
         const found = book.words.find((w) => w.name.toLowerCase() === clean)
