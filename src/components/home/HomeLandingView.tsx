@@ -34,22 +34,13 @@ import { ModuleRouteMap } from './ModuleRouteMap'
 import { LoopDiagram } from './LoopDiagram'
 import { ProductPreview } from './ProductPreview'
 
-/** 预留开源仓库地址，后续替换为实际仓库 URL */
-const GITHUB_REPO_URL = 'https://github.com/your-org/lingualoop'
-const GITEE_REPO_URL = 'https://gitee.com/your-org/lingualoop'
+/** 开源仓库地址（浏览器访问用，克隆地址为 https://github.com/easybuild-jack/lingualoop.git） */
+const GITHUB_REPO_URL = 'https://github.com/easybuild-jack/lingualoop'
 
 function GithubIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
       <path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.38-3.88-1.38-.52-1.33-1.28-1.68-1.28-1.68-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.64 1.59.24 2.76.12 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.41-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
-    </svg>
-  )
-}
-
-function GiteeIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
-      <path d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z" />
     </svg>
   )
 }
@@ -213,15 +204,6 @@ export function HomeLandingView() {
               className="size-8 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center justify-center transition-colors"
             >
               <GithubIcon className="size-4" />
-            </a>
-            <a
-              href={GITEE_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Gitee 仓库"
-              className="size-8 rounded-md border border-border hover:bg-muted inline-flex items-center justify-center transition-colors"
-            >
-              <GiteeIcon className="size-3.5 text-[#C71D23]" />
             </a>
             <Link
               href="/learn"
@@ -725,10 +707,6 @@ export function HomeLandingView() {
             <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer" className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors">
               <GithubIcon className="size-3.5" />
               <span>GitHub</span>
-            </a>
-            <a href={GITEE_REPO_URL} target="_blank" rel="noopener noreferrer" className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors">
-              <GiteeIcon className="size-3.5 text-[#C71D23]" />
-              <span>Gitee</span>
             </a>
             <Link href="/learn" className="hover:text-foreground transition-colors">
               开始学习 →
