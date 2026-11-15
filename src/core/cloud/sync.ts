@@ -92,6 +92,21 @@ function readCustomTranslateBooks(): TranslationBook[] {
   return useTranslateStore.getState().books.filter((book) => book.isCustom)
 }
 
+/**
+ * 等 localStorage 里的翻译题库水合完成再决定从云端拉取。
+ * 否则可能先读到默认值、随后又被 persist 的旧数据覆盖，把云端题库撞掉。
+ */
+export async function ensureTranslateHydrated(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (useTranslateStore.persist?.hasHydrated?.()) return
+  await new Promise<void>((resolve) => {
+    const unsubscribe = useTranslateStore.persist.onFinishHydration(() => {
+      unsubscribe()
+      resolve()
+    })
+  })
+}
+
 function translateStateSnapshot(): TranslateProgressState {
   const state = useTranslateStore.getState()
   return {
@@ -103,6 +118,7 @@ function translateStateSnapshot(): TranslateProgressState {
 
 /** 用云端自定义题库 + 完成记录覆盖本地（内置预置题库始终以代码为准） */
 export async function hydrateTranslateProgress(): Promise<void> {
+  await ensureTranslateHydrated()
   const repositories = getRepositories()
   const [books, state] = await Promise.all([
     repositories.translate.getBooks(),
@@ -136,6 +152,7 @@ export async function hydrateTranslateProgress(): Promise<void> {
 }
 
 export function startTranslateSync(): () => void {
+  void ensureTranslateHydrated()
   let lastBooks = JSON.stringify(readCustomTranslateBooks())
   let lastState = JSON.stringify({ ...translateStateSnapshot(), updatedAt: 0 })
 
