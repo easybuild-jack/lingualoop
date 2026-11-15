@@ -14,6 +14,20 @@ import {
   Check,
   AlertCircle,
 } from 'lucide-react'
+import { CloudVisibilityField } from '@/components/cloud/VisibilityPicker'
+import { contentOwnerFor, type ContentVisibility } from '@/core/cloud/visibility'
+import { isCloudSignedIn } from '@/core/cloud/config'
+
+function normalizeMediaUrl(raw: string): string | null {
+  const value = raw.trim()
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
 
 interface RadioUploadModalProps {
   isOpen: boolean
@@ -47,6 +61,8 @@ export function RadioUploadModal({
   const [scenario, setScenario] = useState<RadioScenario>('日常生活')
   const [customScenario, setCustomScenario] = useState('')
   const [error, setError] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [visibility, setVisibility] = useState<ContentVisibility>('personal')
 
   useEffect(() => {
     if (isOpen) {
@@ -57,6 +73,8 @@ export function RadioUploadModal({
       setScenario('日常生活')
       setCustomScenario('')
       setError('')
+      setLinkUrl('')
+      setVisibility('personal')
     }
   }, [isOpen, defaultCategory])
 
@@ -71,6 +89,7 @@ export function RadioUploadModal({
   const processFile = (file: File) => {
     setError('')
     setSelectedFile(file)
+    setLinkUrl('')
 
     // 默认标题使用文件名（去掉后缀）
     const defaultName = file.name.replace(/\.[^/.]+$/, '')
@@ -93,8 +112,13 @@ export function RadioUploadModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!selectedFile && !fileUrl) {
-      setError('请先选择或拖拽一个视频文件')
+    const remoteUrl = selectedFile ? null : normalizeMediaUrl(linkUrl)
+    if (!selectedFile && linkUrl.trim() && !remoteUrl) {
+      setError('视频链接需以 http:// 或 https:// 开头')
+      return
+    }
+    if (!selectedFile && !remoteUrl) {
+      setError('请先选择视频文件或填写视频链接')
       return
     }
 
@@ -105,12 +129,15 @@ export function RadioUploadModal({
 
     const finalScenario = category === 'dialogue' ? (customScenario.trim() || scenario) : ''
 
+    // 本地文件只是 Blob URL，无法入库；只有链接视频才带归属并保存到云端
+    const owner = remoteUrl ? contentOwnerFor(visibility) : undefined
     const newItem: RadioItem = {
       id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...(owner !== undefined ? { accountId: owner } : {}),
       category,
       title: title.trim(),
       type: 'video',
-      src: fileUrl,
+      src: remoteUrl ?? fileUrl,
       duration: 60, // 初始估算，实际播放时会自动根据 duration 动态纠正
       scenario: finalScenario,
       createdAt: Date.now(),
@@ -215,6 +242,37 @@ export function RadioUploadModal({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* 视频链接：可保存到云端 */}
+          <div>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
+              或填写视频链接
+            </label>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => {
+                setLinkUrl(e.target.value)
+                if (e.target.value.trim() && selectedFile) {
+                  setSelectedFile(null)
+                  setFileUrl('')
+                }
+                if (error) setError('')
+              }}
+              placeholder="https://example.com/video.mp4"
+              className="w-full h-9 px-3 rounded-xl bg-card border border-border text-xs sm:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
+            />
+            {isCloudSignedIn() && (
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                {selectedFile
+                  ? '本地视频文件仅本次会话可播放，不会保存到云端；如需保存请改用视频链接。'
+                  : '视频链接会保存到云端数据库。'}
+              </p>
+            )}
+            {!selectedFile && (
+              <CloudVisibilityField value={visibility} onChange={setVisibility} label="保存为" className="mt-3" />
+            )}
           </div>
 
           {/* 视频名称 */}

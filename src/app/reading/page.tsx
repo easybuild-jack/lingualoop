@@ -17,7 +17,8 @@ import { getRepositories } from '@/db/repository'
 const STORAGE_KEY = 'lingualoop_reading_articles_v1'
 
 function loadInitialArticles(): ReadingArticle[] {
-  if (typeof window === 'undefined') return DEFAULT_READING_ARTICLES
+  // 云模式下本地存的是本地模式那份文章，不能先展示出来，等云端列表返回
+  if (typeof window === 'undefined' || isCloudMode()) return DEFAULT_READING_ARTICLES
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -48,7 +49,10 @@ export default function ReadingPage() {
   // 搜索与上传弹窗状态
   const [searchQuery, setSearchQuery] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  // 云模式下列表返回前不允许增删，避免基于不完整的列表写库
+  const [isCloudLoading, setIsCloudLoading] = useState(() => isCloudMode())
 
   // 云模式下用数据库里的文章（内置示例文章仍以代码为准）
   useEffect(() => {
@@ -64,50 +68,31 @@ export default function ReadingPage() {
           ...DEFAULT_READING_ARTICLES.filter((article) => !remoteIds.has(article.id)),
         ]
         setArticles(merged)
-        setCurrentId((prev) => prev || merged[0]?.id || '')
+        setCurrentId((prev) => (merged.some((article) => article.id === prev) ? prev : merged[0]?.id || ''))
       })
       .catch((error) => {
         console.warn('[reading] failed to load cloud articles:', error)
         if (!cancelled) {
-          setLoadError('云数据库读取失败，暂时只能看到本地示例文章。')
+          setLoadError('云数据库读取失败，暂时只能看到内置示例文章，上传与删除已暂停。')
         }
+      })
+      .finally(() => {
+        if (!cancelled) setIsCloudLoading(false)
       })
     return () => {
       cancelled = true
     }
   }, [])
 
-  // 持久化文章列表：云模式写数据库，本地模式写 localStorage
-  const persistArticles = (nextList: ReadingArticle[]) => {
-    const previous = articles
-    setArticles(nextList)
-
-    if (isCloudMode()) {
-      const repositories = getRepositories()
-      const nextIds = new Set(nextList.map((article) => article.id))
-      nextList
-        .filter((article) => article.isCustom)
-        .forEach((article) => {
-          void repositories.reading.putArticle(article).catch((error) => {
-            console.warn('[reading] failed to save article:', error)
-          })
-        })
-      previous
-        .filter((article) => article.isCustom && !nextIds.has(article.id))
-        .forEach((article) => {
-          void repositories.reading.deleteArticle(article.id).catch((error) => {
-            console.warn('[reading] failed to delete article:', error)
-          })
-        })
-      return
-    }
-
+  const saveLocalArticles = (nextList: ReadingArticle[]) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextList))
     } catch {
       // ignore storage errors
     }
   }
+
+  const cloudWritable = !isCloudMode() || (!isCloudLoading && !loadError)
 
   // 当前正在阅读的文章
   const currentArticle = useMemo(() => {
@@ -121,21 +106,47 @@ export default function ReadingPage() {
     return articles.filter((a) => a.title.toLowerCase().includes(q))
   }, [articles, searchQuery])
 
-  // 新增自定义文章
+  // 新增自定义文章：云模式只写这一篇，失败则从列表撤回
   const handleAddArticle = (newArticle: ReadingArticle) => {
+    if (!cloudWritable) return
     const next = [newArticle, ...articles]
-    persistArticles(next)
+    setArticles(next)
     setCurrentId(newArticle.id)
     setActiveTab('reader')
+    if (!isCloudMode()) {
+      saveLocalArticles(next)
+      return
+    }
+    getRepositories()
+      .reading.putArticle(newArticle)
+      .catch((error) => {
+        console.warn('[reading] failed to save article:', error)
+        setArticles((prev) => prev.filter((article) => article.id !== newArticle.id))
+        setActionError(`文章保存失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+      })
   }
 
-  // 删除文章
+  // 删除文章：云模式只删这一篇，失败则恢复
   const handleDeleteArticle = (id: string) => {
+    if (!cloudWritable) return
+    const removed = articles.find((a) => a.id === id)
     const next = articles.filter((a) => a.id !== id)
-    persistArticles(next)
+    setArticles(next)
     if (currentId === id) {
       setCurrentId(next[0]?.id || '')
     }
+    if (!isCloudMode()) {
+      saveLocalArticles(next)
+      return
+    }
+    if (!removed?.isCustom) return
+    getRepositories()
+      .reading.deleteArticle(id)
+      .catch((error) => {
+        console.warn('[reading] failed to delete article:', error)
+        setArticles((prev) => (prev.some((article) => article.id === id) ? prev : [removed, ...prev]))
+        setActionError(`文章删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+      })
   }
 
   return (
@@ -146,12 +157,14 @@ export default function ReadingPage() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           totalCount={articles.length}
-          onOpenUpload={() => setIsUploadOpen(true)}
+          onOpenUpload={() => {
+            if (cloudWritable) setIsUploadOpen(true)
+          }}
         />
 
-        {loadError && (
+        {(loadError || actionError) && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
-            {loadError}
+            {loadError || actionError}
           </div>
         )}
 
