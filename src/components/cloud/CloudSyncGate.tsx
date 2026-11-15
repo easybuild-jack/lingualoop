@@ -1,48 +1,86 @@
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CloudOff, RefreshCw } from 'lucide-react'
-import { ensureWorkspaceHydrated } from '@/store/useWorkspaceStore'
-import { isCloudConfigured, isCloudMode, setOfflineFallback, subscribeCloudMode } from '@/core/cloud/config'
-import { probeCloudConnection, type CloudProbeStatus } from '@/core/cloud/client'
+import { usePathname, useRouter } from 'next/navigation'
+import { AlertTriangle, CloudOff, LogOut, RefreshCw } from 'lucide-react'
+import { ensureLocalWorkspaceHydrated } from '@/store/useWorkspaceStore'
 import {
+  cloudScopeSignature,
+  getCloudSession,
+  isCloudConfigured,
+  isCloudMode,
+  setOfflineFallback,
+  subscribeCloudMode,
+} from '@/core/cloud/config'
+import { probeCloudConnection, type CloudProbeStatus } from '@/core/cloud/client'
+import { logoutAccount, verifyCurrentAccount } from '@/core/cloud/account'
+import { markCloudHydrated, resetCloudHydration } from '@/core/cloud/readiness'
+import {
+  flushCloudSync,
   hydrateTranslateProgress,
   hydrateWorkspaceProgress,
+  startFlushOnPageHide,
   startTranslateSync,
   startWorkspaceProgressSync,
 } from '@/core/cloud/sync'
+import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 type GateStatus = 'idle' | 'checking' | 'ready' | 'error'
+
+function loginHref(pathname: string | null): string {
+  const next = pathname && pathname !== '/login' ? `?next=${encodeURIComponent(pathname)}` : ''
+  return `/login${next}`
+}
 
 /**
  * 云数据库连接守卫。
  *
- * 配置了数据库时负责：启动体检 → 从云端拉回进度 → 启动变更推送。
+ * 配置了数据库时负责：未登录跳转登录页 → 启动体检 → 从云端拉回进度 → 启动变更推送。
  * 连不上时给出「重试 / 临时改用本地模式」两个出口，
  * 选本地模式后业务数据回到浏览器，且不会与云端互相覆盖（下次恢复云端以云端为准）。
+ * 未配置数据库时什么都不做，与纯本地版本完全一致。
  */
 export function CloudSyncGate() {
+  const router = useRouter()
+  const pathname = usePathname()
   const [status, setStatus] = useState<GateStatus>('idle')
   const [message, setMessage] = useState('')
   const [kind, setKind] = useState<CloudProbeStatus>('unknown')
   const cleanupsRef = useRef<Array<() => void>>([])
+  const pathnameRef = useRef(pathname)
+  const scopeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
 
   const stopSync = useCallback(() => {
+    flushCloudSync()
     cleanupsRef.current.forEach((dispose) => dispose())
     cleanupsRef.current = []
   }, [])
 
   const start = useCallback(async () => {
     stopSync()
+    resetCloudHydration()
 
     if (!isCloudConfigured() || !isCloudMode()) {
+      markCloudHydrated()
       setStatus('idle')
+      return
+    }
+
+    if (!getCloudSession()) {
+      markCloudHydrated()
+      setStatus('idle')
+      if (!isChromelessRoute(pathnameRef.current)) router.replace(loginHref(pathnameRef.current))
       return
     }
 
     setStatus('checking')
     const probe = await probeCloudConnection()
     if (!probe.ok) {
+      markCloudHydrated()
       setKind(probe.status)
       setMessage(probe.message)
       setStatus('error')
@@ -50,22 +88,37 @@ export function CloudSyncGate() {
     }
 
     try {
-      await ensureWorkspaceHydrated()
+      if (!(await verifyCurrentAccount())) {
+        logoutAccount()
+        window.location.replace(loginHref(pathnameRef.current))
+        return
+      }
+      await ensureLocalWorkspaceHydrated()
       await hydrateWorkspaceProgress()
       await hydrateTranslateProgress()
-      cleanupsRef.current.push(startWorkspaceProgressSync(), startTranslateSync())
+      markCloudHydrated()
+      cleanupsRef.current.push(startWorkspaceProgressSync(), startTranslateSync(), startFlushOnPageHide())
       setStatus('ready')
     } catch (error) {
+      markCloudHydrated()
       setKind('unknown')
       setMessage(error instanceof Error ? error.message : '云数据库初始化失败')
       setStatus('error')
     }
-  }, [stopSync])
+  }, [router, stopSync])
 
   useEffect(() => {
+    scopeRef.current = cloudScopeSignature()
     // 放到微任务里启动，避免在 effect 体内同步 setState 触发级联渲染
     queueMicrotask(() => void start())
-    const unsubscribe = subscribeCloudMode(() => void start())
+    const unsubscribe = subscribeCloudMode(() => {
+      // 模式、数据库或账号变了（包括其他标签页里的操作）：整页重载，避免内存数据与写入目标错位
+      // 登录页登录成功后会自己整页跳转，这里不抢先重载
+      if (cloudScopeSignature() !== scopeRef.current && pathnameRef.current !== '/login') {
+        stopSync()
+        window.location.reload()
+      }
+    })
     const handleOffline = () => {
       if (!isCloudMode()) return
       setKind('network')
@@ -80,10 +133,20 @@ export function CloudSyncGate() {
     }
   }, [start, stopSync])
 
+  // 未登录时访问任何业务页面都回到登录页
+  useEffect(() => {
+    if (!isCloudMode() || getCloudSession() || isChromelessRoute(pathname)) return
+    router.replace(loginHref(pathname))
+  }, [pathname, router])
+
   const useLocalMode = () => {
-    setOfflineFallback(true)
     stopSync()
-    window.location.reload()
+    setOfflineFallback(true)
+  }
+
+  const handleRelogin = () => {
+    stopSync()
+    logoutAccount()
   }
 
   if (status !== 'error') return null
@@ -107,11 +170,19 @@ export function CloudSyncGate() {
           <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
             {isNetworkIssue
               ? '可以选择临时使用本地模式：数据会保存到这台设备，不会同步到云端；恢复连接后重新切回云端，将以云端数据为准。'
-              : '请先检查设置里的项目地址与 anon key；如果是首次配置，还需要先在 Supabase 的 SQL Editor 里执行建表脚本。'}
+              : '请先检查设置里的项目地址与 anon key；如果是首次配置或刚升级，还需要先在 Supabase 的 SQL Editor 里执行最新的 supabase/schema.sql。'}
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-4">
+          <button
+            type="button"
+            onClick={handleRelogin}
+            className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <LogOut className="size-4" />
+            <span>退出登录</span>
+          </button>
           <button
             type="button"
             onClick={useLocalMode}

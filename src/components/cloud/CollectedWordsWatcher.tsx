@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Sparkles, ArrowRight, X } from 'lucide-react'
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
-import { isCloudMode, subscribeCloudMode } from '@/core/cloud/config'
+import { isCloudSignedIn, subscribeCloudMode } from '@/core/cloud/config'
 import { pullCollectedWords } from '@/core/cloud/collector'
 
 interface SyncToastItem {
@@ -21,7 +21,7 @@ const POLL_INTERVAL_MS = 20000
 /**
  * 外部工具收词提示。
  *
- * 只在云模式下轮询收件箱；没配置数据库时完全不发请求，也就不会收词。
+ * 只在云模式且已登录时轮询收件箱；没配置数据库或未登录时完全不发请求，也就不会收词。
  */
 export function CollectedWordsWatcher() {
   const router = useRouter()
@@ -29,7 +29,7 @@ export function CollectedWordsWatcher() {
   const isPollingRef = useRef(false)
 
   const runOnce = useCallback(async () => {
-    if (!isCloudMode() || isPollingRef.current) return
+    if (!isCloudSignedIn() || isPollingRef.current) return
     isPollingRef.current = true
     try {
       const result = await pullCollectedWords()
@@ -67,7 +67,8 @@ export function CollectedWordsWatcher() {
     const startPolling = () => {
       if (timer) clearInterval(timer)
       timer = null
-      if (!isCloudMode()) return
+      window.removeEventListener('focus', runOnce)
+      if (!isCloudSignedIn()) return
       void runOnce()
       timer = setInterval(() => void runOnce(), POLL_INTERVAL_MS)
       window.addEventListener('focus', runOnce)
