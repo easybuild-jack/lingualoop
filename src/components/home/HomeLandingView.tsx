@@ -711,44 +711,6 @@ export function HomeLandingView() {
             <ModuleRouteMap />
           </div>
         </section>
-
-        {/* ==================== 9. 收尾 CTA ==================== */}
-        <section className="max-w-[1240px] mx-auto px-5 sm:px-8 py-24">
-          <Reveal className="relative overflow-hidden rounded-3xl border border-primary/30 bg-primary/[0.07] px-6 py-16 sm:py-20 text-center">
-            <img src="/logo222.png" alt="" className="relative mx-auto size-16 object-contain animate-[home-float_6s_ease-in-out_infinite]" />
-            <h2 className="relative mt-6 text-3xl sm:text-5xl font-semibold tracking-tight text-foreground">
-              今天，开启你的英语 <span className="font-serif italic font-normal text-primary">Loop</span>
-            </h2>
-            <p className="relative mt-4 text-sm sm:text-base text-muted-foreground">听说读写一站闭环，无需注册，打开即用。完全开源，欢迎 Star 与共建。</p>
-            <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/learn"
-                className="h-11 px-7 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium inline-flex items-center gap-2 transition-all hover:-translate-y-0.5"
-              >
-                <span>立即开始学习</span>
-                <ArrowRight className="size-4" />
-              </Link>
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-11 px-5 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm text-foreground inline-flex items-center gap-2 transition-colors"
-              >
-                <GithubIcon className="size-4" />
-                <span>Star on GitHub</span>
-              </a>
-              <a
-                href={GITEE_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-11 px-5 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm text-foreground inline-flex items-center gap-2 transition-colors"
-              >
-                <GiteeIcon className="size-4 text-[#C71D23]" />
-                <span>Gitee</span>
-              </a>
-            </div>
-          </Reveal>
-        </section>
       </main>
 
       {/* ==================== 底部栏 ==================== */}
