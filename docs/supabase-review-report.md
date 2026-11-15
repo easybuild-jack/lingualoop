@@ -1,6 +1,6 @@
 # dev2 分支 Supabase 相关代码审查报告
 
-> **后续决定（作者确认）**：安全 / RLS / anon key 暴露本次不处理（外部同步工具会直连数据库），因此 M7、L4 以及疑点中关于 `owner_id` 和匿名登录的建议不再作为待办。账号隔离改用简单的 `account_id` 字段（进度表必填，内容表可空，NULL 表示共享）。本报告中能在库层解决的问题（H1、H3、H4、H6、H5 的库层兜底、L3、L9）已经落实到 `supabase/schema.sql`；其余问题的代码改造清单见 `docs/supabase-dev-plan.md`。
+> **后续决定（作者确认）**：安全 / RLS / anon key 暴露本次不处理（外部同步工具会直连数据库），因此 M7、L4 以及疑点中关于 `owner_id` 和匿名登录的建议不再作为待办。账号隔离改用系统自建的 `accounts` 表（账号名 + 密码登录，不使用 Supabase Auth），加上简单的 `account_id` 字段（进度表必填，内容表可空，NULL 表示共享）；数据库只用一个拥有全部权限的连接角色。本报告中能在库层解决的问题（H1、H3、H4、H6、H5 的库层兜底、L3、L9）已经落实到 `supabase/schema.sql`；其余问题的代码改造清单见 `docs/supabase-dev-plan.md`。
 
 | 项目 | 内容 |
 |---|---|
