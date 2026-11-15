@@ -80,9 +80,11 @@ export function SettingsModal() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('audio')
 
   // 若通过外部快捷方式或引导指定了初始 Tab，自动切换至对应设置页
+  // 放到微任务里更新：effect 体内同步 setState 会触发级联渲染，交给微任务后
+  // 同一次渲染周期内完成切换，视觉上与直接设置一致。
   useEffect(() => {
     if (isSettingsModalOpen && settingsInitialTab) {
-      setActiveTab(settingsInitialTab)
+      queueMicrotask(() => setActiveTab(settingsInitialTab))
     }
   }, [isSettingsModalOpen, settingsInitialTab])
   const [recordingAction, setRecordingAction] = useState<keyof ShortcutConfig | null>(null)
@@ -111,14 +113,11 @@ export function SettingsModal() {
     (!AI_PROVIDER_PRESETS[aiConfig.provider]?.hidden && AI_PROVIDER_PRESETS[aiConfig.provider]) ||
     AI_PROVIDER_PRESETS.deepseek
 
-  // 外部工具同步设置状态
-  const [syncToken, setSyncToken] = useState('')
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSyncToken(localStorage.getItem('lingualoop_sync_token') || '')
-    }
-  }, [])
+  // 外部工具同步设置状态：Token 直接从 localStorage 惰性初始，省掉一次挂载后的状态同步
+  const [syncToken, setSyncToken] = useState(
+    () =>
+      (typeof window === 'undefined' ? '' : localStorage.getItem('lingualoop_sync_token')) || ''
+  )
 
   const handleUpdateToken = (val: string) => {
     setSyncToken(val)
@@ -150,7 +149,10 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (isSettingsModalOpen && activeTab === 'dictionary') {
-      refreshWordCount()
+      // 同上：把计数刷新放到微任务里，避免 effect 体内同步 setState
+      queueMicrotask(() => {
+        void refreshWordCount()
+      })
     }
   }, [isSettingsModalOpen, activeTab])
 
