@@ -14,7 +14,7 @@ import { buildWordId } from '@/lib/wordId'
 import { db } from './local'
 import { getRepositories } from './repository'
 import { isCloudMode } from '@/core/cloud/config'
-import { cloudOperations } from '@/core/cloud/supabaseRepository'
+import { cloudMigration, cloudOperations } from '@/core/cloud/supabaseRepository'
 
 export { db }
 export { localRepositories } from './repository'
@@ -336,6 +336,15 @@ export async function getCustomBooks(): Promise<VocabularyBook[]> {
         (b) => b.name === '我的自定义生词本' || b.id === DEFAULT_SAMPLE_CUSTOM_BOOK.id
       )
 
+    if (repositories.mode === 'cloud') {
+      // 云端示例词库 id 固定，可能已被别的账号作为个人内容上传：只补插、不覆盖；
+      // 也不做旧测试数据清理，那些可能是别的账号的共享词库，删了会连带清掉所有账号在该库上的进度
+      if (custom.length > 0) return custom
+      await cloudMigration.insertBooks([DEFAULT_SAMPLE_CUSTOM_BOOK])
+      const sample = await repositories.books.get(DEFAULT_SAMPLE_CUSTOM_BOOK.id)
+      return sample ? [sample] : []
+    }
+
     // 若无数据或仅有旧测试产生的冗余条目，仅保留并呈现 1 个官方标准示例词库
     if (custom.length === 0 || isRedundantLegacyTest) {
       if (isRedundantLegacyTest) {
@@ -353,7 +362,7 @@ export async function getCustomBooks(): Promise<VocabularyBook[]> {
     return custom
   } catch (err) {
     console.error('Failed to load custom books:', err)
-    return [DEFAULT_SAMPLE_CUSTOM_BOOK]
+    return isCloudMode() ? [] : [DEFAULT_SAMPLE_CUSTOM_BOOK]
   }
 }
 
