@@ -8,10 +8,12 @@
 -- 约定：
 --   1. 业务时间戳统一 bigint（epoch 毫秒），与前端 TS 类型一一对应，由客户端写入；
 --      另有 server_updated_at 由触发器在服务端维护，供外部工具按它增量拉取。
---   2. 账号：配置了数据库就需要登录（Supabase Auth），账号字段统一叫 account_id，
---      类型 uuid，对应登录账号的用户 id（JWT 的 sub）。
---      - 学习记录 / 进度表：account_id 不允许为空，进度完全属于当前登录账号；
---        客户端写入时可以不传 account_id，默认取当前登录账号。
+--   2. 账号：系统用户由本项目自己的 accounts 表管理（账号 + 密码），与数据库自身的
+--      角色 / 权限无关。数据库连接只用一个统一的角色（Supabase 上即 anon key），
+--      换成自建 Postgres 时用任意一个有全部表权限的连接账号即可。
+--      配置了数据库就需要登录：register_account / login_account 返回账号 id，
+--      客户端保存在本机，之后每次读写都显式带上 account_id。
+--      - 学习记录 / 进度表：account_id 不允许为空，进度完全属于该账号。
 --      - 自定义内容表（词库 / 句库 / 文章 / 视频 / 收件箱）：account_id 可以为空。
 --        NULL = 共享，所有账号可见、可改、可删；非空 = 个人，只有该账号可见。
 --      - 查询规则：内容表  where account_id is null or account_id = 当前账号
@@ -33,25 +35,17 @@ language sql volatile as $$
   select (extract(epoch from clock_timestamp()) * 1000)::bigint
 $$;
 
--- 当前登录账号：PostgREST 会把 JWT 放进 request.jwt.claims，sub 即 Supabase Auth 用户 id。
--- 未登录（只带 anon key）或外部工具直连时返回 NULL。
-create or replace function public.current_account_id() returns uuid
-language sql stable as $$
-  select nullif(coalesce(
-    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub',
-    current_setting('request.jwt.claim.sub', true)
-  ), '')::uuid
-$$;
+-- 密码哈希用 pgcrypto（Supabase 已预装在 extensions schema；自建 Postgres 会装到 public）
+create extension if not exists pgcrypto;
 
-create or replace function public.require_account_id() returns uuid
-language plpgsql stable as $$
-declare
-  v uuid := public.current_account_id();
+-- 账号相关函数统一要求调用方显式传入 account_id；为空说明客户端还没登录
+create or replace function public.require_account(p_account_id uuid) returns uuid
+language plpgsql immutable as $$
 begin
-  if v is null then
-    raise exception 'not signed in: this operation needs a logged-in account' using errcode = 'P0001';
+  if p_account_id is null then
+    raise exception 'not signed in: account_id is required' using errcode = 'P0001';
   end if;
-  return v;
+  return p_account_id;
 end $$;
 
 create or replace function public.tg_touch_server_updated_at() returns trigger
@@ -61,19 +55,14 @@ begin
   return new;
 end $$;
 
--- 个人内容只属于它的账号：另一个已登录账号按同一个 id 改写或删除它时报错，
--- 防止固定 id（如收藏词库）或盲目 upsert 把别人的个人内容覆盖掉。
--- 共享内容（account_id 为 NULL）不受限制，任何已登录账号都可以改、可以删。
+-- 个人内容不能被改挂到另一个账号名下：防止固定 id（如收藏词库）或盲目 upsert
+-- 带着另一个账号的 account_id 把别人的个人内容覆盖掉。
+-- 个人改为共享（account_id 改为 NULL）、共享改为个人都允许；共享内容任何人都可以改、可以删。
 create or replace function public.tg_personal_content_guard() returns trigger
 language plpgsql as $$
-declare
-  v_me uuid := public.current_account_id();
 begin
-  if old.account_id is not null and v_me is not null and old.account_id <> v_me then
+  if old.account_id is not null and new.account_id is not null and new.account_id <> old.account_id then
     raise exception '% % belongs to another account', tg_table_name, old.id using errcode = '23514';
-  end if;
-  if tg_op = 'DELETE' then
-    return old;
   end if;
   return new;
 end $$;
@@ -142,6 +131,22 @@ insert into schema_meta (key, value) values ('schema_version', '2')
   on conflict (key) do update set value = excluded.value;
 
 -- =============================================================================
+-- 〇、系统账号（本项目自己的用户表，与数据库角色无关）
+--     账号名不区分大小写、不允许重复；密码只存 bcrypt 哈希。
+--     注册 / 登录 / 改密码通过下方 register_account / login_account / change_account_password。
+-- =============================================================================
+create table if not exists accounts (
+  id                 uuid    primary key default gen_random_uuid(),
+  username           text    not null check (username = btrim(username) and length(username) between 1 and 32),
+  password_hash      text    not null,
+  display_name       text,
+  created_at         bigint  not null default public.now_ms(),
+  last_login_at      bigint,
+  server_updated_at  bigint  not null default public.now_ms()
+);
+create unique index if not exists accounts_username_key on accounts (lower(username));
+
+-- =============================================================================
 -- 一、自定义内容表（account_id 可为空：NULL = 共享，非空 = 个人）
 --    主键仍是客户端生成的全局 id（book_custom_<时间戳> 等），account_id 只决定谁能看见。
 --    进度表里的 book_id 因此始终指向唯一的一本书。
@@ -152,7 +157,7 @@ insert into schema_meta (key, value) values ('schema_version', '2')
 -- -----------------------------------------------------------------------------
 create table if not exists vocab_books (
   id                 text    primary key check (id <> ''),
-  account_id         uuid,                                      -- NULL = 共享；非空 = 个人
+  account_id         uuid    references accounts(id) on delete cascade,   -- NULL = 共享；非空 = 个人
   name               text    not null,
   description        text    not null default '',
   category           text    not null default 'custom',
@@ -198,7 +203,7 @@ create index if not exists vocab_units_book_idx on vocab_units (book_id, order_i
 -- -----------------------------------------------------------------------------
 create table if not exists translate_books (
   id                 text    primary key check (id <> ''),
-  account_id         uuid,
+  account_id         uuid    references accounts(id) on delete cascade,
   name               text    not null,
   description        text,
   category           text,
@@ -229,7 +234,7 @@ create trigger translate_books_derive before insert or update on translate_books
 -- -----------------------------------------------------------------------------
 create table if not exists reading_articles (
   id                 text    primary key check (id <> ''),
-  account_id         uuid,
+  account_id         uuid    references accounts(id) on delete cascade,
   title              text    not null,
   paragraphs         jsonb   not null default '[]'::jsonb check (jsonb_typeof(paragraphs) = 'array'),  -- ReadingSentence[][]
   is_custom          boolean not null default true,
@@ -244,7 +249,7 @@ create index if not exists reading_articles_account_idx on reading_articles (acc
 -- -----------------------------------------------------------------------------
 create table if not exists radio_items (
   id                 text    primary key check (id <> ''),
-  account_id         uuid,
+  account_id         uuid    references accounts(id) on delete cascade,
   category           text    not null check (category in ('phrases', 'dialogue', 'radio')),
   title              text    not null check (btrim(title) <> ''),
   media_type         text    not null default 'video' check (media_type in ('video', 'audio')),
@@ -270,7 +275,7 @@ create index if not exists radio_items_account_idx on radio_items (account_id);
 -- -----------------------------------------------------------------------------
 create table if not exists collected_words (
   id                 bigint generated by default as identity primary key,
-  account_id         uuid,
+  account_id         uuid    references accounts(id) on delete cascade,
   word               text    not null check (btrim(word) <> ''),
   meaning            text,
   source             text,
@@ -308,7 +313,7 @@ create trigger collected_words_status before insert or update on collected_words
 -- alter table translate_books add constraint translate_books_account_name_key unique nulls not distinct (account_id, name);
 
 -- =============================================================================
--- 二、学习记录 / 进度表（account_id 不允许为空，默认取当前登录账号）
+-- 二、学习记录 / 进度表（account_id 不允许为空，客户端写入时必须带上登录账号的 id）
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -316,7 +321,7 @@ create trigger collected_words_status before insert or update on collected_words
 --    同一账号下一个单词一条，跨词库共用；word_id = buildWordId(拼写)。
 -- -----------------------------------------------------------------------------
 create table if not exists word_records (
-  account_id                 uuid    not null default public.current_account_id(),
+  account_id                 uuid    not null references accounts(id) on delete cascade,
   word_id                    text    not null check (word_id <> ''),
   book_id                    text    not null default '',     -- 首次记录时所在词库，仅作来源参考
   word_name                  text,
@@ -342,7 +347,7 @@ create index if not exists word_records_trouble_idx on word_records (account_id,
 --    completed_word_ids / retry_word_ids 存 word_id，与本地 JSON 按拼写派生的 id 对齐。
 -- -----------------------------------------------------------------------------
 create table if not exists unit_progress (
-  account_id          uuid    not null default public.current_account_id(),
+  account_id          uuid    not null references accounts(id) on delete cascade,
   book_id             text    not null check (book_id <> ''),
   unit_id             text    not null check (unit_id <> ''),
   mode                text    not null check (mode in ('learn', 'dictation', 'phonetic')),
@@ -386,7 +391,7 @@ create trigger unit_progress_guard before update on unit_progress
 --    一行一个 (account_id, book_id, mode)，多设备、多账号互不覆盖；较旧的写入自动忽略。
 -- -----------------------------------------------------------------------------
 create table if not exists book_progress (
-  account_id         uuid    not null default public.current_account_id(),
+  account_id         uuid    not null references accounts(id) on delete cascade,
   book_id            text    not null check (book_id <> ''),
   mode               text    not null check (mode in ('learn', 'dictation', 'phonetic')),
   book_kind          text    generated always as (
@@ -407,7 +412,7 @@ create trigger book_progress_newer_wins before update on book_progress
 -- 10. 用户对单词的手工修改（音节拆分 / 构词法 / 音标 / 释义 / 例句 / 短语），按账号各自保存
 -- -----------------------------------------------------------------------------
 create table if not exists word_overrides (
-  account_id         uuid   not null default public.current_account_id(),
+  account_id         uuid   not null references accounts(id) on delete cascade,
   word_id            text   not null check (word_id <> ''),
   name               text   not null,
   phonetic_us        text,
@@ -429,7 +434,7 @@ create table if not exists word_overrides (
 --     书内单元位置已拆到 book_progress。
 -- -----------------------------------------------------------------------------
 create table if not exists app_state (
-  account_id          uuid    primary key default public.current_account_id(),
+  account_id          uuid    primary key references accounts(id) on delete cascade,
   current_book_id     text,
   current_unit_index  integer not null default 0 check (current_unit_index >= 0),
   loop_counts         jsonb   not null default '{}'::jsonb check (jsonb_typeof(loop_counts) = 'object'),     -- 循环遍数（是否入库待确认）
@@ -443,7 +448,7 @@ create table if not exists app_state (
 --     completed_sentence_ids 只增不减，建议通过 merge_translate_state() 取并集写入。
 -- -----------------------------------------------------------------------------
 create table if not exists translate_state (
-  account_id              uuid   primary key default public.current_account_id(),
+  account_id              uuid   primary key references accounts(id) on delete cascade,
   current_book_id         text,
   completed_sentence_ids  jsonb  not null default '{}'::jsonb check (jsonb_typeof(completed_sentence_ids) = 'object'),
   updated_at              bigint not null default public.now_ms(),
@@ -459,7 +464,7 @@ declare
 begin
   -- server_updated_at：每张业务表都由服务端维护，并建索引供外部工具按它分页增量拉取
   foreach t in array array[
-    'vocab_books', 'translate_books', 'reading_articles', 'radio_items', 'collected_words',
+    'accounts', 'vocab_books', 'translate_books', 'reading_articles', 'radio_items', 'collected_words',
     'word_records', 'unit_progress', 'book_progress', 'word_overrides', 'app_state', 'translate_state'
   ] loop
     execute format('drop trigger if exists %I on %I', t || '_touch', t);
@@ -469,7 +474,7 @@ begin
 
   foreach t in array array['vocab_books', 'translate_books', 'reading_articles', 'radio_items', 'collected_words'] loop
     execute format('drop trigger if exists %I on %I', t || '_personal_guard', t);
-    execute format('create trigger %I before update or delete on %I for each row execute function public.tg_personal_content_guard()', t || '_personal_guard', t);
+    execute format('create trigger %I before update on %I for each row execute function public.tg_personal_content_guard()', t || '_personal_guard', t);
   end loop;
 
   foreach t in array array['word_records', 'unit_progress', 'book_progress', 'word_overrides', 'app_state', 'translate_state'] loop
@@ -493,12 +498,81 @@ create trigger vocab_books_cleanup after delete on vocab_books
   for each row execute function public.tg_vocab_books_cleanup();
 
 -- =============================================================================
--- 三、数据库函数：把"读-改-写"放进一条事务，全部按当前登录账号执行
---     均为 security invoker（默认），权限与直接读写表一致。未登录调用会报错。
+-- 三、数据库函数：把"读-改-写"放进一条事务
+--     第一个参数都是 p_account_id（登录后客户端保存的账号 id），为空会报错。
 -- =============================================================================
+
+-- A1. 注册：账号名不区分大小写、不能重复，密码至少 6 位。返回 {account_id, username, display_name}
+create or replace function public.register_account(
+  p_username     text,
+  p_password     text,
+  p_display_name text default null
+) returns jsonb
+language plpgsql
+set search_path = public, extensions
+as $$
+declare
+  v_name text := btrim(coalesce(p_username, ''));
+  v_row  accounts;
+begin
+  if v_name = '' or length(v_name) > 32 then
+    raise exception 'username must be 1-32 characters' using errcode = '22023';
+  end if;
+  if coalesce(length(p_password), 0) < 6 then
+    raise exception 'password must be at least 6 characters' using errcode = '22023';
+  end if;
+  if exists (select 1 from accounts where lower(username) = lower(v_name)) then
+    raise exception 'username already exists' using errcode = '23505';
+  end if;
+
+  insert into accounts (username, password_hash, display_name, last_login_at)
+  values (v_name, crypt(p_password, gen_salt('bf')), nullif(btrim(coalesce(p_display_name, '')), ''), public.now_ms())
+  returning * into v_row;
+  return jsonb_build_object('account_id', v_row.id, 'username', v_row.username, 'display_name', v_row.display_name);
+exception when unique_violation then
+  raise exception 'username already exists' using errcode = '23505';
+end $$;
+
+-- A2. 登录：成功返回 {account_id, username, display_name}，账号或密码错误返回 NULL
+create or replace function public.login_account(p_username text, p_password text) returns jsonb
+language plpgsql
+set search_path = public, extensions
+as $$
+declare
+  v_row accounts;
+begin
+  update accounts set last_login_at = public.now_ms()
+   where lower(username) = lower(btrim(coalesce(p_username, '')))
+     and password_hash = crypt(coalesce(p_password, ''), password_hash)
+  returning * into v_row;
+  if not found then
+    return null;
+  end if;
+  return jsonb_build_object('account_id', v_row.id, 'username', v_row.username, 'display_name', v_row.display_name);
+end $$;
+
+-- A3. 修改密码：旧密码正确才修改，返回是否成功
+create or replace function public.change_account_password(
+  p_account_id   uuid,
+  p_old_password text,
+  p_new_password text
+) returns boolean
+language plpgsql
+set search_path = public, extensions
+as $$
+begin
+  if coalesce(length(p_new_password), 0) < 6 then
+    raise exception 'password must be at least 6 characters' using errcode = '22023';
+  end if;
+  update accounts set password_hash = crypt(p_new_password, gen_salt('bf'))
+   where id = public.require_account(p_account_id)
+     and password_hash = crypt(coalesce(p_old_password, ''), password_hash);
+  return found;
+end $$;
 
 -- R1. 记录一次练习结果（与 src/db/index.ts recordWordAttempt 的规则逐条对应）
 create or replace function public.record_word_attempt(
+  p_account_id uuid,
   p_word_id    text,
   p_book_id    text,
   p_is_correct boolean,
@@ -507,7 +581,7 @@ create or replace function public.record_word_attempt(
 ) returns word_records
 language plpgsql as $$
 declare
-  v_acc      uuid    := public.require_account_id();
+  v_acc      uuid    := public.require_account(p_account_id);
   v_now      bigint  := public.now_ms();
   v_dict     boolean := p_mode = 'dictation';
   v_dict_err boolean := (not p_is_correct) and p_mode = 'dictation';
@@ -542,13 +616,14 @@ end $$;
 
 -- R2. 切换加星（不存在则创建为已加星）。返回切换后的 is_starred。
 create or replace function public.toggle_star_word(
-  p_word_id   text,
-  p_book_id   text,
-  p_word_item jsonb default null
+  p_account_id uuid,
+  p_word_id    text,
+  p_book_id    text,
+  p_word_item  jsonb default null
 ) returns boolean
 language plpgsql as $$
 declare
-  v_acc     uuid := public.require_account_id();
+  v_acc     uuid := public.require_account(p_account_id);
   v_starred boolean;
 begin
   insert into word_records as r (account_id, word_id, book_id, word_name, word_item, is_starred, last_practiced_at)
@@ -562,18 +637,18 @@ begin
 end $$;
 
 -- R3. 生词本 / 错词本：以单个标量返回，不受 PostgREST Max Rows（默认 1000）截断
-create or replace function public.get_starred_word_ids() returns text[]
+create or replace function public.get_starred_word_ids(p_account_id uuid) returns text[]
 language sql stable as $$
   select coalesce(array_agg(word_id order by word_id), '{}')
   from word_records
-  where account_id = public.require_account_id() and is_starred
+  where account_id = public.require_account(p_account_id) and is_starred
 $$;
 
-create or replace function public.get_trouble_word_records() returns jsonb
+create or replace function public.get_trouble_word_records(p_account_id uuid) returns jsonb
 language sql stable as $$
   select coalesce(jsonb_agg(to_jsonb(r) order by r.last_practiced_at desc), '[]'::jsonb)
   from word_records r
-  where r.account_id = public.require_account_id() and (r.is_error or r.is_starred)
+  where r.account_id = public.require_account(p_account_id) and (r.is_error or r.is_starred)
 $$;
 
 -- 内部工具：按 p_keep 过滤 jsonb 字符串数组，保持原顺序
@@ -608,6 +683,7 @@ end $$;
 
 -- R4. 标记单元内一个词"真正敲完"（对应 markUnitWordCompleted，含按当前单元成员剪除失效词）
 create or replace function public.mark_unit_word_completed(
+  p_account_id       uuid,
   p_book_id          text,
   p_unit_id          text,
   p_mode             text,
@@ -618,7 +694,7 @@ create or replace function public.mark_unit_word_completed(
 ) returns unit_progress
 language plpgsql as $$
 declare
-  v_acc        uuid    := public.require_account_id();
+  v_acc        uuid    := public.require_account(p_account_id);
   v_now        bigint  := public.now_ms();
   v_n          integer := coalesce(array_length(p_unit_word_ids, 1), 0);
   v_old        unit_progress;
@@ -667,6 +743,7 @@ end $$;
 
 -- R5. 把默写出错/偷看的词放回本单元重考队列（对应 markUnitWordForRetry）
 create or replace function public.mark_unit_word_for_retry(
+  p_account_id uuid,
   p_book_id    text,
   p_unit_id    text,
   p_mode       text,
@@ -675,7 +752,7 @@ create or replace function public.mark_unit_word_for_retry(
 ) returns unit_progress
 language plpgsql as $$
 declare
-  v_acc uuid := public.require_account_id();
+  v_acc uuid := public.require_account(p_account_id);
   v_old unit_progress;
   v_row unit_progress;
 begin
@@ -700,13 +777,13 @@ begin
   return v_row;
 end $$;
 
--- R6. 把单词并入当前账号可见的自定义词库：同 id 原位覆盖，新词追加（对应 mergeWordsIntoBook）
+-- R6. 把单词并入该账号可见的自定义词库：同 id 原位覆盖，新词追加（对应 mergeWordsIntoBook）
 --     词库不存在或是别人的个人词库时返回 NULL。
-create or replace function public.merge_words_into_book(p_book_id text, p_words jsonb)
+create or replace function public.merge_words_into_book(p_account_id uuid, p_book_id text, p_words jsonb)
 returns jsonb
 language plpgsql as $$
 declare
-  v_acc     uuid := public.require_account_id();
+  v_acc     uuid := public.require_account(p_account_id);
   v_words   jsonb;
   v_merged  jsonb;
   v_added   integer;
@@ -755,13 +832,14 @@ end $$;
 
 -- R7. 翻译进度：completed_sentence_ids 取并集（只增不减），多设备不会互相抹掉
 create or replace function public.merge_translate_state(
+  p_account_id      uuid,
   p_current_book_id text,
   p_completed       jsonb,
   p_updated_at      bigint default null
 ) returns translate_state
 language plpgsql as $$
 declare
-  v_acc uuid := public.require_account_id();
+  v_acc uuid := public.require_account(p_account_id);
   v_row translate_state;
 begin
   insert into translate_state as s (account_id, current_book_id, completed_sentence_ids, updated_at)
@@ -774,15 +852,16 @@ begin
   return v_row;
 end $$;
 
--- R8. 收件箱：认领 / 完成 / 失败（只处理共享条目和当前账号的条目）
+-- R8. 收件箱：认领 / 完成 / 失败（只处理共享条目和该账号的条目）
 create or replace function public.claim_collected_words(
-  p_limit    integer default 20,
-  p_claimer  text    default null,
-  p_lease_ms bigint  default 300000
+  p_account_id uuid,
+  p_limit      integer default 20,
+  p_claimer    text    default null,
+  p_lease_ms   bigint  default 300000
 ) returns setof collected_words
 language plpgsql as $$
 declare
-  v_acc uuid   := public.require_account_id();
+  v_acc uuid   := public.require_account(p_account_id);
   v_now bigint := public.now_ms();
 begin
   return query
@@ -802,19 +881,20 @@ begin
   returning c.*;
 end $$;
 
-create or replace function public.complete_collected_words(p_ids bigint[]) returns integer
+create or replace function public.complete_collected_words(p_account_id uuid, p_ids bigint[]) returns integer
 language sql as $$
   with done as (
     update collected_words
        set status = 'done', pulled_at = public.now_ms(), last_error = null
      where id = any(p_ids) and status <> 'done'
-       and (account_id is null or account_id = public.require_account_id())
+       and (account_id is null or account_id = public.require_account(p_account_id))
     returning 1
   )
   select count(*)::integer from done
 $$;
 
 create or replace function public.fail_collected_word(
+  p_account_id   uuid,
   p_id           bigint,
   p_error        text,
   p_retryable    boolean default true,
@@ -822,7 +902,7 @@ create or replace function public.fail_collected_word(
 ) returns collected_words
 language plpgsql as $$
 declare
-  v_acc uuid := public.require_account_id();
+  v_acc uuid := public.require_account(p_account_id);
   v_row collected_words;
 begin
   update collected_words set
@@ -840,8 +920,8 @@ end $$;
 --     - 自定义词库 / 句库 / 文章 / 收件箱 / vocab_units：按"共享"（account_id = NULL）导入；
 --     - 学习记录 / 进度：导入到"第一个账号"。账号来源优先级：
 --         1) 执行前设置：select set_config('lingualoop.legacy_account_id', '<uuid>', false);
---         2) Supabase Auth 中最早注册的用户（auth.users）。
---       两者都没有时跳过进度导入并给出提示；注册第一个账号后再执行一次本文件即可。
+--         2) accounts 表中最早注册的账号。
+--       两者都没有时跳过进度导入并给出提示；在应用里注册第一个账号后再执行一次本文件即可。
 --     旧表保留不删，确认无误后可手动 drop table legacy_v1_* 。
 -- =============================================================================
 do $$
@@ -906,11 +986,14 @@ begin
   end if;
 
   v_acc := nullif(current_setting('lingualoop.legacy_account_id', true), '')::uuid;
-  if v_acc is null and to_regclass('auth.users') is not null then
-    execute 'select id from auth.users order by created_at limit 1' into v_acc;
+  if v_acc is not null and not exists (select 1 from accounts where id = v_acc) then
+    raise exception 'lingualoop.legacy_account_id % 不在 accounts 表中', v_acc;
   end if;
   if v_acc is null then
-    raise notice 'v1 进度尚未导入：还没有可用的账号。请先注册第一个账号（或 set_config lingualoop.legacy_account_id），再执行一次本文件。';
+    select id into v_acc from accounts order by created_at, id limit 1;
+  end if;
+  if v_acc is null then
+    raise notice 'v1 进度尚未导入：还没有可用的账号。请先在应用里注册第一个账号（或 set_config lingualoop.legacy_account_id），再执行一次本文件。';
     return;
   end if;
 
@@ -982,50 +1065,41 @@ begin
 end $$;
 
 -- =============================================================================
--- 权限：沿用 v1 的模型（本次不调整安全策略），只是把已登录请求使用的 authenticated
--- 角色也加进来——登录后 PostgREST 以 authenticated 身份访问，只授予 anon 会读不到任何数据。
+-- 权限：数据库这一层只有一个统一的连接角色，像 root 一样拥有全部权限；
+-- 系统用户（谁能看到哪些数据）完全由 accounts 表和 account_id 决定，与数据库权限无关。
+-- 因此关闭行级安全（RLS），把 public 下所有表、序列、函数的全部权限授予连接角色。
+--   - Supabase：前端用 anon key 连接，对应角色 anon；
+--   - 自建 Postgres：把下面 v_roles 改成自己的连接账号（若连接账号就是表的所有者，可以不改）。
 -- =============================================================================
 do $$
 declare
+  v_roles text[] := array['anon'];
+  r text;
   t text;
 begin
   foreach t in array array[
+    'schema_meta', 'accounts',
     'vocab_books', 'vocab_units', 'translate_books', 'reading_articles', 'radio_items', 'collected_words',
     'word_records', 'unit_progress', 'book_progress', 'word_overrides', 'app_state', 'translate_state'
   ] loop
-    execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists anon_all on %I', t);
     execute format('drop policy if exists app_all on %I', t);
-    execute format('create policy app_all on %I for all to anon, authenticated using (true) with check (true)', t);
-    execute format('grant select, insert, update, delete on %I to anon, authenticated', t);
+    execute format('drop policy if exists app_read on %I', t);
+    execute format('alter table %I disable row level security', t);
+  end loop;
+
+  foreach r in array v_roles loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('grant usage on schema public to %I', r);
+      execute format('grant all privileges on all tables in schema public to %I', r);
+      execute format('grant all privileges on all sequences in schema public to %I', r);
+      execute format('grant execute on all functions in schema public to %I', r);
+      execute format('alter default privileges in schema public grant all on tables to %I', r);
+      execute format('alter default privileges in schema public grant all on sequences to %I', r);
+      execute format('alter default privileges in schema public grant execute on functions to %I', r);
+    end if;
   end loop;
 end $$;
-
-alter table schema_meta enable row level security;
-drop policy if exists app_read on schema_meta;
-create policy app_read on schema_meta for select to anon, authenticated using (true);
-grant select on schema_meta to anon, authenticated;
-
-grant usage on schema public to anon, authenticated;
-grant usage, select on all sequences in schema public to anon, authenticated;
-grant execute on function
-  public.now_ms(),
-  public.current_account_id(),
-  public.require_account_id(),
-  public.record_word_attempt(text, text, boolean, text, jsonb),
-  public.toggle_star_word(text, text, jsonb),
-  public.get_starred_word_ids(),
-  public.get_trouble_word_records(),
-  public.jsonb_text_array_filter(jsonb, text[]),
-  public.lock_unit_progress(uuid, text, text, text),
-  public.mark_unit_word_completed(text, text, text, text, integer, text[], boolean),
-  public.mark_unit_word_for_retry(text, text, text, text, integer),
-  public.merge_words_into_book(text, jsonb),
-  public.merge_translate_state(text, jsonb, bigint),
-  public.claim_collected_words(integer, text, bigint),
-  public.complete_collected_words(bigint[]),
-  public.fail_collected_word(bigint, text, boolean, integer)
-to anon, authenticated;
 
 -- 让 PostgREST 立即识别新表与新函数
 notify pgrst, 'reload schema';
