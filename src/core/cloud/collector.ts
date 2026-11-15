@@ -129,6 +129,7 @@ export async function pullCollectedWords(): Promise<CollectResult | null> {
 
   const bookId = collectedBookId(accountId)
   const added: WordItem[] = []
+  const addedIds: number[] = []
   const doneIds: number[] = []
 
   for (const row of rows) {
@@ -148,15 +149,22 @@ export async function pullCollectedWords(): Promise<CollectResult | null> {
         .catch((error) => console.warn('[collector] failed to mark row as failed:', error))
       continue
     }
-    if (outcome.kind === 'added') added.push(outcome.word)
+    if (outcome.kind === 'added') {
+      added.push(outcome.word)
+      addedIds.push(row.id)
+      continue
+    }
     doneIds.push(row.id)
   }
 
+  let merged = false
   if (added.length > 0) {
     await ensureCollectedBook(bookId, accountId)
-    await mergeWordsIntoBook(bookId, added)
+    merged = (await mergeWordsIntoBook(bookId, added)) !== null
   }
-  await cloudOperations.completeCollectedWords(doneIds)
+  // 并入收藏词库失败时不标记完成：这些行认领超时后会被重新认领（加星是幂等的）
+  await cloudOperations.completeCollectedWords(merged ? [...doneIds, ...addedIds] : doneIds)
+  if (!merged) return null
 
   if (added.length === 0) return null
   return {
