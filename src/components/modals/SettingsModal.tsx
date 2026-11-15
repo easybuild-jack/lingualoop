@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   X,
   Volume2,
@@ -52,6 +53,7 @@ const RECOMMENDED_MODELS: Record<string, string[]> = {
 }
 
 export function SettingsModal() {
+  const router = useRouter()
   const {
     isSettingsModalOpen,
     setSettingsModalOpen,
@@ -156,7 +158,12 @@ export function SettingsModal() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(DICT_CACHE_VERSION_KEY)
       setSettingsModalOpen(false)
+      // 离线词库加载器只在单词查询页挂载：本页已挂载则直接触发重跑，
+      // 未挂载则跳转到查询页，由该页首次挂载时的版本检测自动启动重建。
       window.dispatchEvent(new Event('lingualoop_rebuild_dict_cache'))
+      if (window.location.pathname !== '/dictionary') {
+        router.push('/dictionary')
+      }
     }
   }
 

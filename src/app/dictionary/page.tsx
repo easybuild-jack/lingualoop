@@ -6,6 +6,7 @@ import { DictWordCard } from '@/components/dictionary/DictWordCard'
 import { DictEmptyState } from '@/components/dictionary/DictEmptyState'
 import { DictSearchingCard } from '@/components/dictionary/DictSearchingCard'
 import { DictPlaceholderSkeleton } from '@/components/dictionary/DictPlaceholderSkeleton'
+import { InitialDictionaryDataLoader } from '@/components/layout/InitialDictionaryDataLoader'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import {
   searchWordSuggestions,
@@ -353,6 +354,9 @@ export default function DictionaryPage() {
 
   return (
     <div className="flex-1 min-h-full flex flex-col justify-between relative pb-1">
+      {/* 离线词库游戏风格加载器：仅在本页挂载，首次进入本页时才构建本地词库缓存 */}
+      <InitialDictionaryDataLoader />
+
       {/* 顶部工具栏：仅保留搜索输入框、发音口音切换与皮肤选择 */}
       <DictHeaderToolbar
         searchQuery={searchQuery}
