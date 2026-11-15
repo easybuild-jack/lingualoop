@@ -7,12 +7,14 @@ import type {
   WordEtymology,
   PracticeMode,
   WordExample,
+  ContentAccountId,
 } from '@/types'
 import { DEFAULT_SAMPLE_CUSTOM_BOOK } from '@/resources/books'
 import { buildWordId } from '@/lib/wordId'
 import { db } from './local'
 import { getRepositories } from './repository'
 import { isCloudMode } from '@/core/cloud/config'
+import { cloudOperations } from '@/core/cloud/supabaseRepository'
 
 export { db }
 export { localRepositories } from './repository'
@@ -25,10 +27,18 @@ export type { Repositories } from './repository'
  * 没配置就落到本地 IndexedDB，业务逻辑只写一份。
  */
 
-/** 本地模式下沿用 Dexie 事务；云模式下读改写直接在服务端串行执行 */
+/**
+ * 本地模式下沿用 Dexie 事务。云模式下这里没有串行保护：
+ * 计数与单元进度的读改写已改走数据库函数（cloudOperations），只有低频的修剪逻辑仍走这里。
+ */
 async function runInUnitProgressTransaction<T>(fn: () => Promise<T>): Promise<T> {
   if (isCloudMode()) return fn()
   return db.transaction('rw', db.unitProgress, fn)
+}
+
+/** 云模式返回原子操作集合，本地模式返回 null */
+function cloudOps() {
+  return getRepositories().mode === 'cloud' ? cloudOperations : null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -114,6 +124,9 @@ export async function recordWordAttempt(
   wordItem?: WordItem
 ) {
   try {
+    const ops = cloudOps()
+    if (ops) return await ops.recordWordAttempt({ wordId, bookId, isCorrect, mode, wordItem })
+
     const repositories = getRepositories()
     const existing = await repositories.wordRecords.get(wordId)
     const now = Date.now()
@@ -218,8 +231,10 @@ export async function removeErrorWord(wordId: string) {
  */
 export async function getActiveTroubleWords(): Promise<{ word: WordItem; record: WordMasteryRecord }[]> {
   try {
-    const records = await getRepositories().wordRecords.getAll()
-    const troubleRecords = records.filter((r) => r.isError || r.isStarred)
+    const ops = cloudOps()
+    const troubleRecords = ops
+      ? await ops.getTroubleWordRecords()
+      : (await getRepositories().wordRecords.getAll()).filter((r) => r.isError || r.isStarred)
     const result: { word: WordItem; record: WordMasteryRecord }[] = []
 
     for (const r of troubleRecords) {
@@ -247,11 +262,22 @@ export async function getActiveTroubleWords(): Promise<{ word: WordItem; record:
 /** 向前兼容 */
 export const getActiveErrorWords = getActiveTroubleWords
 
+/** 生词本里全部单词的 id（云模式由数据库函数一次返回，不受单次 1000 行上限影响） */
+export async function getStarredWordIds(): Promise<string[]> {
+  const ops = cloudOps()
+  if (ops) return ops.getStarredWordIds()
+  const records = await getRepositories().wordRecords.getAll()
+  return records.filter((record) => record.isStarred).map((record) => record.wordId)
+}
+
 /**
  * 切换单词生词本加星状态
  */
 export async function toggleStarWord(wordId: string, bookId: string, wordItem?: WordItem): Promise<boolean> {
   try {
+    const ops = cloudOps()
+    if (ops) return await ops.toggleStarWord(wordId, bookId, wordItem)
+
     const repositories = getRepositories()
     const existing = await repositories.wordRecords.get(wordId)
     if (!existing) {
@@ -301,14 +327,13 @@ export async function getCustomBooks(): Promise<VocabularyBook[]> {
       (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
     )
 
-    // 检查是否全为历史测试产生的多余重复默认生词本（如开发测试时产生的多个同名“我的自定义生词本”或临时记录）
+    // 检查是否全为历史测试产生的多余重复默认生词本（如开发测试时产生的多个同名“我的自定义生词本”或临时记录）。
+    // 「翻译工具收藏」词库（book_custom_collected 及按账号的 book_custom_collected_<账号>）是真实数据，
+    // 一旦出现就不算冗余；云模式下 custom 只含当前账号可见的词库，清理也只作用于这些。
     const isRedundantLegacyTest =
       custom.length > 1 &&
       custom.every(
-        (b) =>
-          b.name === '我的自定义生词本' ||
-          b.id === 'book_custom_collected' ||
-          b.id === DEFAULT_SAMPLE_CUSTOM_BOOK.id
+        (b) => b.name === '我的自定义生词本' || b.id === DEFAULT_SAMPLE_CUSTOM_BOOK.id
       )
 
     // 若无数据或仅有旧测试产生的冗余条目，仅保留并呈现 1 个官方标准示例词库
@@ -341,6 +366,16 @@ export async function getCustomBooks(): Promise<VocabularyBook[]> {
 export async function mergeWordsIntoBook(bookId: string, words: WordItem[]) {
   try {
     const repositories = getRepositories()
+    const ops = cloudOps()
+    if (ops) {
+      // 云端在一条事务里合并，多设备同时导入/收词不会互相覆盖
+      const result = await ops.mergeWordsIntoBook(bookId, words)
+      if (!result) return null
+      const book = await repositories.books.get(bookId)
+      if (!book) return null
+      return { book, updated: result.updated, added: result.added }
+    }
+
     const book = await repositories.books.get(bookId)
     if (!book) return null
 
@@ -378,10 +413,18 @@ export async function mergeWordsIntoBook(bookId: string, words: WordItem[]) {
 
 /**
  * 保存自定义新词库
+ *
+ * accountId 只在云模式下有意义：null = 共享给所有账号，账号 id = 个人词库。
  */
-export async function saveCustomVocabularyBook(name: string, description: string, words: WordItem[]) {
+export async function saveCustomVocabularyBook(
+  name: string,
+  description: string,
+  words: WordItem[],
+  accountId?: ContentAccountId
+) {
   const newBook: VocabularyBook = {
     id: `book_custom_${Date.now()}`,
+    ...(accountId !== undefined ? { accountId } : {}),
     name: name.trim() || '自定义生词本',
     description: description.trim() || '用户自定义导入词库',
     category: 'custom',
@@ -475,6 +518,15 @@ export async function reconcileUnitProgressRecord(params: {
         isRetrying: !isCompleted && retryWordIds.length > 0 && existing.isRetrying === true,
         completedAt: isCompleted ? existing.completedAt : undefined,
       }
+      // 云模式下没有事务保护，内容没变就不回写，避免把并发完成的词覆盖掉
+      const unchanged =
+        record.status === existing.status &&
+        record.currentWordIndex === existing.currentWordIndex &&
+        record.isRetrying === (existing.isRetrying ?? false) &&
+        record.completedAt === existing.completedAt &&
+        JSON.stringify(record.completedWordIds) === JSON.stringify(existing.completedWordIds) &&
+        JSON.stringify(record.retryWordIds) === JSON.stringify(existing.retryWordIds)
+      if (unchanged && existing.bookId === bookId) return existing
       await repositories.unitProgress.put(record)
       return record
     })
@@ -511,6 +563,9 @@ export async function markUnitWordForRetry(params: {
   if (!unitId || !wordId || typeof window === 'undefined') return null
 
   try {
+    const ops = cloudOps()
+    if (ops) return await ops.markUnitWordForRetry({ bookId, unitId, mode, wordId, wordIndex })
+
     return await runInUnitProgressTransaction(async () => {
       const repositories = getRepositories()
       const existing = await repositories.unitProgress.get(unitId, mode)
@@ -561,6 +616,19 @@ export async function markUnitWordCompleted(params: {
   if (!unitId || !wordId || unitWordIds.length === 0 || typeof window === 'undefined') return null
 
   try {
+    const ops = cloudOps()
+    if (ops) {
+      return await ops.markUnitWordCompleted({
+        bookId,
+        unitId,
+        mode,
+        wordId,
+        wordIndex,
+        unitWordIds,
+        deferForRetry,
+      })
+    }
+
     return await runInUnitProgressTransaction(async () => {
       const repositories = getRepositories()
       const existing = await repositories.unitProgress.get(unitId, mode)

@@ -4,6 +4,10 @@ import type { TranslationBook, TranslationSentenceItem } from '@/types'
 import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
+import { createScopedProgressStorage } from '@/core/cloud/scopedStorage'
+
+/** 云模式下按账号分开缓存的字段（自定义句库来自云端，完成记录与位置属于账号） */
+const TRANSLATE_PROGRESS_KEYS = ['currentBookId', 'completedSentenceIds', 'books'] as const
 
 interface TranslateState {
   books: TranslationBook[]
@@ -268,7 +272,7 @@ export const useTranslateStore = create<TranslateState>()(
     }),
     {
       name: 'lingualoop-translate-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createScopedProgressStorage(TRANSLATE_PROGRESS_KEYS)),
       partialize: (state) => ({
         currentBookId: state.currentBookId,
         audioRate: state.audioRate,
