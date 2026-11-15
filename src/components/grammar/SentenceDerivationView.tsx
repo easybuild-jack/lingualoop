@@ -1,0 +1,437 @@
+'use client'
+
+import React, { useState } from 'react'
+import { Volume2, Lightbulb } from 'lucide-react'
+import {
+  SENTENCE_CORE_CONCEPTS,
+  SENTENCE_MODIFIERS_DATA,
+  APPLE_SENTENCE_GROWTH_STEPS,
+  LINKING_SENTENCE_GROWTH_STEPS,
+  SV_SENTENCE_GROWTH_STEPS,
+  SVOO_SENTENCE_GROWTH_STEPS,
+  SVOC_SENTENCE_GROWTH_STEPS,
+  THERE_BE_SENTENCE_GROWTH_STEPS,
+  type SentenceGrowthStep,
+} from '@/resources/grammarData'
+
+const SENTENCE_GROWTH_SERIES = [
+  {
+    id: 'sv',
+    tabLabel: '主谓',
+    tabSublabel: 'S + V',
+    title: '主谓推演：看着“鸟会飞”一句话长大',
+    description: '从 Birds fly. 开始，理解不需要宾语也能成立的句子。',
+    idPrefix: 'sv-step',
+    steps: SV_SENTENCE_GROWTH_STEPS,
+  },
+  {
+    id: 'svc',
+    tabLabel: '主系表',
+    tabSublabel: 'S + V-link + P',
+    title: '主系表推演：看着“苹果是红的”一句话长大',
+    description: '从 The apple is red. 开始，理解系动词如何连接主语和表语。',
+    idPrefix: 'linking-step',
+    steps: LINKING_SENTENCE_GROWTH_STEPS,
+  },
+  {
+    id: 'svo',
+    tabLabel: '主谓宾',
+    tabSublabel: 'S + V + O',
+    title: '主谓宾推演：看着“吃苹果”一句话长大',
+    description: '从 I eat apples. 开始，每一步只增加一个成分。',
+    idPrefix: 'step',
+    steps: APPLE_SENTENCE_GROWTH_STEPS,
+  },
+  {
+    id: 'svoo',
+    tabLabel: '主谓双宾',
+    tabSublabel: 'S + V + Oi + Od',
+    title: '主谓双宾推演：看着“妈妈给我一本书”一句话长大',
+    description: '从 Mom gives me a book. 开始，分清“给谁”和“给什么”。',
+    idPrefix: 'svoo-step',
+    steps: SVOO_SENTENCE_GROWTH_STEPS,
+  },
+  {
+    id: 'svoc',
+    tabLabel: '主谓宾宾补',
+    tabSublabel: 'S + V + O + C',
+    title: '主谓宾宾补推演：看着“消息让我开心”一句话长大',
+    description: '从 The news makes me happy. 开始，理解宾语后为什么还需要补充说明。',
+    idPrefix: 'svoc-step',
+    steps: SVOC_SENTENCE_GROWTH_STEPS,
+  },
+  {
+    id: 'there-be',
+    tabLabel: 'There be',
+    tabSublabel: 'There + be + N',
+    title: 'There be 推演：看着“有一本书”一句话长大',
+    description: '从 There is a book. 开始，学习如何表达某处存在某人或某物。',
+    idPrefix: 'there-be-step',
+    steps: THERE_BE_SENTENCE_GROWTH_STEPS,
+  },
+] as const
+
+type GrowthSeriesId = (typeof SENTENCE_GROWTH_SERIES)[number]['id']
+
+/** 辅助函数：高亮本步新增的关键词，采用与音标例词一致的琥珀色 (#F59E0B)，无下划线 */
+function renderGrowthSentence(sentence: string, highlightWords: string[]) {
+  if (!highlightWords || highlightWords.length === 0) {
+    return <span className="text-foreground">{sentence}</span>
+  }
+
+  const sortedWords = [...highlightWords].sort((a, b) => b.length - a.length)
+  const pattern = sortedWords
+    .map((w) => {
+      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const hasTrailingPunct = /[!.,?;:]$/.test(w)
+      return `\\b${escaped}${hasTrailingPunct ? '' : '\\b'}`
+    })
+    .join('|')
+
+  const regex = new RegExp(`(${pattern})`, 'gi')
+  const parts = sentence.split(regex)
+
+  return (
+    <span className="text-foreground">
+      {parts.map((part, idx) => {
+        const isMatch = sortedWords.some((w) => w.toLowerCase() === part.toLowerCase())
+        if (isMatch) {
+          return (
+            <span
+              key={idx}
+              className="grammar-keyword font-medium"
+            >
+              {part}
+            </span>
+          )
+        }
+        return <React.Fragment key={idx}>{part}</React.Fragment>
+      })}
+    </span>
+  )
+}
+
+function SentenceGrowthSeries({
+  title,
+  description,
+  idPrefix,
+  steps,
+  onSpeak,
+}: {
+  title: string
+  description: string
+  idPrefix: string
+  steps: SentenceGrowthStep[]
+  onSpeak: (text: string) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <div>
+          <h3 className="text-lg sm:text-xl font-bold text-foreground">{title}</h3>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{description}</p>
+        </div>
+        <span className="text-xs sm:text-sm font-mono text-primary font-bold">{steps.length} 阶生长</span>
+      </div>
+
+      <div className="space-y-4">
+        {steps.map((stepItem) => (
+          <article
+            key={stepItem.step}
+            id={`${idPrefix}-${stepItem.step}`}
+            className="border-t border-border pt-5 flex flex-col gap-4"
+          >
+            <header className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-baseline gap-2.5 flex-wrap">
+                  <span className="font-serif italic text-sm text-primary">
+                    Step 0{stepItem.step}
+                  </span>
+                  <h3 className="text-xl font-bold text-foreground">
+                    {stepItem.titleZh}
+                  </h3>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                    {stepItem.tagZh}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-foreground/90">
+                  <strong className="text-primary font-medium">新增演进：</strong>
+                  {stepItem.addedElementDesc}
+                </p>
+                <p className="mt-1 text-xs sm:text-sm leading-relaxed text-muted-foreground">
+                  <strong className="text-foreground font-medium">为什么加这个成分：</strong>
+                  {stepItem.whyAddIt}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onSpeak(stepItem.sentenceEn)}
+                title="朗读本步例句"
+                className="size-7 sm:size-8 shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <Volume2 className="size-3.5 sm:size-4" />
+              </button>
+            </header>
+
+            <section className="border-t border-border pt-4 space-y-3">
+              {/* 句子与翻译紧随其后 */}
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <p className="font-serif text-base sm:text-lg leading-relaxed text-foreground">
+                  {renderGrowthSentence(stepItem.sentenceEn, stepItem.highlightWords)}
+                </p>
+                <span className="text-xs sm:text-sm text-muted-foreground">
+                  （{stepItem.sentenceZh}）
+                </span>
+              </div>
+
+              {/* 分析直接放在例句下面，文字表述，不使用表格 */}
+              <div className="space-y-1.5 pt-1 text-sm leading-relaxed">
+                <p className="text-xs font-semibold text-primary/90">成分分析：</p>
+                <div className="space-y-1.5">
+                  {stepItem.breakdown.map((token, idx) => (
+                    <p key={idx} className="flex items-baseline gap-2">
+                      <span
+                        className={`font-mono text-sm sm:text-base tracking-wide shrink-0 ${
+                          token.isNew
+                            ? 'grammar-keyword font-medium'
+                            : 'text-foreground font-bold'
+                        }`}
+                      >
+                        {token.text}
+                      </span>
+                      <span className="text-xs sm:text-sm text-muted-foreground">：{token.role}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <aside className="mt-auto border-l-2 border-primary pl-3.5 flex items-start gap-2.5 pt-1">
+              <Lightbulb className="size-4 shrink-0 text-primary mt-0.5" />
+              <p className="text-xs sm:text-sm leading-relaxed text-foreground/85">
+                <strong className="text-primary font-medium">演变心法：</strong>
+                {stepItem.takeaway}
+              </p>
+            </aside>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function SentenceDerivationView() {
+  const [activeStepId, setActiveStepId] = useState<number>(1)
+  const [activeSeriesId, setActiveSeriesId] = useState<GrowthSeriesId>('svo')
+  const activeSeries =
+    SENTENCE_GROWTH_SERIES.find((series) => series.id === activeSeriesId) ??
+    SENTENCE_GROWTH_SERIES[0]
+
+  // 语音播报
+  const speakText = (text: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = 'en-US'
+      utterance.rate = 0.95
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* 模块导引条（与词性页风格完全一致） */}
+      <div className="pb-6 border-b border-border flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Module 03 · 句子主干与成分演进
+            </span>
+            <span className="text-xs text-muted-foreground">
+              吃苹果推导法
+            </span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            英语句子成分与结构演变：从“谁在干什么”开始
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-3xl">
+            用通俗易懂的语言理解句子核心主干，并通过一个简单的“吃苹果”例句，直观看到一句话是如何从3个词逐步演变为丰满长句的。
+          </p>
+        </div>
+
+        {/* 步骤快速跳转胶囊 */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => {
+              const el = document.getElementById('sentence-foundation')
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }}
+            className="text-xs sm:text-sm px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+          >
+            句法核心认知
+          </button>
+          {activeSeries.steps.map((s) => (
+            <button
+              key={s.step}
+              onClick={() => {
+                const el = document.getElementById(`${activeSeries.idPrefix}-${s.step}`)
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                setActiveStepId(s.step)
+              }}
+              className={`text-xs sm:text-sm px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md border transition-colors cursor-pointer ${
+                activeStepId === s.step
+                  ? 'bg-primary/10 text-primary border-transparent font-medium'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              步骤 0{s.step} <span className="font-mono text-xs text-muted-foreground">({s.tagZh.slice(0, 4)})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 第一部分：通俗解释句子成分的作用（核心认知大卡片） */}
+      <article
+        id="sentence-foundation"
+        className="space-y-6"
+      >
+        <header className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="font-serif italic text-base text-primary">01</span>
+            <h3 className="text-xl font-bold text-foreground">
+              核心认知：英语句子到底在表达什么？
+            </h3>
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            任何英语句子，无论在考试中看起来多么冗长复杂，其核心本质永远只在回答两个问题：<strong className="text-foreground font-medium">“谁在干什么”（动作主干）</strong>，或者 <strong className="text-foreground font-medium">“谁是什么状态”（状态主干）</strong>。
+          </p>
+        </header>
+
+        {/* 两大核心主干 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 border-t border-border pt-6">
+          {SENTENCE_CORE_CONCEPTS.map((concept) => (
+            <div
+              key={concept.id}
+              className="rounded-lg border border-border p-5 flex flex-col gap-4"
+            >
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-foreground">{concept.titleZh}</h4>
+                  <p className="font-mono text-xs text-primary font-semibold">
+                    {concept.formula}
+                  </p>
+                </div>
+                <p className="text-xs font-semibold text-primary/90">
+                  {concept.coreQuestion}
+                </p>
+                <p className="text-sm leading-relaxed text-foreground/85">
+                  {concept.plainExplanation}
+                </p>
+              </div>
+
+              {/* 拆解项 */}
+              <div className="mt-auto border-t border-border pt-4 space-y-2">
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="font-mono text-base sm:text-lg font-bold text-foreground">
+                    {concept.exampleEn}
+                  </span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">{concept.exampleZh}</span>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs sm:text-sm">
+                  {concept.components.map((comp, idx) => (
+                    <React.Fragment key={idx}>
+                      <span className="font-mono font-bold text-xs text-primary pt-0.5">
+                        {comp.code} ({comp.nameZh})
+                      </span>
+                      <span className="text-muted-foreground">
+                        {comp.role} · 例：
+                        <strong className="text-foreground font-mono">{comp.exampleWord}</strong>
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 枝叶成分的作用 */}
+        <div className="border-t border-border pt-6 space-y-4">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h4 className="text-base font-bold text-foreground">枝叶成分：给句子穿衣服与添细节</h4>
+            <span className="text-xs text-muted-foreground">剥离它们，句子依然成立；加上它们，意思更加丰富</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {SENTENCE_MODIFIERS_DATA.map((mod) => (
+              <div
+                key={mod.id}
+                className="rounded-lg border border-border p-4 flex flex-col gap-2.5"
+              >
+                <div className="space-y-0.5">
+                  <span className="block font-bold text-sm text-foreground">
+                    {mod.nameZh}
+                  </span>
+                  <span className="block text-[12px] text-primary font-mono">
+                    {mod.questionZh}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-foreground/80">
+                  {mod.plainExplanation}
+                </p>
+                <div className="mt-auto pt-2.5 border-t border-border space-y-0.5">
+                  <p className="font-mono font-medium text-xs sm:text-sm text-foreground">
+                    {mod.exampleEn}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{mod.exampleZh}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside className="border-l-2 border-primary pl-3.5 flex items-start gap-2.5 pt-1">
+          <Lightbulb className="size-4 shrink-0 text-primary mt-0.5" />
+          <p className="text-xs sm:text-sm leading-relaxed text-foreground/85">
+            <strong className="text-primary font-medium">初学者学习心法：</strong>
+            阅读英语时，千万别把一句话当成零散的一堆单词。先找动词，顺藤摸瓜找到“谁发出的动作”和“对谁发出的”，把主干抓牢，再看其他修饰词，长句瞬间变简单！
+          </p>
+        </aside>
+      </article>
+
+      <div className="flex items-center gap-1 w-fit max-w-full overflow-x-auto custom-scrollbar">
+        {SENTENCE_GROWTH_SERIES.map((series) => {
+          const isActive = activeSeriesId === series.id
+          return (
+            <button
+              key={series.id}
+              type="button"
+              onClick={() => setActiveSeriesId(series.id)}
+              className={`px-4 py-1.5 sm:px-5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer ${
+                isActive
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {series.tabLabel}
+              <span className={`ml-1.5 font-mono text-xs ${
+                isActive ? 'text-primary/70' : 'text-muted-foreground/70'
+              }`}>
+                {series.tabSublabel}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <SentenceGrowthSeries
+        title={activeSeries.title}
+        description={activeSeries.description}
+        idPrefix={activeSeries.idPrefix}
+        steps={activeSeries.steps}
+        onSpeak={speakText}
+      />
+    </div>
+  )
+}

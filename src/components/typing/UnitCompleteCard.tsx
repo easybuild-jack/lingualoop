@@ -1,0 +1,267 @@
+'use client'
+
+import React from 'react'
+import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
+import confetti from 'canvas-confetti'
+import { CheckCircle2, RotateCcw, ArrowRight } from 'lucide-react'
+import { useWorkspaceStore } from '@/store/useWorkspaceStore'
+import { startRouteProgressBar } from '@/components/layout/RouteProgressBar'
+import { dictionaryLoader } from '@/core/dictionaryLoader'
+
+/** 学习页与默写页共用的通关结算卡片，文案按当前场景切换 */
+export function UnitCompleteCard() {
+  const router = useRouter()
+
+  const restartButtonRef = React.useRef<HTMLButtonElement>(null)
+  const dictationButtonRef = React.useRef<HTMLButtonElement>(null)
+  const nextButtonRef = React.useRef<HTMLButtonElement>(null)
+  const exitToErrorsButtonRef = React.useRef<HTMLButtonElement>(null)
+
+  const {
+    mode,
+    currentBookId,
+    currentBook,
+    currentUnitIndex,
+    unitSize,
+    currentUnitMeta,
+    isErrorPracticeActive,
+    currentLoadedWords,
+    startErrorPractice,
+    restartUnit,
+    exitErrorPractice,
+    setUnitIndex,
+  } = useWorkspaceStore()
+
+  const fallbackUnitCount = Math.max(1, Math.ceil(currentBook.totalWords / unitSize))
+  const [unitCount, setUnitCount] = React.useState(
+    dictionaryLoader.getCachedBookUnits(currentBookId)?.length ?? fallbackUnitCount
+  )
+
+  React.useEffect(() => {
+    let cancelled = false
+    dictionaryLoader.getBookUnitCount(currentBookId).then((count) => {
+      if (!cancelled) setUnitCount(count > 0 ? count : fallbackUnitCount)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentBookId, fallbackUnitCount])
+
+  const isLastUnit = unitCount > 0 && currentUnitIndex >= unitCount - 1
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
+  }, [])
+
+  // 按当前模式组装按钮引用数组，供键盘左右切换时定位
+  const buttonRefs = React.useMemo(() => {
+    if (isErrorPracticeActive) {
+      const refs: React.RefObject<HTMLButtonElement | null>[] = [exitToErrorsButtonRef]
+      if (mode === 'learn') refs.push(dictationButtonRef)
+      refs.push(nextButtonRef)
+      return refs
+    }
+    const refs: React.RefObject<HTMLButtonElement | null>[] = [restartButtonRef]
+    if (mode === 'learn') refs.push(dictationButtonRef)
+    refs.push(nextButtonRef)
+    return refs
+  }, [isErrorPracticeActive, mode])
+
+  // 单元完成后自动聚焦主按钮（下一单元 / 继续常规章节默写）
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      // 默认聚焦最后一个（主按钮）；左右键后续会从这里开始切换
+      const lastRef = buttonRefs[buttonRefs.length - 1]
+      lastRef?.current?.focus()
+    }, 50)
+    return () => clearTimeout(timer)
+    // buttonRefs 由 mode/error 派生，挂载时聚焦即可
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isErrorPracticeActive, mode])
+
+  // 左右键在按钮组里循环切换焦点；Enter 走原生按钮 onClick，所以这里不重复绑 Enter
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault()
+        const activeIdx = buttonRefs.findIndex((ref) => ref.current === document.activeElement)
+        const count = buttonRefs.length
+        if (count === 0) return
+
+        let nextIdx = 0
+        if (e.key === 'ArrowRight') {
+          nextIdx = activeIdx >= 0 ? (activeIdx + 1) % count : 0
+        } else {
+          nextIdx = activeIdx > 0 ? activeIdx - 1 : count - 1
+        }
+        buttonRefs[nextIdx]?.current?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [buttonRefs])
+
+  // 几个按钮共用的 focus 描边样式 —— 让左右键切换时每个按钮都能看见焦点
+  const baseFocusRing =
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+  const secondaryButtonClass = `flex items-center gap-2 h-10 px-4 rounded-lg border border-border text-foreground hover:bg-muted text-sm transition-colors cursor-pointer ${baseFocusRing}`
+  const primaryButtonClass = `flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover transition-colors cursor-pointer ${baseFocusRing}`
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-xl w-full py-10 text-center space-y-7 relative z-20"
+    >
+      <CheckCircle2 className="size-10 text-primary mx-auto" strokeWidth={1.5} />
+
+      {isErrorPracticeActive ? (
+        <div className="space-y-3">
+          <h2 className="text-3xl font-medium text-white tracking-tight">
+            {mode === 'learn' ? '生错词练习完成' : '生错词攻坚完成'}
+          </h2>
+          <p className="text-sm text-[#9CA3AF] leading-relaxed">
+            {mode === 'learn'
+              ? '太棒了！生错词本中的单词已全部完成跟学拼读，接下来可以去默写页检验记忆。'
+              : '恭喜！本次攻坚的所有生错词均已连续 3 次无误默写通关，肌肉记忆重塑完成，已从生错词本中全部消除归档。'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <h2 className="text-3xl font-medium text-white tracking-tight">
+            {currentUnitMeta
+              ? `完成「${currentUnitMeta.name}」`
+              : `完成第 ${currentUnitIndex + 1} 单元`}
+          </h2>
+          <p className="text-sm text-[#9CA3AF]">
+            {mode === 'learn'
+              ? '本单元所有单词均已跟学拼读完成，接下来可以到默写页检验记忆。'
+              : '所有单词均已在默写模式下 100% 正确击键通过，肌肉记忆已牢固建立。'}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-3 pt-2">
+        {isErrorPracticeActive ? (
+          <>
+            <button
+              ref={exitToErrorsButtonRef}
+              onClick={async () => {
+                startRouteProgressBar()
+                await exitErrorPractice()
+                router.push('/errors')
+              }}
+              className={secondaryButtonClass}
+            >
+              <span>返回生错词</span>
+            </button>
+            {mode === 'learn' && (
+              <button
+                ref={dictationButtonRef}
+                onClick={() => {
+                  startRouteProgressBar()
+                  useWorkspaceStore.getState().setShouldAutoStartDictation(true)
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('lingualoop_auto_start_dictation', 'true')
+                  }
+                  startErrorPractice(currentLoadedWords, 0)
+                  router.push('/dictation')
+                }}
+                className={secondaryButtonClass}
+              >
+                <span>去生错词默写</span>
+              </button>
+            )}
+            <button
+              ref={nextButtonRef}
+              onClick={async () => {
+                startRouteProgressBar()
+                await exitErrorPractice()
+                if (mode === 'learn') {
+                  useWorkspaceStore.getState().setShouldAutoStartLearn(true)
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('lingualoop_auto_start_learn', 'true')
+                  }
+                } else {
+                  useWorkspaceStore.getState().setShouldAutoStartDictation(true)
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('lingualoop_auto_start_dictation', 'true')
+                  }
+                }
+                router.push(mode === 'learn' ? '/learn' : '/dictation')
+              }}
+              className={primaryButtonClass}
+            >
+              <span>{mode === 'learn' ? '继续常规章节跟学' : '继续常规章节默写'}</span>
+              <ArrowRight className="size-4" />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              ref={restartButtonRef}
+              onClick={restartUnit}
+              className={secondaryButtonClass}
+            >
+              <RotateCcw className="size-4" />
+              <span>重做本单元</span>
+            </button>
+
+            {mode === 'learn' && (
+              <button
+                ref={dictationButtonRef}
+                onClick={() => {
+                  startRouteProgressBar()
+                  useWorkspaceStore.getState().setShouldAutoStartDictation(true)
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('lingualoop_auto_start_dictation', 'true')
+                  }
+                  router.push('/dictation')
+                }}
+                className={secondaryButtonClass}
+              >
+                <span>去默写检验</span>
+              </button>
+            )}
+
+            {isLastUnit ? (
+              <button
+                ref={nextButtonRef}
+                onClick={() => {
+                  startRouteProgressBar()
+                  router.push('/books')
+                }}
+                className={primaryButtonClass}
+              >
+                <span>已是最后一个单元 · 返回词库</span>
+                <ArrowRight className="size-4" />
+              </button>
+            ) : (
+              <button
+                ref={nextButtonRef}
+                onClick={() => setUnitIndex(currentUnitIndex + 1)}
+                className={primaryButtonClass}
+              >
+                <span>下一单元</span>
+                <ArrowRight className="size-4" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </motion.div>
+  )
+}

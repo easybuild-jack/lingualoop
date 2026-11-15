@@ -1,0 +1,1028 @@
+@import "tailwindcss";
+
+/* 单词与例句用的衬线字体，自托管以支持离线；latin-ext 覆盖 IPA 音标字符 */
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/newsreader-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/newsreader-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------------------------------------------------------------------------
+   配色变量默认值 = slate-mint（沉静薄荷）
+   SkinApplier 会在客户端挂载 / 切换皮肤时把对应的 token 写到
+   documentElement 的 inline style 上；下面的 [data-skin=...] 块是首屏
+   兜底，避免刷新后闪色。
+   --------------------------------------------------------------------------- */
+:root {
+  --background: #0E1216;
+  --foreground: #F3F4F6;
+  --sidebar-bg: #161B22;
+  --card: rgba(255, 255, 255, 0.045);
+  --card-foreground: #FFFFFF;
+  --primary: #5EEAD4;
+  --primary-foreground: #0B0C0E;
+  --primary-hover: #99F6E4;
+  /* 供 rgb(var(--primary-rgb) / <alpha>) 拼光晕用，改主色时这里要一起改 */
+  --primary-rgb: 94 234 212;
+  --secondary: #1F242E;
+  --secondary-foreground: #F3F4F6;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #94A3B8;
+  --accent: #FEBC2E;
+  --accent-foreground: #0B0C0E;
+  --destructive: #FF5F57;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.07);
+  --ring: #5EEAD4;
+}
+
+:root[data-skin="classic-emerald"] {
+  --background: #0B0C0E;
+  --sidebar-bg: #0B0C0E;
+  --card: rgba(255, 255, 255, 0.05);
+  --primary: #34D399;
+  --primary-hover: #6EE7B7;
+  --primary-rgb: 52 211 153;
+  --border: rgba(255, 255, 255, 0.1);
+  --muted: rgba(255, 255, 255, 0.08);
+  --muted-foreground: #9CA3AF;
+  --ring: #34D399;
+}
+
+:root[data-skin="sakura-pink"] {
+  --background: #140E15;
+  --sidebar-bg: #1E1420;
+  --card: rgba(255, 255, 255, 0.045);
+  --primary: #F472B6;
+  --primary-hover: #FBCFE8;
+  --primary-rgb: 244 114 182;
+  --border: rgba(244, 114, 182, 0.12);
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #BFA3C4;
+  --ring: #F472B6;
+}
+
+:root[data-skin="peach-oolong"] {
+  --background: #150F0F;
+  --sidebar-bg: #211717;
+  --card: rgba(255, 255, 255, 0.045);
+  --primary: #FB923C;
+  --primary-hover: #FDBA74;
+  --primary-rgb: 251 146 60;
+  --border: rgba(251, 146, 60, 0.12);
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #C7AFA8;
+  --ring: #FB923C;
+}
+
+:root[data-skin="oxford-twilight"] {
+  --background: #090D1A;
+  --sidebar-bg: #0F1528;
+  --card: rgba(255, 255, 255, 0.045);
+  --primary: #818CF8;
+  --primary-hover: #A5B4FC;
+  --primary-rgb: 129 140 248;
+  --border: rgba(129, 140, 248, 0.14);
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #8E9BB5;
+  --ring: #818CF8;
+}
+
+:root[data-skin="muted-parchment"] {
+  --background: #F5F1E8;
+  --foreground: #1C1917;
+  --sidebar-bg: #ECE6D8;
+  --card: rgba(255, 255, 255, 0.75);
+  --card-foreground: #1C1917;
+  --primary: #0D766E;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #115E59;
+  --primary-rgb: 13 118 110;
+  --secondary: #E5DFC9;
+  --secondary-foreground: #1C1917;
+  --muted: rgba(0, 0, 0, 0.05);
+  --muted-foreground: #78716C;
+  --accent: #D97706;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(13, 118, 110, 0.16);
+  --ring: #0D766E;
+}
+
+:root[data-skin="avocado-cream"] {
+  --background: #F9FBE6;
+  --foreground: #242B23;
+  --sidebar-bg: #EEF3D2;
+  --card: rgba(255, 255, 255, 0.90);
+  --card-foreground: #242B23;
+  --primary: #7FA921;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #6C9219;
+  --primary-rgb: 127 169 33;
+  --secondary: #E3E9C4;
+  --secondary-foreground: #242B23;
+  --muted: rgba(110, 118, 108, 0.08);
+  --muted-foreground: #6E766C;
+  --accent: #D97706;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(110, 118, 108, 0.20);
+  --ring: #7FA921;
+}
+
+/* Tailwind v4 只认 @theme 里注册的令牌，缺了这层 bg-primary / text-accent 等工具类不会被生成 */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar-bg);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  /* 全局字号统一放大一号：只改 text-* 令牌，间距、控件高度、图标尺寸都不动。
+     line-height 在 Tailwind v4 里是倍数（calc(...)），会跟着字号自动缩放，无需另设。 */
+  :root {
+    --text-xs: 0.8125rem; /* 12 → 13 */
+    --text-sm: 0.9375rem; /* 14 → 15 */
+    --text-base: 1.0625rem; /* 16 → 17 */
+    --text-lg: 1.1875rem; /* 18 → 19 */
+    --text-xl: 1.3125rem; /* 20 → 21 */
+    --text-2xl: 1.625rem; /* 24 → 26 */
+    --text-3xl: 1.9375rem; /* 30 → 31 */
+  }
+
+  /* 口语陪练窗口已完成字号分级，这里把它钉回原值，不跟随全局放大 */
+  [data-speaking] {
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+  }
+}
+
+/* 放进 components 层，才能被 border-primary/30 这类工具类覆盖 */
+@layer components {
+
+  /* 全局背景纯色深底，消除光圈光晕对文本清晰度的干扰 */
+  .bg-easybuild-radial {
+    background-color: var(--background);
+  }
+
+  .glass-card {
+    background: var(--card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+
+  .glass-panel {
+    background: rgba(18, 20, 26, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* 例句查词浮层卡片与提示小框：与例句组件框背景、边框完全保持一致 */
+  .word-lookup-card {
+    background: rgba(18, 22, 29, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  .word-lookup-arrow {
+    background: rgba(18, 22, 29, 0.96);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+
+  .tooltip-box {
+    background: rgba(18, 22, 29, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* 进度条与进度环未完成底槽/底轨规范（深色默认） */
+  .progress-track {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .progress-ring-track {
+    stroke: rgba(255, 255, 255, 0.08);
+  }
+
+  .animate-shake {
+    animation: shake-animation 0.22s ease-in-out;
+  }
+
+  .animate-cursor {
+    animation: cursor-blink 0.9s infinite;
+  }
+
+  /* 校验失败时整块边框红闪两下，用于音标键盘这类没有输入焦点的浮层 */
+  .animate-border-flash {
+    animation: border-flash-animation 0.9s ease-in-out;
+  }
+
+  /* 基础按钮过渡 */
+  .btn-neon-glow {
+    transition: all 0.2s ease;
+  }
+
+  /* 切分音节纯文字动效：亮度由暗变亮，从最左侧向右波浪式扫描，柔和慢速 */
+  .syllable-font-light {
+    animation: syllable-light-sweep 4.5s ease-in-out infinite;
+    will-change: opacity, filter;
+  }
+
+  /* 输入错误字母红色闪动提示（闪动 3 次后平稳常亮） */
+  .animate-error-flash {
+    animation: error-letter-flash 0.45s ease-in-out 3 forwards;
+  }
+
+  /* 错误输入槽外框红色呼吸提示（闪动 3 次后平稳常亮） */
+  .animate-error-box {
+    animation: error-box-pulse 0.45s ease-in-out 3 forwards;
+  }
+}
+
+/* 音节纯文字亮度扫描动效：极轻柔的由暗渐进变亮，过渡舒缓平静 */
+@keyframes syllable-light-sweep {
+  0% {
+    opacity: 0.55;
+    filter: brightness(0.8);
+  }
+
+  35% {
+    opacity: 1;
+    filter: brightness(1.2) drop-shadow(0 0 6px rgb(var(--primary-rgb) / 0.45));
+  }
+
+  65%,
+  100% {
+    opacity: 0.85;
+    filter: brightness(1);
+  }
+}
+
+/* 错误震动动画 */
+@keyframes shake-animation {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+/* 校验失败：边框红闪两下，无刺眼光晕 */
+@keyframes border-flash-animation {
+
+  0%,
+  50%,
+  100% {
+    border-color: var(--destructive);
+  }
+
+  25%,
+  75% {
+    border-color: rgba(255, 95, 87, 0.2);
+  }
+}
+
+/* 呼吸光标动画 */
+@keyframes cursor-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 输入错误字母红光闪烁提示 */
+@keyframes error-letter-flash {
+
+  0%,
+  100% {
+    opacity: 1;
+    color: #ef4444;
+    text-shadow: 0 0 14px rgba(239, 68, 68, 0.95);
+    border-color: rgba(239, 68, 68, 0.8);
+    background-color: rgba(239, 68, 68, 0.25);
+  }
+
+  50% {
+    opacity: 0.35;
+    color: #f87171;
+    text-shadow: 0 0 2px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    background-color: rgba(239, 68, 68, 0.08);
+  }
+}
+
+/* 错误输入槽外框红色呼吸提示 */
+@keyframes error-box-pulse {
+
+  0%,
+  100% {
+    border-color: rgba(239, 68, 68, 0.8);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+  }
+
+  50% {
+    border-color: rgba(239, 68, 68, 0.3);
+    box-shadow: none;
+  }
+}
+
+/* 自定义极简暗黑滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------------------------------------------------------------------------
+   自然拼读与音标高亮发音字母（phonics-highlight）在各主题下的色彩优化
+   - 统一为经典暖琥珀色（#F59E0B / #D97706），暗色与浅色保持高度一致的暖琥珀质感
+   - 彻底移除所有 text-shadow、drop-shadow 与光晕效果，呈现清晰锐利的纯矢量字形
+   --------------------------------------------------------------------------- */
+.phonics-highlight {
+  color: #F59E0B;
+  text-decoration-color: #D97706;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+.phonics-pattern-title {
+  color: #F59E0B;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+@media (prefers-color-scheme: light) {
+
+  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .phonics-highlight,
+  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-400,
+  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-500 {
+    color: #B45309 !important;
+    text-shadow: none !important;
+    filter: none !important;
+    text-decoration-color: #D97706 !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   晨曦纸墨（muted-parchment）浅色纸质模式专属适配规则
+   在不影响其他暗色皮肤的前提下，将页面内浅色文字映射为清晰墨色
+   --------------------------------------------------------------------------- */
+:root[data-skin="muted-parchment"] {
+  color-scheme: light;
+}
+
+:root[data-skin="muted-parchment"] body {
+  color: #1C1917;
+}
+
+:root[data-skin="muted-parchment"] h1,
+:root[data-skin="muted-parchment"] h2,
+:root[data-skin="muted-parchment"] h3,
+:root[data-skin="muted-parchment"] h4 {
+  color: #1C1917;
+}
+
+:root[data-skin="muted-parchment"] .text-white,
+:root[data-skin="muted-parchment"] [class*="text-white"] {
+  color: #1C1917 !important;
+}
+
+:root[data-skin="muted-parchment"] .text-gray-100 {
+  color: #1C1917 !important;
+}
+
+:root[data-skin="muted-parchment"] .text-gray-200 {
+  color: #292524 !important;
+}
+
+:root[data-skin="muted-parchment"] .text-gray-300 {
+  color: #44403C !important;
+}
+
+:root[data-skin="muted-parchment"] .text-gray-400 {
+  color: #57534E !important;
+}
+
+:root[data-skin="muted-parchment"] .text-gray-500 {
+  color: #78716C !important;
+}
+
+:root[data-skin="muted-parchment"] .text-\[\#9CA3AF\],
+:root[data-skin="muted-parchment"] [class*="text-\[\#9CA3AF\]"] {
+  color: #57534E !important;
+}
+
+:root[data-skin="muted-parchment"] .text-muted-foreground,
+:root[data-skin="muted-parchment"] [class*="text-muted-foreground"] {
+  color: #78716C !important;
+}
+
+/* 实色品牌色与状态色按钮上的文字保持纯白，保证高对比可读性（排除带 / 的半透明背景，如 bg-destructive/10、bg-destructive/[0.04] 等） */
+:root[data-skin="muted-parchment"] button.bg-primary,
+:root[data-skin="muted-parchment"] button.bg-primary *,
+:root[data-skin="muted-parchment"] .btn-primary,
+:root[data-skin="muted-parchment"] .btn-primary *,
+:root[data-skin="muted-parchment"] .bg-primary:not([class*="/"]),
+:root[data-skin="muted-parchment"] .bg-primary:not([class*="/"]) *,
+:root[data-skin="muted-parchment"] button.bg-destructive,
+:root[data-skin="muted-parchment"] button.bg-destructive *,
+:root[data-skin="muted-parchment"] .bg-destructive:not([class*="/"]),
+:root[data-skin="muted-parchment"] .bg-destructive:not([class*="/"]) *,
+:root[data-skin="muted-parchment"] [class*="bg-rose-"]:not([class*="/"]),
+:root[data-skin="muted-parchment"] [class*="bg-rose-"]:not([class*="/"]) *,
+:root[data-skin="muted-parchment"] [class*="bg-green-600"]:not([class*="/"]),
+:root[data-skin="muted-parchment"] [class*="bg-green-600"]:not([class*="/"]) * {
+  color: #FFFFFF !important;
+}
+
+/* 浅色纸质模式下：明确保证打字输入槽中已输入的正确字母保持深青墨色，错误字母保持鲜明深红 */
+:root[data-skin="muted-parchment"] .text-primary {
+  color: var(--primary) !important;
+}
+
+:root[data-skin="muted-parchment"] .text-destructive {
+  color: #DC2626 !important;
+}
+
+:root[data-skin="muted-parchment"] .text-destructive\/40 {
+  color: rgba(220, 38, 38, 0.45) !important;
+}
+
+:root[data-skin="muted-parchment"] .text-primary\/35 {
+  color: rgba(13, 118, 110, 0.4) !important;
+}
+
+/* 浅色纸质模式下：例词高亮与组合拼读字母映射为高对比度深琥珀橙，解决浅色背景下看不清的问题 */
+:root[data-skin="muted-parchment"] .phonics-highlight,
+:root[data-skin="muted-parchment"] .text-amber-400,
+:root[data-skin="muted-parchment"] [class*="text-amber-400"],
+:root[data-skin="muted-parchment"] [class*="text-amber-300"] {
+  color: #B45309 !important;
+  text-shadow: none !important;
+  text-decoration-color: #D97706 !important;
+}
+
+:root[data-skin="muted-parchment"] .phonics-pattern-title {
+  color: #B45309 !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* 边框在浅色下的感知染色 */
+:root[data-skin="muted-parchment"] .border-white\/5,
+:root[data-skin="muted-parchment"] .border-white\/10,
+:root[data-skin="muted-parchment"] .border-white\/15,
+:root[data-skin="muted-parchment"] .border-white\/20,
+:root[data-skin="muted-parchment"] [class*="border-white/"],
+:root[data-skin="muted-parchment"] [class*="divide-white/"]>* {
+  border-color: rgba(13, 118, 110, 0.22) !important;
+}
+
+/* 半透明浅色背景块（包括下拉选择框与徽标） */
+:root[data-skin="muted-parchment"] .bg-white\/5,
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.02\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.025\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.03\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.04\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.05\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.06\],
+:root[data-skin="muted-parchment"] .bg-white\/\[0\.08\],
+:root[data-skin="muted-parchment"] [class*="bg-white/"] {
+  background-color: rgba(13, 118, 110, 0.06) !important;
+}
+
+:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.06\]:hover,
+:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.08\]:hover,
+:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.1\]:hover,
+:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.12\]:hover,
+:root[data-skin="muted-parchment"] .hover\:bg-white\/10:hover,
+:root[data-skin="muted-parchment"] .hover\:bg-white\/5:hover,
+:root[data-skin="muted-parchment"] [class*="hover:bg-white/"]:hover {
+  background-color: rgba(13, 118, 110, 0.12) !important;
+}
+
+/* 磨砂玻璃卡片 */
+:root[data-skin="muted-parchment"] .glass-card {
+  background: rgba(255, 255, 255, 0.90) !important;
+  border: 1px solid rgba(13, 118, 110, 0.18) !important;
+  box-shadow: 0 10px 32px 0 rgba(70, 60, 45, 0.10) !important;
+}
+
+:root[data-skin="muted-parchment"] .glass-panel {
+  background: rgba(245, 241, 232, 0.98) !important;
+  border: 1px solid rgba(13, 118, 110, 0.22) !important;
+  color: #1C1917 !important;
+}
+
+/* 侧边栏与弹窗底色 */
+:root[data-skin="muted-parchment"] aside[data-sidebar] {
+  background-color: rgba(236, 230, 216, 0.95) !important;
+  border-color: rgba(13, 118, 110, 0.18) !important;
+}
+
+:root[data-skin="muted-parchment"] .bg-sidebar {
+  background-color: #ECE6D8 !important;
+  color: #1C1917 !important;
+}
+
+:root[data-skin="muted-parchment"] .bg-\[\#12141A\],
+:root[data-skin="muted-parchment"] [class*="bg-\[\#12141A\]"],
+:root[data-skin="muted-parchment"] .bg-\[\#181B22\],
+:root[data-skin="muted-parchment"] [class*="bg-\[\#181B22\]"] {
+  background-color: #FDFCFA !important;
+  border-color: rgba(13, 118, 110, 0.25) !important;
+  box-shadow: 0 16px 40px rgba(60, 50, 35, 0.18) !important;
+  color: #1C1917 !important;
+}
+
+:root[data-skin="muted-parchment"] .word-lookup-card,
+:root[data-skin="muted-parchment"] .word-lookup-arrow,
+:root[data-skin="muted-parchment"] .tooltip-box {
+  background-color: #FDFCFA !important;
+  border-color: rgba(13, 118, 110, 0.20) !important;
+  color: #1C1917 !important;
+  box-shadow: 0 16px 40px rgba(60, 50, 35, 0.16) !important;
+}
+
+/* 输入框聚焦与 placeholder 颜色 */
+:root[data-skin="muted-parchment"] input,
+:root[data-skin="muted-parchment"] textarea {
+  color: #1C1917 !important;
+}
+
+:root[data-skin="muted-parchment"] input::placeholder,
+:root[data-skin="muted-parchment"] textarea::placeholder {
+  color: #78716C !important;
+}
+
+/* 浅色滚动条 */
+:root[data-skin="muted-parchment"] ::-webkit-scrollbar-thumb {
+  background: rgba(13, 118, 110, 0.2) !important;
+}
+
+:root[data-skin="muted-parchment"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 118, 110, 0.35) !important;
+}
+
+/* 进度环与进度条未完成底槽在晨曦纸墨（浅色）下的高对比度适配 */
+:root[data-skin="muted-parchment"] .progress-track {
+  background-color: rgba(13, 118, 110, 0.12) !important;
+  border-color: rgba(13, 118, 110, 0.22) !important;
+}
+
+:root[data-skin="muted-parchment"] .progress-ring-track {
+  stroke: rgba(13, 118, 110, 0.18) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   酪梨青灰（avocado-cream）潮流高级感浅色模式专属适配规则
+   核心三色：豆汁黄(#F9FBE6) + 青灰(#6E766C) + 牛油果绿(#7FA921)
+   --------------------------------------------------------------------------- */
+:root[data-skin="avocado-cream"] {
+  color-scheme: light;
+}
+
+:root[data-skin="avocado-cream"] body {
+  color: #242B23;
+}
+
+:root[data-skin="avocado-cream"] h1,
+:root[data-skin="avocado-cream"] h2,
+:root[data-skin="avocado-cream"] h3,
+:root[data-skin="avocado-cream"] h4 {
+  color: #242B23;
+}
+
+:root[data-skin="avocado-cream"] .text-white,
+:root[data-skin="avocado-cream"] [class*="text-white"] {
+  color: #242B23 !important;
+}
+
+:root[data-skin="avocado-cream"] .text-gray-100 {
+  color: #242B23 !important;
+}
+
+:root[data-skin="avocado-cream"] .text-gray-200 {
+  color: #313B2F !important;
+}
+
+:root[data-skin="avocado-cream"] .text-gray-300 {
+  color: #485246 !important;
+}
+
+:root[data-skin="avocado-cream"] .text-gray-400 {
+  color: #6E766C !important;
+}
+
+:root[data-skin="avocado-cream"] .text-gray-500 {
+  color: #6E766C !important;
+}
+
+:root[data-skin="avocado-cream"] .text-\[\#9CA3AF\],
+:root[data-skin="avocado-cream"] [class*="text-\[\#9CA3AF\]"] {
+  color: #6E766C !important;
+}
+
+:root[data-skin="avocado-cream"] .text-muted-foreground,
+:root[data-skin="avocado-cream"] [class*="text-muted-foreground"] {
+  color: #6E766C !important;
+}
+
+/* 实色主按钮与状态色文字保持纯白高对比 */
+:root[data-skin="avocado-cream"] button.bg-primary,
+:root[data-skin="avocado-cream"] button.bg-primary *,
+:root[data-skin="avocado-cream"] .btn-primary,
+:root[data-skin="avocado-cream"] .btn-primary *,
+:root[data-skin="avocado-cream"] .bg-primary:not([class*="/"]),
+:root[data-skin="avocado-cream"] .bg-primary:not([class*="/"]) *,
+:root[data-skin="avocado-cream"] button.bg-destructive,
+:root[data-skin="avocado-cream"] button.bg-destructive *,
+:root[data-skin="avocado-cream"] .bg-destructive:not([class*="/"]),
+:root[data-skin="avocado-cream"] .bg-destructive:not([class*="/"]) *,
+:root[data-skin="avocado-cream"] [class*="bg-rose-"]:not([class*="/"]),
+:root[data-skin="avocado-cream"] [class*="bg-rose-"]:not([class*="/"]) *,
+:root[data-skin="avocado-cream"] [class*="bg-green-600"]:not([class*="/"]),
+:root[data-skin="avocado-cream"] [class*="bg-green-600"]:not([class*="/"]) * {
+  color: #FFFFFF !important;
+}
+
+/* 键盘按键与字符色映射 */
+:root[data-skin="avocado-cream"] .text-primary {
+  color: #7FA921 !important;
+}
+
+:root[data-skin="avocado-cream"] .text-destructive {
+  color: #DC2626 !important;
+}
+
+:root[data-skin="avocado-cream"] .text-destructive\/40 {
+  color: rgba(220, 38, 38, 0.45) !important;
+}
+
+:root[data-skin="avocado-cream"] .text-primary\/35 {
+  color: rgba(127, 169, 33, 0.4) !important;
+}
+
+/* 浅色酪梨模式下：例词高亮与组合拼读字母映射为高对比度深琥珀橙 */
+:root[data-skin="avocado-cream"] .phonics-highlight,
+:root[data-skin="avocado-cream"] .text-amber-400,
+:root[data-skin="avocado-cream"] [class*="text-amber-400"],
+:root[data-skin="avocado-cream"] [class*="text-amber-300"] {
+  color: #B45309 !important;
+  text-shadow: none !important;
+  text-decoration-color: #D97706 !important;
+}
+
+:root[data-skin="avocado-cream"] .phonics-pattern-title {
+  color: #B45309 !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* 边框映射：雅致青灰边框 */
+:root[data-skin="avocado-cream"] .border-white\/5,
+:root[data-skin="avocado-cream"] .border-white\/10,
+:root[data-skin="avocado-cream"] .border-white\/15,
+:root[data-skin="avocado-cream"] .border-white\/20,
+:root[data-skin="avocado-cream"] [class*="border-white/"],
+:root[data-skin="avocado-cream"] [class*="divide-white/"]>* {
+  border-color: rgba(110, 118, 108, 0.20) !important;
+}
+
+/* 半透明背景微块（按钮、徽章） */
+:root[data-skin="avocado-cream"] .bg-white\/5,
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.02\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.025\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.03\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.04\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.05\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.06\],
+:root[data-skin="avocado-cream"] .bg-white\/\[0\.08\],
+:root[data-skin="avocado-cream"] [class*="bg-white/"] {
+  background-color: rgba(127, 169, 33, 0.08) !important;
+}
+
+:root[data-skin="avocado-cream"] .hover\:bg-white\/\[0\.06\]:hover,
+:root[data-skin="avocado-cream"] .hover\:bg-white\/\[0\.08\]:hover,
+:root[data-skin="avocado-cream"] .hover\:bg-white\/\[0\.1\]:hover,
+:root[data-skin="avocado-cream"] .hover\:bg-white\/\[0\.12\]:hover,
+:root[data-skin="avocado-cream"] .hover\:bg-white\/10:hover,
+:root[data-skin="avocado-cream"] .hover\:bg-white\/5:hover,
+:root[data-skin="avocado-cream"] [class*="hover:bg-white/"]:hover {
+  background-color: rgba(127, 169, 33, 0.16) !important;
+}
+
+/* 磨砂玻璃卡片 */
+:root[data-skin="avocado-cream"] .glass-card {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(127, 169, 33, 0.20) !important;
+  box-shadow: 0 10px 32px 0 rgba(110, 118, 108, 0.12) !important;
+}
+
+:root[data-skin="avocado-cream"] .glass-panel {
+  background: rgba(249, 251, 230, 0.98) !important;
+  border: 1px solid rgba(127, 169, 33, 0.22) !important;
+  color: #242B23 !important;
+}
+
+/* 侧边栏与弹窗底色 */
+:root[data-skin="avocado-cream"] aside[data-sidebar] {
+  background-color: rgba(238, 243, 210, 0.96) !important;
+  border-color: rgba(110, 118, 108, 0.18) !important;
+}
+
+:root[data-skin="avocado-cream"] .bg-sidebar {
+  background-color: #EEF3D2 !important;
+  color: #242B23 !important;
+}
+
+/* 下拉菜单与弹层底色：纯净高亮遮盖 */
+:root[data-skin="avocado-cream"] .bg-\[\#12141A\],
+:root[data-skin="avocado-cream"] [class*="bg-\[\#12141A\]"],
+:root[data-skin="avocado-cream"] .bg-\[\#181B22\],
+:root[data-skin="avocado-cream"] [class*="bg-\[\#181B22\]"] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(127, 169, 33, 0.25) !important;
+  box-shadow: 0 16px 40px rgba(110, 118, 108, 0.18) !important;
+  color: #242B23 !important;
+}
+
+:root[data-skin="avocado-cream"] .word-lookup-card,
+:root[data-skin="avocado-cream"] .word-lookup-arrow,
+:root[data-skin="avocado-cream"] .tooltip-box {
+  background-color: #FFFFFF !important;
+  border-color: rgba(127, 169, 33, 0.20) !important;
+  color: #242B23 !important;
+  box-shadow: 0 16px 40px rgba(110, 118, 108, 0.16) !important;
+}
+
+/* 输入框与 placeholder */
+:root[data-skin="avocado-cream"] input,
+:root[data-skin="avocado-cream"] textarea {
+  color: #242B23 !important;
+}
+
+:root[data-skin="avocado-cream"] input::placeholder,
+:root[data-skin="avocado-cream"] textarea::placeholder {
+  color: #6E766C !important;
+}
+
+/* 浅色滚动条 */
+:root[data-skin="avocado-cream"] ::-webkit-scrollbar-thumb {
+  background: rgba(127, 169, 33, 0.25) !important;
+}
+
+:root[data-skin="avocado-cream"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 169, 33, 0.45) !important;
+}
+
+/* 进度环与进度条未完成底槽在酪梨青灰（浅色）下的高对比度适配 */
+:root[data-skin="avocado-cream"] .progress-track {
+  background-color: rgba(110, 118, 108, 0.14) !important;
+  border-color: rgba(110, 118, 108, 0.22) !important;
+}
+
+:root[data-skin="avocado-cream"] .progress-ring-track {
+  stroke: rgba(110, 118, 108, 0.20) !important;
+}
+
+/* 语法研习页沿用词库管理页的可读字号下限（与全局一样抬一号） */
+.grammar-page [class~="text-[10px]"],
+.grammar-page [class~="text-[11px]"],
+.grammar-page [class~="text-[12px]"] {
+  font-size: 0.8125rem;
+  line-height: 1.0625rem;
+}
+
+.grammar-page [class~="text-xs"] {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+}
+
+/* 语法页只保留主题主色与中性色，避免各模块各用一套装饰色 */
+.grammar-page :is([class*="text-emerald-"],
+  [class*="text-teal-"],
+  [class*="text-cyan-"],
+  [class*="text-sky-"],
+  [class*="text-blue-"],
+  [class*="text-indigo-"],
+  [class*="text-purple-"],
+  [class*="text-pink-"],
+  [class*="text-rose-"],
+  [class*="text-orange-"],
+  [class*="text-amber-"],
+  [class*="text-yellow-"],
+  [class*="text-lime-"]) {
+  color: var(--primary) !important;
+}
+
+.grammar-page :is([class*="bg-emerald-"],
+  [class*="bg-teal-"],
+  [class*="bg-cyan-"],
+  [class*="bg-sky-"],
+  [class*="bg-blue-"],
+  [class*="bg-indigo-"],
+  [class*="bg-purple-"],
+  [class*="bg-pink-"],
+  [class*="bg-rose-"],
+  [class*="bg-orange-"],
+  [class*="bg-amber-"],
+  [class*="bg-yellow-"],
+  [class*="bg-lime-"]) {
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent) !important;
+}
+
+.grammar-page :is([class*="border-emerald-"],
+  [class*="border-teal-"],
+  [class*="border-cyan-"],
+  [class*="border-sky-"],
+  [class*="border-blue-"],
+  [class*="border-indigo-"],
+  [class*="border-purple-"],
+  [class*="border-pink-"],
+  [class*="border-rose-"],
+  [class*="border-orange-"],
+  [class*="border-amber-"],
+  [class*="border-yellow-"],
+  [class*="border-lime-"]) {
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
+}
+
+/* 与音标学习页例词关键词颜色一致 (#F59E0B) - 无下划线 */
+.grammar-keyword,
+.grammar-page .grammar-keyword {
+  color: #F59E0B !important;
+  font-weight: 800;
+  text-decoration: none !important;
+}
+
+:root[data-skin="muted-parchment"] .grammar-keyword,
+:root[data-skin="avocado-cream"] .grammar-keyword,
+:root[data-skin="muted-parchment"] .grammar-page .grammar-keyword,
+:root[data-skin="avocado-cream"] .grammar-page .grammar-keyword {
+  color: #B45309 !important;
+  text-decoration: none !important;
+}
+
+@media (prefers-color-scheme: light) {
+
+  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-keyword,
+  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-page .grammar-keyword {
+    color: #B45309 !important;
+    text-decoration: none !important;
+  }
+}
+
+/* 首页 3D 卡片环绕 Y 轴旋转 */
+@keyframes home-carousel {
+  from {
+    transform: rotateY(0deg);
+  }
+
+  to {
+    transform: rotateY(-360deg);
+  }
+}
+
+@keyframes home-float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+/* 首页首屏底纹：所有皮肤统一用前景色淡点阵，不用带色相的 --border，深浅主题观感一致 */
+.home-hero-bg {
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 14%, transparent) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, black 10%, transparent 70%);
+}
+
+/* 首页模块路线图：主轨上来回巡游的小光点 */
+@keyframes home-route {
+  0% {
+    left: 0%;
+  }
+
+  50% {
+    left: calc(100% - 8px);
+  }
+
+  100% {
+    left: 0%;
+  }
+}
+
+/* 首页设计理念环形图：切换时序号轻弹 */
+@keyframes home-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 首页听力场景的声波柱 */
+@keyframes home-wave {
+
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* 扫光流光关键帧动画 (用于骨架屏与卡片加载态) */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}

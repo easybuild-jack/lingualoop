@@ -1,0 +1,1001 @@
+import Dexie, { type Table } from 'dexie'
+import type { VocabularyBook, VocabularyUnit, WordMasteryRecord, UnitProgressRecord, WordItem, WordOverrideRecord, WordEtymology, PracticeMode, WordExample } from '@/types'
+import { BUILTIN_BOOKS, DEFAULT_SAMPLE_CUSTOM_BOOK } from '@/resources/books'
+import { buildWordId } from '@/lib/wordId'
+
+const STORE_SCHEMA_V1: Record<string, string> = {
+  books: 'id, name, category, isCustom, updatedAt',
+  wordRecords: 'wordId, bookId, isMastered, isStarred, isError, lastPracticedAt',
+  unitProgress: '[bookId+unitIndex], bookId, isFinished',
+}
+
+const STORE_SCHEMA_V3: Record<string, string> = {
+  ...STORE_SCHEMA_V1,
+  wordOverrides: 'wordId, name, updatedAt',
+}
+
+const STORE_SCHEMA_V4: Record<string, string> = {
+  ...STORE_SCHEMA_V3,
+  aiWordCache: 'id, name',
+}
+
+const UNITS_SCHEMA = 'id, bookId, [bookId+order]'
+
+// IndexedDB 不能原地修改主键，因此先删除旧的空进度表，再按新主键重建。
+const STORE_SCHEMA_V5 = {
+  ...STORE_SCHEMA_V4,
+  units: UNITS_SCHEMA,
+  unitProgress: null,
+}
+
+const STORE_SCHEMA_V6 = {
+  ...STORE_SCHEMA_V4,
+  units: UNITS_SCHEMA,
+  unitProgress: '[unitId+mode], unitId, bookId, mode, status, lastStudiedAt',
+}
+
+/**
+ * 把同一个单词散落的多条记录合成一条：
+ * 累计类字段相加，「当前状态」类字段取最近一次练习的那条，加星是用户意图不能丢。
+ */
+function mergeMasteryRecords(a: WordMasteryRecord, b: WordMasteryRecord): WordMasteryRecord {
+  const latest = (b.lastPracticedAt || 0) >= (a.lastPracticedAt || 0) ? b : a
+  const older = latest === b ? a : b
+
+  return {
+    ...latest,
+    wordItem: latest.wordItem || older.wordItem,
+    wordName: latest.wordName || older.wordName,
+    totalPracticeCount: (a.totalPracticeCount || 0) + (b.totalPracticeCount || 0),
+    dictationErrorCount: (a.dictationErrorCount || 0) + (b.dictationErrorCount || 0),
+    isStarred: Boolean(a.isStarred || b.isStarred),
+  }
+}
+
+export class LinguaLoopDatabase extends Dexie {
+  books!: Table<VocabularyBook, string>
+  units!: Table<VocabularyUnit, string>
+  wordRecords!: Table<WordMasteryRecord, string>
+  unitProgress!: Table<UnitProgressRecord, [string, PracticeMode]>
+  wordOverrides!: Table<WordOverrideRecord, string>
+  aiWordCache!: Table<WordItem, string>
+
+  constructor() {
+    super('LinguaLoopDB')
+    this.version(1).stores(STORE_SCHEMA_V1)
+
+    // v1 的 wordId 掺了随机数与时间戳，同一个单词每次加载都会写成一条新记录。
+    // 改用拼写派生的确定性 id 后，把历史数据按拼写归并回同一条，避免错词本重复与进度归零。
+    this.version(2)
+      .stores(STORE_SCHEMA_V1)
+      .upgrade(async (tx) => {
+        const booksTable = tx.table<VocabularyBook, string>('books')
+        const customBooks = await booksTable.toArray()
+        for (const book of customBooks) {
+          if (!book.words?.length) continue
+          const rekeyed = book.words.map((w) => ({ ...w, id: buildWordId(w.name) }))
+          await booksTable.put({ ...book, words: rekeyed })
+        }
+
+        const recordsTable = tx.table<WordMasteryRecord, string>('wordRecords')
+        const legacyRecords = await recordsTable.toArray()
+
+        const mergedById = new Map<string, WordMasteryRecord>()
+        const consumedIds: string[] = []
+
+        for (const record of legacyRecords) {
+          const name = record.wordItem?.name || record.wordName
+          // 连拼写都没有的记录无法归位（例如仅加星过、未练习过的词），原样留下
+          if (!name) continue
+
+          const canonicalId = buildWordId(name)
+          const existing = mergedById.get(canonicalId)
+          const next = existing ? mergeMasteryRecords(existing, record) : record
+
+          mergedById.set(canonicalId, { ...next, wordId: canonicalId })
+          consumedIds.push(record.wordId)
+        }
+
+        if (consumedIds.length) await recordsTable.bulkDelete(consumedIds)
+        if (mergedById.size) await recordsTable.bulkPut(Array.from(mergedById.values()))
+      })
+
+    // v3: 增加用户自定义单词拆分与构词覆盖表
+    this.version(3).stores(STORE_SCHEMA_V3)
+
+    // v4: 增加 AI 字典单词本地缓存表
+    this.version(4).stores(STORE_SCHEMA_V4)
+
+    // v5-v6: 增加单元表，并把进度主键从单元序号改为稳定的 unitId + mode
+    this.version(5).stores(STORE_SCHEMA_V5)
+    this.version(6).stores(STORE_SCHEMA_V6)
+  }
+
+  async initializeDefaults() {
+    for (const book of BUILTIN_BOOKS) {
+      const existing = await this.books.get(book.id)
+      if (!existing || !existing.isCustom) {
+        await this.books.put(book)
+      }
+    }
+  }
+}
+
+export const db = new LinguaLoopDatabase()
+
+// 初始化默认词库
+if (typeof window !== 'undefined') {
+  // 调试用句柄：控制台里可以直接 __lingualoop_db 查看本地库
+  Object.assign(window, { __lingualoop_db: db })
+  db.initializeDefaults().catch(console.error)
+}
+
+
+/**
+ * 记录单词练习结果 (支持存储完整 wordItem 保证错词本跨词库独立展示与练习)
+ */
+export async function recordWordAttempt(
+  wordId: string,
+  bookId: string,
+  isCorrect: boolean,
+  mode: PracticeMode,
+  wordItem?: WordItem
+) {
+  try {
+    const existing = await db.wordRecords.get(wordId)
+    const now = Date.now()
+
+    if (!existing) {
+      const isDictationError = !isCorrect && mode === 'dictation'
+      const newRecord: WordMasteryRecord = {
+        wordId,
+        bookId,
+        wordName: wordItem?.name,
+        wordItem,
+        isMastered: isCorrect && mode === 'dictation',
+        isStarred: false,
+        isError: isDictationError,
+        totalPracticeCount: 1,
+        dictationErrorCount: isDictationError ? 1 : 0,
+        consecutiveCorrectCount: isCorrect && mode === 'dictation' ? 1 : 0,
+        lastPracticedAt: now,
+      }
+      await db.wordRecords.put(newRecord)
+      return newRecord
+    }
+
+    const consecutive = isCorrect && mode === 'dictation' ? existing.consecutiveCorrectCount + 1 : 0
+    const dictationErrors = !isCorrect && mode === 'dictation' ? existing.dictationErrorCount + 1 : existing.dictationErrorCount
+
+    // 只有在【默写模式】下出现错误或偷看提示才加入错词本；
+    // 在【跟学模式】下的输入错误完全不记录为错词；
+    // 连续正确 3 次且在默写模式下，自动移出错词本
+    let isError = existing.isError
+    if (mode === 'dictation') {
+      if (!isCorrect) {
+        isError = true
+      } else if (consecutive >= 3) {
+        isError = false
+      }
+    }
+    const isMastered = consecutive >= 3 || (isCorrect && mode === 'dictation')
+
+    const updated: WordMasteryRecord = {
+      ...existing,
+      wordItem: wordItem || existing.wordItem,
+      wordName: wordItem?.name || existing.wordName,
+      totalPracticeCount: existing.totalPracticeCount + 1,
+      dictationErrorCount: dictationErrors,
+      consecutiveCorrectCount: consecutive,
+      isError,
+      isMastered,
+      lastPracticedAt: now,
+    }
+
+    await db.wordRecords.put(updated)
+    return updated
+  } catch (err) {
+    console.error('Failed to record word attempt:', err)
+  }
+}
+
+/**
+ * 彻底消除单个生错词记录 (连续 3 次无误默写通关后调用)
+ */
+export async function eliminateErrorWord(wordId: string) {
+  try {
+    const existing = await db.wordRecords.get(wordId)
+    if (existing) {
+      await db.wordRecords.update(wordId, {
+        isError: false,
+        isStarred: false,
+        isMastered: true,
+        consecutiveCorrectCount: 3,
+        lastPracticedAt: Date.now(),
+      })
+    }
+  } catch (err) {
+    console.error('Failed to eliminate error word:', err)
+  }
+}
+
+/**
+ * 手动从生错词本移除/删除单个生错词
+ */
+export async function removeErrorWord(wordId: string) {
+  try {
+    const existing = await db.wordRecords.get(wordId)
+    if (existing) {
+      await db.wordRecords.update(wordId, {
+        isError: false,
+        isStarred: false,
+        consecutiveCorrectCount: 0,
+        lastPracticedAt: Date.now(),
+      })
+    }
+  } catch (err) {
+    console.error('Failed to remove error word:', err)
+  }
+}
+
+/**
+ * 获取所有活跃待攻克的生错词（加星生词 + 默写错词）及完整信息
+ */
+export async function getActiveTroubleWords(): Promise<{ word: WordItem; record: WordMasteryRecord }[]> {
+  try {
+    const records = await db.wordRecords.toArray()
+    const troubleRecords = records.filter((r) => r.isError || r.isStarred)
+    const result: { word: WordItem; record: WordMasteryRecord }[] = []
+
+    for (const r of troubleRecords) {
+      if (r.wordItem) {
+        result.push({ word: r.wordItem, record: r })
+      } else if (r.wordName) {
+        result.push({
+          word: {
+            id: r.wordId,
+            name: r.wordName,
+            syllables: [r.wordName],
+            posList: [],
+          },
+          record: r,
+        })
+      }
+    }
+    return result
+  } catch (err) {
+    console.error('Failed to get active trouble words:', err)
+    return []
+  }
+}
+
+/** 向前兼容 */
+export const getActiveErrorWords = getActiveTroubleWords
+
+/**
+ * 切换单词生词本加星状态
+ */
+export async function toggleStarWord(wordId: string, bookId: string, wordItem?: WordItem): Promise<boolean> {
+  try {
+    const existing = await db.wordRecords.get(wordId)
+    if (!existing) {
+      await db.wordRecords.put({
+        wordId,
+        bookId,
+        wordName: wordItem?.name,
+        wordItem,
+        isMastered: false,
+        isStarred: true,
+        isError: false,
+        totalPracticeCount: 0,
+        dictationErrorCount: 0,
+        consecutiveCorrectCount: 0,
+        lastPracticedAt: Date.now(),
+      })
+      return true
+    }
+
+    const nextStarred = !existing.isStarred
+    await db.wordRecords.update(wordId, {
+      isStarred: nextStarred,
+      wordItem: wordItem || existing.wordItem,
+      wordName: wordItem?.name || existing.wordName,
+    })
+    return nextStarred
+  } catch (err) {
+    console.error('Failed to toggle star word:', err)
+    return false
+  }
+}
+
+/**
+ * 取出全部自定义词库，供导入时选择目标。
+ *
+ * 只返回自定义词库：官方词库的词是从 /dicts 下的 JSON 按需加载的，
+ * db.books 里那条只是占位（setBookId 还会主动删掉它），写进去也不会被读出来。
+ */
+export async function getCustomBooks(): Promise<VocabularyBook[]> {
+  try {
+    const all = await db.books.toArray()
+    const custom = all.filter((b) => b.isCustom).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+
+    // 检查是否全为历史测试产生的多余重复默认生词本（如开发测试时产生的多个同名“我的自定义生词本”或临时记录）
+    const isRedundantLegacyTest =
+      custom.length > 1 &&
+      custom.every(
+        (b) =>
+          b.name === '我的自定义生词本' ||
+          b.id === 'book_custom_collected' ||
+          b.id === DEFAULT_SAMPLE_CUSTOM_BOOK.id
+      )
+
+    // 若无数据或仅有旧测试产生的冗余条目，仅保留并呈现 1 个官方标准示例词库
+    if (custom.length === 0 || isRedundantLegacyTest) {
+      if (isRedundantLegacyTest) {
+        for (const b of custom) {
+          if (b.id !== DEFAULT_SAMPLE_CUSTOM_BOOK.id) {
+            await db.books.delete(b.id).catch(() => { })
+            await db.unitProgress.where('bookId').equals(b.id).delete().catch(() => { })
+          }
+        }
+      }
+      await db.books.put(DEFAULT_SAMPLE_CUSTOM_BOOK)
+      return [DEFAULT_SAMPLE_CUSTOM_BOOK]
+    }
+
+    return custom
+  } catch (err) {
+    console.error('Failed to load custom books:', err)
+    return [DEFAULT_SAMPLE_CUSTOM_BOOK]
+  }
+}
+
+/**
+ * 把导入的单词并进已有词库：同名单词覆盖原条目，新词追加到末尾。
+ *
+ * 同名的判断直接用 id，它由拼写派生（见 buildWordId），所以"已存在"就是"拼写相同"。
+ * 覆盖时保留原有位置，否则重新导入一遍会打乱整本书的顺序，章节划分跟着全变。
+ */
+export async function mergeWordsIntoBook(bookId: string, words: WordItem[]) {
+  try {
+    const book = await db.books.get(bookId)
+    if (!book) return null
+
+    const merged = [...(book.words || [])]
+    const indexById = new Map(merged.map((word, index) => [word.id, index]))
+    let updated = 0
+    let added = 0
+
+    for (const word of words) {
+      const at = indexById.get(word.id)
+      if (at === undefined) {
+        indexById.set(word.id, merged.length)
+        merged.push(word)
+        added++
+      } else {
+        merged[at] = word
+        updated++
+      }
+    }
+
+    const nextBook: VocabularyBook = {
+      ...book,
+      words: merged,
+      totalWords: merged.length,
+      updatedAt: Date.now(),
+    }
+
+    await db.books.put(nextBook)
+    return { book: nextBook, updated, added }
+  } catch (err) {
+    console.error('Failed to merge words into book:', err)
+    return null
+  }
+}
+
+/**
+ * 保存自定义新词库
+ */
+export async function saveCustomVocabularyBook(name: string, description: string, words: WordItem[]) {
+  const newBook: VocabularyBook = {
+    id: `book_custom_${Date.now()}`,
+    name: name.trim() || '自定义生词本',
+    description: description.trim() || '用户自定义导入词库',
+    category: 'custom',
+    isCustom: true,
+    unitSize: 20,
+    totalWords: words.length,
+    words,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  await db.books.put(newBook)
+  return newBook
+}
+
+/**
+ * 删除用户自定义词库及关联的章节进度数据
+ * 内置/官方词库受到保护，无法被删除
+ */
+export async function deleteCustomVocabularyBook(bookId: string): Promise<boolean> {
+  try {
+    const book = await db.books.get(bookId)
+    // 保护：仅允许删除明确标记为自定义的词库
+    if (!book || !book.isCustom) return false
+
+    // 1. 删除词库主体
+    await db.books.delete(bookId)
+
+    // 2. 级联清理该词库的所有单元学习进度记录
+    await db.unitProgress.where('bookId').equals(bookId).delete()
+
+    return true
+  } catch (err) {
+    console.error('Failed to delete custom vocabulary book:', err)
+    return false
+  }
+}
+
+/**
+ * 读取某个语义单元在某个练习模式下的断点存档。
+ *
+ * 返回 undefined 代表这个单元从没被真正练过（只浏览过不算）。
+ */
+export async function getUnitProgressRecord(
+  unitId: string,
+  mode: PracticeMode
+): Promise<UnitProgressRecord | undefined> {
+  if (!unitId || typeof window === 'undefined') return undefined
+  try {
+    return await db.unitProgress.get([unitId, mode])
+  } catch (err) {
+    console.error('Failed to get unit progress:', err)
+    return undefined
+  }
+}
+
+/** 词库内容更新后，用当前单元成员修剪历史进度并重新计算完成状态。 */
+export async function reconcileUnitProgressRecord(params: {
+  bookId: string
+  unitId: string
+  mode: PracticeMode
+  unitWordIds: string[]
+}): Promise<UnitProgressRecord | undefined> {
+  const { bookId, unitId, mode, unitWordIds } = params
+  if (!unitId || unitWordIds.length === 0 || typeof window === 'undefined') return undefined
+
+  try {
+    return await db.transaction('rw', db.unitProgress, async () => {
+      const existing = await db.unitProgress.get([unitId, mode])
+      if (!existing) return undefined
+
+      const currentIds = new Set(unitWordIds)
+      const completedWordIds = existing.completedWordIds.filter((id) => currentIds.has(id))
+      const retryWordIds = existing.retryWordIds.filter((id) => currentIds.has(id))
+      const completed = new Set(completedWordIds)
+      const isCompleted =
+        retryWordIds.length === 0 && unitWordIds.every((id) => completed.has(id))
+      const record: UnitProgressRecord = {
+        ...existing,
+        bookId,
+        status: isCompleted ? 'completed' : 'in_progress',
+        currentWordIndex: Math.min(existing.currentWordIndex, unitWordIds.length - 1),
+        completedWordIds,
+        retryWordIds,
+        isRetrying: !isCompleted && retryWordIds.length > 0 && existing.isRetrying === true,
+        completedAt: isCompleted ? existing.completedAt : undefined,
+      }
+      await db.unitProgress.put(record)
+      return record
+    })
+  } catch (err) {
+    console.error('Failed to reconcile unit progress:', err)
+    return undefined
+  }
+}
+
+/** 读取一本词库在指定模式下的全部真实单元进度。 */
+export async function getBookUnitProgressRecords(
+  bookId: string,
+  mode: PracticeMode
+): Promise<UnitProgressRecord[]> {
+  if (!bookId || typeof window === 'undefined') return []
+  try {
+    const records = await db.unitProgress.where('bookId').equals(bookId).toArray()
+    return records.filter((record) => record.mode === mode)
+  } catch (err) {
+    console.error('Failed to get book unit progress:', err)
+    return []
+  }
+}
+
+/** 将默写出错或偷看的单词放回本单元待重考队列。 */
+export async function markUnitWordForRetry(params: {
+  bookId: string
+  unitId: string
+  mode: PracticeMode
+  wordId: string
+  wordIndex: number
+}): Promise<UnitProgressRecord | null> {
+  const { bookId, unitId, mode, wordId, wordIndex } = params
+  if (!unitId || !wordId || typeof window === 'undefined') return null
+
+  try {
+    return await db.transaction('rw', db.unitProgress, async () => {
+      const existing = await db.unitProgress.get([unitId, mode])
+      const now = Date.now()
+      const record: UnitProgressRecord = {
+        unitId,
+        bookId,
+        mode,
+        status: 'in_progress',
+        currentWordIndex: Math.max(existing?.currentWordIndex ?? 0, wordIndex),
+        completedWordIds: (existing?.completedWordIds ?? []).filter((id) => id !== wordId),
+        retryWordIds: Array.from(new Set([...(existing?.retryWordIds ?? []), wordId])),
+        isRetrying: existing?.isRetrying ?? false,
+        startedAt: existing?.startedAt ?? now,
+        lastStudiedAt: now,
+      }
+      await db.unitProgress.put(record)
+      return record
+    })
+  } catch (err) {
+    console.error('Failed to mark unit word for retry:', err)
+    return null
+  }
+}
+
+/**
+ * 标记单元内的一个单词「真正被敲完」。
+ *
+ * 这是 unitProgress 唯一的写入入口：只有用户在练习区逐字拼对这个词、
+ * 并打满当前循环次数（与「达到消灭标准」同一时刻）才会调用。
+ * 单纯浏览、按切换键翻词、加星、重放发音、偷看提示都不经过这里。
+ *
+ * 读改写放在一个事务里，避免连续完成多个词时互相覆盖。
+ */
+export async function markUnitWordCompleted(params: {
+  bookId: string
+  unitId: string
+  mode: PracticeMode
+  wordId: string
+  /** 该词在单元内的下标，用来推进断点 */
+  wordIndex: number
+  /** 当前单元的实际词 ID，用集合覆盖而非历史计数判断完成 */
+  unitWordIds: string[]
+  /** 首轮出错的词暂不计完成，留到单元末尾重考 */
+  deferForRetry?: boolean
+}): Promise<UnitProgressRecord | null> {
+  const { bookId, unitId, mode, wordId, wordIndex, unitWordIds, deferForRetry = false } = params
+  if (!unitId || !wordId || unitWordIds.length === 0 || typeof window === 'undefined') return null
+
+  try {
+    return await db.transaction('rw', db.unitProgress, async () => {
+      const existing = await db.unitProgress.get([unitId, mode])
+      const now = Date.now()
+      const currentWordIds = new Set(unitWordIds)
+      const completed = new Set(
+        (existing?.completedWordIds ?? []).filter((id) => currentWordIds.has(id))
+      )
+      const retry = new Set(
+        (existing?.retryWordIds ?? []).filter((id) => currentWordIds.has(id))
+      )
+
+      if (deferForRetry) {
+        completed.delete(wordId)
+        retry.add(wordId)
+      } else {
+        completed.add(wordId)
+        retry.delete(wordId)
+      }
+
+      const completedWordIds = Array.from(completed)
+      const retryWordIds = Array.from(retry)
+      const isUnitCompleted =
+        retryWordIds.length === 0 && unitWordIds.every((id) => completed.has(id))
+      const nextWordIndex = Math.min(wordIndex + 1, unitWordIds.length - 1)
+      const isRetrying =
+        !isUnitCompleted &&
+        (existing?.isRetrying === true ||
+          (wordIndex >= unitWordIds.length - 1 && retryWordIds.length > 0))
+
+      const record: UnitProgressRecord = {
+        unitId,
+        bookId,
+        mode,
+        status: isUnitCompleted ? 'completed' : 'in_progress',
+        // 断点只前进不后退：回头重练前面的词不会把存档拉回去
+        currentWordIndex: Math.max(existing?.currentWordIndex ?? 0, nextWordIndex),
+        completedWordIds,
+        retryWordIds,
+        isRetrying,
+        startedAt: existing?.startedAt ?? now,
+        lastStudiedAt: now,
+        completedAt: isUnitCompleted ? existing?.completedAt ?? now : undefined,
+      }
+
+      await db.unitProgress.put(record)
+      return record
+    })
+  } catch (err) {
+    console.error('Failed to mark unit word completed:', err)
+    return null
+  }
+}
+
+/**
+ * 清空某个单元在某个模式下的练习存档，「重做本单元」时调用。
+ *
+ * 不清的话，重做过程中刷新页面会被旧存档顶回重做前的位置。
+ */
+export async function clearUnitProgress(unitId: string, mode: PracticeMode): Promise<void> {
+  if (!unitId || typeof window === 'undefined') return
+  try {
+    await db.unitProgress.delete([unitId, mode])
+  } catch (err) {
+    console.error('Failed to clear unit progress:', err)
+  }
+}
+
+/**
+ * 保存单个单词的用户自定义切分与构词覆盖
+ * 1. 写入 wordOverrides 表
+ * 2. 同步更新 wordRecords 中已有的离线快照
+ * 3. 同步更新自定义词库中该词条的持久化数据
+ */
+export async function saveWordOverride(
+  wordId: string,
+  name: string,
+  overrides: {
+    phoneticUs?: string
+    phoneticUk?: string
+    posList?: WordItem['posList']
+    syllables?: string[]
+    etymology?: WordEtymology
+    silentIndices?: number[]
+    examples?: WordExample[]
+    phrases?: { en: string; cn: string }[]
+  },
+  guard?: {
+    keys: (keyof WordOverrideRecord)[]
+    snapshot: string
+  }
+): Promise<WordOverrideRecord> {
+  const cleanName = name.trim()
+  let record: WordOverrideRecord = {
+    wordId,
+    name: cleanName,
+    phoneticUs: overrides.phoneticUs,
+    phoneticUk: overrides.phoneticUk,
+    posList: overrides.posList,
+    syllables: overrides.syllables,
+    etymology: overrides.etymology,
+    silentIndices: overrides.silentIndices,
+    examples: overrides.examples,
+    phrases: overrides.phrases,
+    updatedAt: Date.now(),
+  }
+
+  try {
+    await db.transaction('rw', db.wordOverrides, db.wordRecords, db.books, async () => {
+      const existing = await db.wordOverrides.get(wordId)
+      if (
+        guard &&
+        JSON.stringify(guard.keys.map((key) => existing?.[key])) !== guard.snapshot
+      ) {
+        record = existing ?? {
+          wordId,
+          name: cleanName,
+          updatedAt: Date.now(),
+        }
+        return
+      }
+      record = {
+        ...existing,
+        wordId,
+        name: cleanName,
+        phoneticUs: overrides.phoneticUs !== undefined ? overrides.phoneticUs : existing?.phoneticUs,
+        phoneticUk: overrides.phoneticUk !== undefined ? overrides.phoneticUk : existing?.phoneticUk,
+        posList: overrides.posList !== undefined ? overrides.posList : existing?.posList,
+        syllables: overrides.syllables !== undefined ? overrides.syllables : existing?.syllables,
+        etymology: overrides.etymology !== undefined ? overrides.etymology : existing?.etymology,
+        silentIndices: overrides.silentIndices !== undefined ? overrides.silentIndices : existing?.silentIndices,
+        examples: overrides.examples !== undefined ? overrides.examples : existing?.examples,
+        phrases: overrides.phrases !== undefined ? overrides.phrases : existing?.phrases,
+        updatedAt: Date.now(),
+      }
+      await db.wordOverrides.put(record)
+
+      // 1. 同步更新 wordRecords 快照
+      const existingWordRecord = await db.wordRecords.get(wordId)
+      if (existingWordRecord?.wordItem) {
+        await db.wordRecords.update(wordId, {
+          wordItem: {
+            ...existingWordRecord.wordItem,
+            phoneticUs: record.phoneticUs || existingWordRecord.wordItem.phoneticUs,
+            phoneticUk: record.phoneticUk || existingWordRecord.wordItem.phoneticUk,
+            posList: record.posList?.length ? record.posList : existingWordRecord.wordItem.posList,
+            syllables: record.syllables || existingWordRecord.wordItem.syllables,
+            etymology: record.etymology !== undefined ? record.etymology : existingWordRecord.wordItem.etymology,
+            silentIndices: record.silentIndices !== undefined ? record.silentIndices : existingWordRecord.wordItem.silentIndices,
+            examples: record.examples !== undefined ? record.examples : existingWordRecord.wordItem.examples,
+            phrases: record.phrases !== undefined ? record.phrases : existingWordRecord.wordItem.phrases,
+          },
+        })
+      }
+
+      // 2. 同步更新自定义词库中的条目
+      const customBooks = await db.books.filter((b) => Boolean(b.isCustom)).toArray()
+      for (const book of customBooks) {
+        if (book.words?.some((w) => w.id === wordId || w.name.toLowerCase() === cleanName.toLowerCase())) {
+          const updatedWords = book.words.map((w) => {
+            if (w.id === wordId || w.name.toLowerCase() === cleanName.toLowerCase()) {
+              return {
+                ...w,
+                phoneticUs: overrides.phoneticUs || w.phoneticUs,
+                phoneticUk: overrides.phoneticUk || w.phoneticUk,
+                posList: overrides.posList?.length ? overrides.posList : w.posList,
+                syllables: overrides.syllables || w.syllables,
+                etymology: overrides.etymology !== undefined ? overrides.etymology : w.etymology,
+                silentIndices: overrides.silentIndices !== undefined ? overrides.silentIndices : w.silentIndices,
+                examples: overrides.examples !== undefined ? overrides.examples : w.examples,
+                phrases: overrides.phrases !== undefined ? overrides.phrases : w.phrases,
+              }
+            }
+            return w
+          })
+          await db.books.update(book.id, {
+            words: updatedWords,
+            updatedAt: Date.now(),
+          })
+        }
+      }
+    })
+  } catch (err) {
+    console.error('Failed to save word override:', err)
+  }
+
+  return record
+}
+
+/**
+ * 查询单个单词的自定义覆盖
+ */
+export async function getWordOverride(wordId: string): Promise<WordOverrideRecord | undefined> {
+  try {
+    return await db.wordOverrides.get(wordId)
+  } catch (err) {
+    console.error('Failed to get word override:', err)
+    return undefined
+  }
+}
+
+/**
+ * 查询全部单词覆盖
+ */
+export async function getAllWordOverrides(): Promise<WordOverrideRecord[]> {
+  try {
+    return await db.wordOverrides.toArray()
+  } catch (err) {
+    console.error('Failed to get all word overrides:', err)
+    return []
+  }
+}
+
+/**
+ * =================================================================
+ * AI 字典单词缓存相关操作（结构与 WordItem 完全一致）
+ * =================================================================
+ */
+
+/**
+ * 从 AI 单词缓存表中查询单词（大小写不敏感匹配）
+ */
+export async function getWordFromAiCache(cleanWord: string): Promise<WordItem | null> {
+  if (!cleanWord || typeof window === 'undefined') return null
+  try {
+    const lower = cleanWord.trim().toLowerCase()
+    const directId = buildWordId(lower)
+
+    // 1. 优先根据确定性 wordId 直查
+    const byId = await db.aiWordCache.get(directId)
+    if (byId) return byId
+
+    // 2. 备选：根据 name 字段做大小写不敏感匹配
+    const byName = await db.aiWordCache
+      .where('name')
+      .equalsIgnoreCase(lower)
+      .first()
+
+    return byName || null
+  } catch (err) {
+    console.warn('Failed to query AI word cache:', err)
+    return null
+  }
+}
+
+/**
+ * 将 AI 字典生成的 WordItem 存入缓存表
+ */
+export async function saveWordToAiCache(wordItem: WordItem): Promise<void> {
+  if (!wordItem?.name || typeof window === 'undefined') return
+  try {
+    const canonicalId = buildWordId(wordItem.name)
+    await db.aiWordCache.put({
+      ...wordItem,
+      id: canonicalId,
+    })
+  } catch (err) {
+    console.warn('Failed to save word to AI cache:', err)
+  }
+}
+
+type AiWordCachePatch = Omit<Partial<WordItem>, 'aiSections'> &
+  Pick<WordItem, 'name'> & {
+    aiSections?: Partial<NonNullable<WordItem['aiSections']>>
+  }
+
+/** 原子合并 AI 分阶段结果，避免并发请求互相覆盖。 */
+export async function mergeWordIntoAiCache(
+  patch: AiWordCachePatch,
+  fallback?: WordItem
+): Promise<WordItem | null> {
+  if (!patch.name || typeof window === 'undefined') return null
+
+  try {
+    const canonicalId = buildWordId(patch.name)
+    return await db.transaction(
+      'rw',
+      db.aiWordCache,
+      db.wordRecords,
+      db.wordOverrides,
+      async () => {
+        const existing = (await db.aiWordCache.get(canonicalId)) || fallback
+        if (!existing) return null
+
+        const mergeStatus = (
+          current: NonNullable<WordItem['aiSections']>[keyof NonNullable<WordItem['aiSections']>] | undefined,
+          next: NonNullable<WordItem['aiSections']>[keyof NonNullable<WordItem['aiSections']>] | undefined
+        ) => next ?? current
+
+        const merged: WordItem = {
+          ...existing,
+          ...patch,
+          id: canonicalId,
+          aiSections: patch.aiSections
+            ? {
+              syllables: mergeStatus(
+                existing.aiSections?.syllables,
+                patch.aiSections.syllables
+              ),
+              examples: mergeStatus(
+                existing.aiSections?.examples,
+                patch.aiSections.examples
+              ),
+              phrases: mergeStatus(
+                existing.aiSections?.phrases,
+                patch.aiSections.phrases
+              ),
+              etymology: mergeStatus(
+                existing.aiSections?.etymology,
+                patch.aiSections.etymology
+              ),
+            }
+            : existing.aiSections,
+        }
+        await db.aiWordCache.put(merged)
+        const record = await db.wordRecords.get(canonicalId)
+        if (record?.wordItem) {
+          const override = await db.wordOverrides.get(canonicalId)
+          const recordWord: WordItem = {
+            ...record.wordItem,
+            ...patch,
+            id: canonicalId,
+            name: merged.name,
+            aiSections: merged.aiSections,
+          }
+          if (override?.phoneticUs) recordWord.phoneticUs = override.phoneticUs
+          if (override?.phoneticUk) recordWord.phoneticUk = override.phoneticUk
+          if (override?.posList?.length) recordWord.posList = override.posList
+          if (override?.syllables?.length) recordWord.syllables = override.syllables
+          if (override?.etymology !== undefined) recordWord.etymology = override.etymology
+          if (override?.silentIndices !== undefined) {
+            recordWord.silentIndices = override.silentIndices
+          }
+          await db.wordRecords.update(canonicalId, {
+            wordName: merged.name,
+            wordItem: recordWord,
+          })
+        }
+        return merged
+      }
+    )
+  } catch (err) {
+    console.warn('Failed to merge AI word cache:', err)
+    return null
+  }
+}
+
+/**
+ * 前缀检索 AI 缓存中的单词（用于搜索下拉建议）
+ */
+export async function searchWordsInAiCache(
+  prefix: string,
+  limit: number = 6
+): Promise<WordItem[]> {
+  if (!prefix || typeof window === 'undefined') return []
+  try {
+    const lower = prefix.trim().toLowerCase()
+    return await db.aiWordCache
+      .where('name')
+      .startsWithIgnoreCase(lower)
+      .limit(limit)
+      .toArray()
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 清空 AI 字典缓存
+ */
+export async function clearAiWordCache(): Promise<void> {
+  if (typeof window === 'undefined') return
+  try {
+    await db.aiWordCache.clear()
+  } catch (err) {
+    console.warn('Failed to clear AI word cache:', err)
+  }
+}
+
+/**
+ * 获取本地离线单词缓存表中的总条目数
+ */
+export async function getAiWordCacheCount(): Promise<number> {
+  if (typeof window === 'undefined') return 0
+  try {
+    return await db.aiWordCache.count()
+  } catch (err) {
+    console.warn('Failed to count AI word cache:', err)
+    return 0
+  }
+}
+
+/**
+ * 手动维护能力：正常查询、收藏和导入流程不会调用。
+ */
+export async function deleteWordFromAiCache(cleanWord: string): Promise<void> {
+  if (!cleanWord || typeof window === 'undefined') return
+  try {
+    const lower = cleanWord.trim().toLowerCase()
+    const directId = buildWordId(lower)
+    await db.aiWordCache.delete(directId)
+    // 防御性清除以 name 匹配的条目
+    await db.aiWordCache.filter((item) => item.name?.toLowerCase() === lower).delete()
+  } catch (err) {
+    console.warn('Failed to delete word from AI cache:', err)
+  }
+}
+
+/**
+ * 批量从 AI 缓存表中删除单词
+ */
+export async function deleteWordsFromAiCache(wordNames: string[]): Promise<void> {
+  if (!wordNames?.length || typeof window === 'undefined') return
+  try {
+    const lowerNames = wordNames.map((w) => w.trim().toLowerCase()).filter(Boolean)
+    if (!lowerNames.length) return
+
+    const ids = lowerNames.map((w) => buildWordId(w))
+    await db.aiWordCache.bulkDelete(ids)
+
+    const lowerSet = new Set(lowerNames)
+    await db.aiWordCache.filter((item) => lowerSet.has(item.name?.toLowerCase())).delete()
+  } catch (err) {
+    console.warn('Failed to bulk delete words from AI cache:', err)
+  }
+}
+
+
+

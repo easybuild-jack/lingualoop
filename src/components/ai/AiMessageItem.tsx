@@ -1,0 +1,91 @@
+'use client'
+
+import React, { useState } from 'react'
+import { Copy, Check } from 'lucide-react'
+import type { AiMessage } from '@/store/useAiAssistantStore'
+import { AiContentRenderer } from './AiContentRenderer'
+
+interface AiMessageItemProps {
+  message: AiMessage
+  isStreaming?: boolean
+}
+
+export function AiMessageItem({ message, isStreaming = false }: AiMessageItemProps) {
+  const isUser = message.role === 'user'
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (isUser) {
+    return (
+      <div className="flex flex-col items-end gap-1.5 my-3 pl-8">
+        <span className="text-[11px] text-muted-foreground font-mono">
+          {formatTime(message.timestamp)}
+        </span>
+        <div className="max-w-[88%] rounded-xl rounded-tr-sm px-3.5 py-2 bg-primary/10 text-foreground text-sm leading-relaxed">
+          <p className="whitespace-pre-wrap select-text">{message.content}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 my-3 pr-2">
+      {/* 顶部：Copilot 身份与操作栏 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* 与口语陪练同一朝向：容器整体水平镜像，图片自身的 hover 旋转/缩放不受影响 */}
+          <div className="size-8 rounded-xl bg-muted border border-border flex items-center justify-center p-0.5 shadow-sm cursor-pointer -scale-x-100">
+            <img src="/logo222.png" alt="LinguaLoop Copilot" className="size-full object-contain transition-transform duration-700 ease-[cubic-bezier(0.34,1.4,0.64,1)] hover:rotate-[360deg] hover:scale-110" />
+          </div>
+          <span className="text-xs font-semibold text-foreground tracking-wide">
+            LinguaLoop Copilot
+          </span>
+          {isStreaming && (
+            <span className="text-[11px] text-primary font-medium animate-pulse">
+              ● 正在生成...
+            </span>
+          )}
+          <span className="text-[11px] text-muted-foreground font-mono">
+            {formatTime(message.timestamp)}
+          </span>
+        </div>
+
+        <button
+          onClick={handleCopy}
+          title="复制回复"
+          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+        >
+          {copied ? (
+            <Check className="size-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="size-3.5" />
+          )}
+        </button>
+      </div>
+
+      {/* 主回复卡片：支持 html, markdown, json, shell，无标记时默认纯文本展示 */}
+      <div className="rounded-xl rounded-tl-sm p-4 bg-card border border-border text-foreground text-sm leading-relaxed select-text">
+        <AiContentRenderer content={message.content} />
+        {isStreaming && (
+          <span
+            className="inline-block w-1.5 h-3.5 ml-1 bg-primary align-middle animate-pulse rounded-xs shadow-xs"
+            title="流水输出中..."
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function formatTime(timestamp: number) {
+  const d = new Date(timestamp)
+  return `${d.getHours().toString().padStart(2, '0')}:${d
+    .getMinutes()
+    .toString()
+    .padStart(2, '0')}`
+}
