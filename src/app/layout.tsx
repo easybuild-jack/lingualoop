@@ -14,7 +14,6 @@ import { ExternalSyncManager } from '@/components/sync/ExternalSyncManager'
 import { AiAssistantDrawer } from '@/components/ai/AiAssistantDrawer'
 import { AiFloatingTrigger } from '@/components/ai/AiFloatingTrigger'
 import { SpeakingWindow } from '@/components/speaking/SpeakingWindow'
-import { InitialDictionaryDataLoader } from '@/components/layout/InitialDictionaryDataLoader'
 
 export const metadata: Metadata = {
   title: 'LinguaLoop — 您的私人专属英语学习搭子',
@@ -71,7 +70,7 @@ export default function RootLayout({
         {/* 皮肤应用器（无 UI，挂载即生效） */}
         <SkinApplier />
 
-        {/* PWA：Service Worker 注册器 + 桌面安装提示浮窗 */}
+        {/* PWA：Service Worker 注册器 + 桌面安装提示浮窗（首页不弹出） */}
         <PwaRegistrar />
         <PwaInstallPrompt />
 
@@ -82,9 +81,6 @@ export default function RootLayout({
 
         {/* 外部小工具实时同步监听器 */}
         <ExternalSyncManager />
-
-        {/* 全局离线词库游戏风格加载器（进度条 + 小象向右奔跑） */}
-        <InitialDictionaryDataLoader />
       </body>
     </html>
   )

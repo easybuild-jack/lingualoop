@@ -6,6 +6,7 @@ import { DictWordCard } from '@/components/dictionary/DictWordCard'
 import { DictEmptyState } from '@/components/dictionary/DictEmptyState'
 import { DictSearchingCard } from '@/components/dictionary/DictSearchingCard'
 import { DictPlaceholderSkeleton } from '@/components/dictionary/DictPlaceholderSkeleton'
+import { InitialDictionaryDataLoader } from '@/components/layout/InitialDictionaryDataLoader'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import {
   searchWordSuggestions,
@@ -81,48 +82,61 @@ export default function DictionaryPage() {
   const searchSequenceRef = useRef(0)
 
   // 初始化：仅恢复用户上一次查询的有效单词缓存与历史记录
+  // 恢复动作放进微任务：首帧先按占位骨架渲染，避免本地缓存与 SSR 输出不一致，
+  // 同时避免在 effect 体内同步 setState 引发级联渲染。
   useEffect(() => {
-    syncStarredWordIds()
+    let cancelled = false
 
-    const initialHistory = loadDictHistory()
-    const cached = loadLastLookup()
-    if (cached?.word) {
-      setCurrentResult(cached)
-      setSearchQuery(cached.word.name)
-      setNotFoundQuery(null)
+    queueMicrotask(() => {
+      if (cancelled) return
 
-      if (initialHistory.length === 0 && cached.word.name) {
-        const seeded = addDictHistoryItem(cached.word.name, formatMeaningText(cached.word))
-        setHistory(seeded)
+      syncStarredWordIds()
+
+      const initialHistory = loadDictHistory()
+      const cached = loadLastLookup()
+      if (cached?.word) {
+        setCurrentResult(cached)
+        setSearchQuery(cached.word.name)
+        setNotFoundQuery(null)
+
+        if (initialHistory.length === 0 && cached.word.name) {
+          const seeded = addDictHistoryItem(cached.word.name, formatMeaningText(cached.word))
+          setHistory(seeded)
+        } else {
+          setHistory(initialHistory)
+        }
+
+        // 异步读取本地数据库的最新状态（保证发音/释义/生词本状态完全与数据库同步）
+        const sequence = searchSequenceRef.current
+        getWordFromAiCache(cached.word.name).then((latest) => {
+          if (cancelled) return
+          if (latest && searchSequenceRef.current === sequence) {
+            setCurrentResult((prev) => {
+              if (prev && prev.word.name.toLowerCase() === latest.name.toLowerCase()) {
+                const updated = { ...prev, word: latest }
+                saveLastLookup(updated)
+                const meaningText = formatMeaningText(latest)
+                if (meaningText) {
+                  const updatedHist = updateDictHistoryMeaning(latest.name, meaningText)
+                  setHistory(updatedHist)
+                }
+                return updated
+              }
+              return prev
+            })
+          }
+        })
       } else {
+        // 首次进入且从未查询过：保持占位骨架
+        setCurrentResult(null)
+        setSearchQuery('')
+        setNotFoundQuery(null)
         setHistory(initialHistory)
       }
+    })
 
-      // 异步读取本地数据库的最新状态（保证发音/释义/生词本状态完全与数据库同步）
-      const sequence = searchSequenceRef.current
-      getWordFromAiCache(cached.word.name).then((latest) => {
-        if (latest && searchSequenceRef.current === sequence) {
-          setCurrentResult((prev) => {
-            if (prev && prev.word.name.toLowerCase() === latest.name.toLowerCase()) {
-              const updated = { ...prev, word: latest }
-              saveLastLookup(updated)
-              const meaningText = formatMeaningText(latest)
-              if (meaningText) {
-                const updatedHist = updateDictHistoryMeaning(latest.name, meaningText)
-                setHistory(updatedHist)
-              }
-              return updated
-            }
-            return prev
-          })
-        }
-      })
-    } else {
-      // 首次进入且从未查询过：保持占位骨架
-      setCurrentResult(null)
-      setSearchQuery('')
-      setNotFoundQuery(null)
-      setHistory(initialHistory)
+    return () => {
+      cancelled = true
     }
   }, [syncStarredWordIds])
 
@@ -353,6 +367,9 @@ export default function DictionaryPage() {
 
   return (
     <div className="flex-1 min-h-full flex flex-col justify-between relative pb-1">
+      {/* 离线词库游戏风格加载器：仅在本页挂载，首次进入本页时才构建本地词库缓存 */}
+      <InitialDictionaryDataLoader />
+
       {/* 顶部工具栏：仅保留搜索输入框、发音口音切换与皮肤选择 */}
       <DictHeaderToolbar
         searchQuery={searchQuery}

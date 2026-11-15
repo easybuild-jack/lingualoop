@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   X,
   Volume2,
@@ -52,6 +53,7 @@ const RECOMMENDED_MODELS: Record<string, string[]> = {
 }
 
 export function SettingsModal() {
+  const router = useRouter()
   const {
     isSettingsModalOpen,
     setSettingsModalOpen,
@@ -78,9 +80,11 @@ export function SettingsModal() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('audio')
 
   // 若通过外部快捷方式或引导指定了初始 Tab，自动切换至对应设置页
+  // 放到微任务里更新：effect 体内同步 setState 会触发级联渲染，交给微任务后
+  // 同一次渲染周期内完成切换，视觉上与直接设置一致。
   useEffect(() => {
     if (isSettingsModalOpen && settingsInitialTab) {
-      setActiveTab(settingsInitialTab)
+      queueMicrotask(() => setActiveTab(settingsInitialTab))
     }
   }, [isSettingsModalOpen, settingsInitialTab])
   const [recordingAction, setRecordingAction] = useState<keyof ShortcutConfig | null>(null)
@@ -109,14 +113,11 @@ export function SettingsModal() {
     (!AI_PROVIDER_PRESETS[aiConfig.provider]?.hidden && AI_PROVIDER_PRESETS[aiConfig.provider]) ||
     AI_PROVIDER_PRESETS.deepseek
 
-  // 外部工具同步设置状态
-  const [syncToken, setSyncToken] = useState('')
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSyncToken(localStorage.getItem('lingualoop_sync_token') || '')
-    }
-  }, [])
+  // 外部工具同步设置状态：Token 直接从 localStorage 惰性初始，省掉一次挂载后的状态同步
+  const [syncToken, setSyncToken] = useState(
+    () =>
+      (typeof window === 'undefined' ? '' : localStorage.getItem('lingualoop_sync_token')) || ''
+  )
 
   const handleUpdateToken = (val: string) => {
     setSyncToken(val)
@@ -148,7 +149,10 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (isSettingsModalOpen && activeTab === 'dictionary') {
-      refreshWordCount()
+      // 同上：把计数刷新放到微任务里，避免 effect 体内同步 setState
+      queueMicrotask(() => {
+        void refreshWordCount()
+      })
     }
   }, [isSettingsModalOpen, activeTab])
 
@@ -156,7 +160,12 @@ export function SettingsModal() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(DICT_CACHE_VERSION_KEY)
       setSettingsModalOpen(false)
+      // 离线词库加载器只在单词查询页挂载：本页已挂载则直接触发重跑，
+      // 未挂载则跳转到查询页，由该页首次挂载时的版本检测自动启动重建。
       window.dispatchEvent(new Event('lingualoop_rebuild_dict_cache'))
+      if (window.location.pathname !== '/dictionary') {
+        router.push('/dictionary')
+      }
     }
   }
 

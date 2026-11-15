@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, X } from 'lucide-react'
 
@@ -15,10 +16,15 @@ const DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000 // 关闭后 7 天内不再�
 /**
  * PWA 安装提示浮窗（右下角）
  * 浏览器触发 beforeinstallprompt 时出现，引导用户将应用安装到桌面。
+ * 首页不弹出：安装提示会干扰首屏介绍，用户进入具体功能页后才会看到。
  */
 export function PwaInstallPrompt() {
+  const pathname = usePathname()
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
+
+  // 首页（落地页）不展示安装提示
+  const isHomeRoute = pathname === '/'
 
   useEffect(() => {
     const onBeforeInstallPrompt = (e: Event) => {
@@ -64,7 +70,7 @@ export function PwaInstallPrompt() {
 
   return (
     <AnimatePresence>
-      {visible && (
+      {visible && !isHomeRoute && (
         <motion.div
           initial={{ opacity: 0, y: 16, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
