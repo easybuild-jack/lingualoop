@@ -14,6 +14,8 @@ import {
 import { parseCustomSentenceText } from '@/lib/sentenceParser'
 import { useTranslateStore } from '@/store/useTranslateStore'
 import type { TranslationBook } from '@/types'
+import { CloudVisibilityField } from '@/components/cloud/VisibilityPicker'
+import { contentOwnerFor, type ContentVisibility } from '@/core/cloud/visibility'
 
 const SAMPLE_TEXT = `The sun rises in the east. | 太阳从东方升起。
 Practice makes perfect. | 熟能生巧。
@@ -27,6 +29,7 @@ export function TranslateImportModal() {
   const [selectedScenario, setSelectedScenario] = useState('日常生活')
   const [rawText, setRawText] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [visibility, setVisibility] = useState<ContentVisibility>('personal')
   const fileInputId = useId()
 
   if (!isImportModalOpen) return null
@@ -69,8 +72,10 @@ export function TranslateImportModal() {
 
     const finalName = bookName.trim() || `自定义练习句集 (${new Date().toLocaleDateString()})`
 
+    const owner = contentOwnerFor(visibility)
     const newBook: TranslationBook = {
       id: `custom_book_${Date.now()}`,
+      ...(owner !== undefined ? { accountId: owner } : {}),
       name: finalName,
       description: `用户自主导入的练习题库，共 ${parsedSentences.length} 句`,
       category: 'custom',
@@ -151,6 +156,8 @@ export function TranslateImportModal() {
               </select>
             </div>
           </div>
+
+          <CloudVisibilityField value={visibility} onChange={setVisibility} label="保存为" />
 
           {/* 文本内容输入与文件上传 */}
           <div>

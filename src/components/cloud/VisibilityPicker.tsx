@@ -53,10 +53,10 @@ export function VisibilityPicker({ value, onChange, className }: VisibilityPicke
 export function CloudVisibilityField(props: VisibilityPickerProps & { label?: string }) {
   const visible = useSyncExternalStore(subscribeCloudMode, isCloudSignedIn, () => false)
   if (!visible) return null
-  const { label = '保存为', ...pickerProps } = props
+  const { label = '保存为', className, ...pickerProps } = props
   return (
-    <div className="space-y-1.5">
-      <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+    <div className={cn('space-y-1.5', className)}>
+      {label && <span className="block text-xs font-medium text-muted-foreground">{label}</span>}
       <VisibilityPicker {...pickerProps} />
     </div>
   )

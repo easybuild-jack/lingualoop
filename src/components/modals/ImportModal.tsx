@@ -24,6 +24,8 @@ import {
   splitCsvLine,
 } from '@/lib/importFormat'
 import type { VocabularyBook, WordItem } from '@/types'
+import { CloudVisibilityField } from '@/components/cloud/VisibilityPicker'
+import { contentOwnerFor, contentVisibilityOf, type ContentVisibility } from '@/core/cloud/visibility'
 
 /** 预览表里回显词素构成，如 dis- + cover + -y */
 function describeMorphemes(word: WordItem): string {
@@ -41,6 +43,8 @@ export function ImportModal() {
   const [targetMode, setTargetMode] = useState<'new' | 'existing'>('new')
   const [targetBookId, setTargetBookId] = useState('')
   const [customBooks, setCustomBooks] = useState<VocabularyBook[]>([])
+  // 云模式下新建词库的归属：个人 / 共享
+  const [visibility, setVisibility] = useState<ContentVisibility>('personal')
   
   // Tab 1: 文本粘贴
   const [rawText, setRawText] = useState(
@@ -249,7 +253,12 @@ compile v. 编译；编纂`
       }
       await setBookId(result.book.id)
     } else {
-      const newBook = await saveCustomVocabularyBook(bookName, '用户自定义导入词库', finalWords)
+      const newBook = await saveCustomVocabularyBook(
+        bookName,
+        '用户自定义导入词库',
+        finalWords,
+        contentOwnerFor(visibility)
+      )
       await setBookId(newBook.id)
     }
 
@@ -339,24 +348,30 @@ compile v. 编译；编纂`
           </div>
 
           {targetMode === 'new' ? (
-            <input
-              type="text"
-              value={bookName}
-              onChange={(e) => setBookName(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50"
-              placeholder="例如: 我的考研阅读高频难词"
-            />
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <input
+                type="text"
+                value={bookName}
+                onChange={(e) => setBookName(e.target.value)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50"
+                placeholder="例如: 我的考研阅读高频难词"
+              />
+              <CloudVisibilityField value={visibility} onChange={setVisibility} label="" />
+            </div>
           ) : (
             <select
               value={targetBookId}
               onChange={(e) => setTargetBookId(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50 cursor-pointer"
             >
-              {customBooks.map((book) => (
-                <option key={book.id} value={book.id} className="bg-[#12141A] text-white">
-                  {book.name}（{book.totalWords} 词）
-                </option>
-              ))}
+              {customBooks.map((book) => {
+                const owner = contentVisibilityOf(book.accountId)
+                return (
+                  <option key={book.id} value={book.id} className="bg-[#12141A] text-white">
+                    {book.name}（{book.totalWords} 词）{owner ? ` · ${owner === 'shared' ? '共享' : '个人'}` : ''}
+                  </option>
+                )
+              })}
             </select>
           )}
 
