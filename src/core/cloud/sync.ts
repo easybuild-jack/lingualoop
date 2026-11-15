@@ -18,7 +18,7 @@ import { getRepositories } from '@/db/repository'
 import type { BookModeEntry, ProgressState, TranslateProgressState } from '@/db/repository'
 import type { PracticeMode, TranslationBook } from '@/types'
 import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
-import { isCloudSignedIn } from './config'
+import { getCloudAccountId, isCloudSignedIn } from './config'
 
 const PUSH_DEBOUNCE_MS = 1200
 const RETRY_DELAY_MS = 5000
@@ -27,39 +27,60 @@ const LOOP_COUNT_VALUES = [1, 2, 3, 5] as const
 
 type PushTask = () => Promise<void>
 
+interface PendingTask {
+  task: PushTask
+  /** 产生这次变更时登录的账号：内存里的数据属于它，账号变了就不能再推（否则会写进新账号） */
+  owner: string | null
+}
+
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
-const pendingTasks = new Map<string, PushTask>()
+const pendingTasks = new Map<string, PendingTask>()
 let applyingRemote = false
 
-function runTask(key: string, task: PushTask) {
+function runTask(key: string, pending: PendingTask): Promise<void> {
   pendingTasks.delete(key)
-  void task().catch((error) => {
+  if (!isCloudSignedIn() || getCloudAccountId() !== pending.owner) {
+    console.warn(`[cloud-sync] ${key} dropped: signed-in account changed`)
+    return Promise.resolve()
+  }
+  return pending.task().catch((error) => {
     console.warn(`[cloud-sync] ${key} push failed, will retry:`, error)
-    if (isCloudSignedIn()) schedule(key, task, RETRY_DELAY_MS)
+    if (isCloudSignedIn() && getCloudAccountId() === pending.owner) {
+      queue(key, pending, RETRY_DELAY_MS)
+    }
   })
 }
 
-function schedule(key: string, task: PushTask, delay = PUSH_DEBOUNCE_MS) {
+function queue(key: string, pending: PendingTask, delay: number) {
   const existing = timers.get(key)
   if (existing) clearTimeout(existing)
-  pendingTasks.set(key, task)
+  pendingTasks.set(key, pending)
   timers.set(
     key,
     setTimeout(() => {
       timers.delete(key)
-      runTask(key, task)
+      void runTask(key, pending)
     }, delay)
   )
 }
 
-/** 立即发出所有等待中的推送（页面隐藏、卸载、停止同步时调用） */
-export function flushCloudSync(): void {
-  for (const [key, task] of Array.from(pendingTasks.entries())) {
+function schedule(key: string, task: PushTask, delay = PUSH_DEBOUNCE_MS) {
+  queue(key, { task, owner: getCloudAccountId() }, delay)
+}
+
+/**
+ * 立即发出所有等待中的推送（页面隐藏、卸载、停止同步时调用）。
+ * 返回的 Promise 在这些推送结束（成功或失败）后完成；退出登录前要等它，否则请求会随跳转被取消。
+ */
+export function flushCloudSync(): Promise<void> {
+  const runs: Promise<void>[] = []
+  for (const [key, pending] of Array.from(pendingTasks.entries())) {
     const timer = timers.get(key)
     if (timer) clearTimeout(timer)
     timers.delete(key)
-    runTask(key, task)
+    runs.push(runTask(key, pending))
   }
+  return Promise.all(runs).then(() => undefined)
 }
 
 function withRemoteApplied(fn: () => void | Promise<void>): Promise<void> {

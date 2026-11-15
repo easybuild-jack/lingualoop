@@ -12,6 +12,7 @@ import {
   subscribeCloudMode,
 } from '@/core/cloud/config'
 import { logoutAccount } from '@/core/cloud/account'
+import { flushCloudSync } from '@/core/cloud/sync'
 import { LookingWordmark, type EyeState } from './LookingWordmark'
 import { AccountAuthForm, type AccountAuthMode } from './AccountAuthForm'
 
@@ -57,6 +58,14 @@ export function LoginView() {
   const useLocalMode = () => {
     setOfflineFallback(true)
     goNext()
+  }
+
+  // 先把上一个账号待推送的进度发完，再整页重载：内存里上一个账号的进度不能留到下一个账号登录后
+  const switchAccount = async () => {
+    setLeaving(true)
+    await flushCloudSync()
+    logoutAccount()
+    window.location.reload()
   }
 
   const subtitle =
@@ -138,7 +147,8 @@ export function LoginView() {
                 </button>
                 <button
                   type="button"
-                  onClick={logoutAccount}
+                  onClick={() => void switchAccount()}
+                  disabled={leaving}
                   className="w-full h-10 rounded-md border border-border text-sm text-foreground hover:bg-muted transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
                 >
                   <LogOut className="size-4" />

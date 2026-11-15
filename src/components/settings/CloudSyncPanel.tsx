@@ -16,7 +16,7 @@ import {
 import { probeCloudConnection } from '@/core/cloud/client'
 import { changeAccountPassword, logoutAccount, PASSWORD_MIN_LENGTH } from '@/core/cloud/account'
 import { uploadLocalDataToCloud, type ContentVisibility, type MigrationResult } from '@/core/cloud/migrate'
-import { hydrateTranslateProgress, hydrateWorkspaceProgress } from '@/core/cloud/sync'
+import { flushCloudSync, hydrateTranslateProgress, hydrateWorkspaceProgress } from '@/core/cloud/sync'
 import { VisibilityPicker } from '@/components/cloud/VisibilityPicker'
 
 interface Feedback {
@@ -51,7 +51,7 @@ export function CloudSyncPanel() {
   const session = getCloudSession()
   const [url, setUrl] = useState(existing?.url ?? '')
   const [anonKey, setAnonKey] = useState(existing?.anonKey ?? '')
-  const [busy, setBusy] = useState<'idle' | 'testing' | 'saving' | 'uploading' | 'password'>('idle')
+  const [busy, setBusy] = useState<'idle' | 'testing' | 'saving' | 'uploading' | 'password' | 'logout'>('idle')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [migration, setMigration] = useState<MigrationResult | null>(null)
   const [uploadVisibility, setUploadVisibility] = useState<ContentVisibility>('personal')
@@ -128,7 +128,9 @@ export function CloudSyncPanel() {
     window.location.reload()
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setBusy('logout')
+    await flushCloudSync()
     logoutAccount()
     window.location.replace('/login')
   }
@@ -264,7 +266,8 @@ export function CloudSyncPanel() {
                 </p>
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={() => void handleLogout()}
+                  disabled={busy === 'logout'}
                   className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <LogOut className="size-4" />

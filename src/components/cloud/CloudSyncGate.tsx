@@ -114,10 +114,10 @@ export function CloudSyncGate() {
     const unsubscribe = subscribeCloudMode(() => {
       // 模式、数据库或账号变了（包括其他标签页里的操作）：整页重载，避免内存数据与写入目标错位
       // 登录页登录成功后会自己整页跳转，这里不抢先重载
-      if (cloudScopeSignature() !== scopeRef.current && pathnameRef.current !== '/login') {
-        stopSync()
-        window.location.reload()
-      }
+      if (cloudScopeSignature() === scopeRef.current) return
+      // 账号已经变了，还没推送的旧账号变更会被 sync 层丢弃，不会写进新账号
+      stopSync()
+      if (pathnameRef.current !== '/login') window.location.reload()
     })
     const handleOffline = () => {
       if (!isCloudMode()) return
@@ -144,7 +144,8 @@ export function CloudSyncGate() {
     setOfflineFallback(true)
   }
 
-  const handleRelogin = () => {
+  const handleRelogin = async () => {
+    await flushCloudSync()
     stopSync()
     logoutAccount()
   }
@@ -177,7 +178,7 @@ export function CloudSyncGate() {
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-4">
           <button
             type="button"
-            onClick={handleRelogin}
+            onClick={() => void handleRelogin()}
             className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <LogOut className="size-4" />

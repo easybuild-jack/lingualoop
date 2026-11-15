@@ -47,10 +47,16 @@ function scopedKey(name: string): string | 'local' | null {
 }
 
 export function createScopedProgressStorage(progressKeys: readonly string[]): StateStorage {
+  // 内存里的进度属于水合时的数据源；之后账号或模式变了（如另一个标签页切换了账号，本页还没来得及重载），
+  // 也只能写回原来的 key，不能把这份进度写进新账号的缓存
+  const boundScopes = new Map<string, string | null>()
+  const writeScope = (name: string) => (boundScopes.has(name) ? boundScopes.get(name)! : scopedKey(name))
+
   return {
     getItem(name) {
       if (!canUseStorage()) return null
       const scope = scopedKey(name)
+      boundScopes.set(name, scope)
       const baseRaw = localStorage.getItem(name)
       if (scope === 'local') return baseRaw
 
@@ -65,7 +71,7 @@ export function createScopedProgressStorage(progressKeys: readonly string[]): St
     },
     setItem(name, value) {
       if (!canUseStorage()) return
-      const scope = scopedKey(name)
+      const scope = writeScope(name)
       if (scope === 'local') {
         localStorage.setItem(name, value)
         return
@@ -87,7 +93,7 @@ export function createScopedProgressStorage(progressKeys: readonly string[]): St
     },
     removeItem(name) {
       if (!canUseStorage()) return
-      const scope = scopedKey(name)
+      const scope = writeScope(name)
       if (scope === 'local') localStorage.removeItem(name)
       else if (scope) localStorage.removeItem(scope)
     },
