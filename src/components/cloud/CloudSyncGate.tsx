@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { X } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { ensureLocalWorkspaceHydrated } from '@/store/useWorkspaceStore'
 import {
   cloudScopeSignature,
@@ -48,6 +48,11 @@ export function CloudSyncGate() {
   const cleanupsRef = useRef<Array<() => void>>([])
   const pathnameRef = useRef(pathname)
   const scopeRef = useRef<string | null>(null)
+  const requiresLoginRedirect = useSyncExternalStore(
+    subscribeCloudMode,
+    () => isCloudConfigured() && !getCloudSession() && !isChromelessRoute(pathname),
+    () => false
+  )
 
   useEffect(() => {
     pathnameRef.current = pathname
@@ -62,7 +67,7 @@ export function CloudSyncGate() {
     stopWrites()
     resetCloudHydration()
 
-    if (!isCloudConfigured() || !isCloudMode()) {
+    if (!isCloudConfigured()) {
       markCloudHydrated()
       const pending = takePendingFallbackNotice()
       if (pending) pushCloudNotice(pending, 'error')
@@ -72,6 +77,13 @@ export function CloudSyncGate() {
     if (!getCloudSession()) {
       markCloudHydrated()
       if (!isChromelessRoute(pathnameRef.current)) router.replace(loginHref(pathnameRef.current))
+      return
+    }
+
+    if (!isCloudMode()) {
+      markCloudHydrated()
+      const pending = takePendingFallbackNotice()
+      if (pending) pushCloudNotice(pending, 'error')
       return
     }
 
@@ -134,11 +146,22 @@ export function CloudSyncGate() {
     }
   }, [start, stopWrites])
 
-  // 未登录时访问任何业务页面都回到登录页
+  // 配置了数据库且未登录时，访问任何业务页面（首页与登录页除外）都先跳转到登录页
   useEffect(() => {
-    if (!isCloudMode() || getCloudSession() || isChromelessRoute(pathname)) return
+    if (!isCloudConfigured() || getCloudSession() || isChromelessRoute(pathname)) return
     router.replace(loginHref(pathname))
   }, [pathname, router])
+
+  if (requiresLoginRedirect) {
+    return (
+      <div className="fixed inset-0 z-[2050] bg-background flex items-center justify-center text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin text-primary" />
+          <span>正在前往登录…</span>
+        </div>
+      </div>
+    )
+  }
 
   if (notices.length === 0) return null
 

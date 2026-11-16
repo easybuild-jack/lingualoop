@@ -8,7 +8,6 @@ import {
   getCloudSession,
   isCloudConfigured,
   isCloudMode,
-  setOfflineFallback,
   subscribeCloudMode,
 } from '@/core/cloud/config'
 import { logoutAccount } from '@/core/cloud/account'
@@ -20,8 +19,8 @@ type LoginState = 'loading' | 'local' | 'offline' | 'signed-out' | 'signed-in'
 
 function readLoginState(): LoginState {
   if (!isCloudConfigured()) return 'local'
-  if (!isCloudMode()) return 'offline'
-  return getCloudSession() ? 'signed-in' : 'signed-out'
+  if (!getCloudSession()) return 'signed-out'
+  return isCloudMode() ? 'signed-in' : 'offline'
 }
 
 /** 只接受站内路径，防止 ?next= 被拿来跳到外站 */
@@ -55,11 +54,6 @@ export function LoginView() {
     window.location.replace(resolveNextPath())
   }
 
-  const useLocalMode = () => {
-    setOfflineFallback(true)
-    goNext()
-  }
-
   // 先把上一个账号待推送的进度发完，再整页重载：内存里上一个账号的进度不能留到下一个账号登录后
   const switchAccount = async () => {
     setLeaving(true)
@@ -83,14 +77,13 @@ export function LoginView() {
         <img src="/logo111.png" alt="LinguaLoop" className="size-7 object-contain" />
         <div className="flex items-center gap-3">
           {loginState === 'signed-out' ? (
-            <button
-              type="button"
-              onClick={useLocalMode}
-              className="text-[14px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors cursor-pointer"
+            <Link
+              href="/"
+              className="text-[14px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
             >
-              暂不登录，临时用本地模式
+              返回首页
               <ArrowRight className="size-3.5" />
-            </button>
+            </Link>
           ) : (
             <Link
               href="/learn"

@@ -256,6 +256,7 @@ export const getActiveErrorWords = getActiveTroubleWords
 
 /** 生词本里全部单词的 id（云模式由数据库函数一次返回，不受单次 1000 行上限影响） */
 export async function getStarredWordIds(): Promise<string[]> {
+  if (isCloudMode() && !getCloudAccountId()) return []
   const ops = cloudOps()
   if (ops) return ops.getStarredWordIds()
   const records = await getRepositories().wordRecords.getAll()

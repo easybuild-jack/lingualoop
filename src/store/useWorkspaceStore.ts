@@ -1638,6 +1638,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       syncStarredWordIds: async () => {
+        if (isCloudMode() && !isCloudSignedIn()) return
         try {
           set({ starredWordIds: await getStarredWordIds() })
         } catch (err) {

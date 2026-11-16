@@ -131,8 +131,8 @@ function getBookPhysicalMetrics(totalWords: number): BookPhysicalMetrics {
 
   const dy = Math.max(3, Math.round(dx * 0.46))
   const spineWidth = Math.min(22, Math.max(13, Math.round(11 + dx * 0.34)))
-  const skewYDeg = (Math.atan2(dy, dx) * 180) / Math.PI
-  const skewXDeg = (Math.atan2(dx, dy) * 180) / Math.PI
+  const skewYDeg = Number(((Math.atan2(dy, dx) * 180) / Math.PI).toFixed(2))
+  const skewXDeg = Number(((Math.atan2(dx, dy) * 180) / Math.PI).toFixed(2))
   const estimatedPages = Math.max(12, Math.round(words / 18))
 
   return {
