@@ -6,7 +6,7 @@
 >
 > 执行顺序：**作者先审 `supabase/schema.sql` → 确认后再按第 5 节改业务代码**。脚本确认前不要动业务代码。
 >
-> 第二轮、第三轮决定（见 5.8、5.9 和 `docs/supabase-code-recheck.md` 第六、七节）取代了第 5 节里与「同步」「单词修改」相关的条目：本地与数据库之间只保留设置里的两个手动同步（同步资料、同步进度），没有任何自动同步；页面上不再修改单词，AI 补全写回自定义词库。
+> 第二轮至第四轮决定（见 5.8–5.10 和 `docs/supabase-code-recheck.md` 第六至八节）取代了第 5 节里与「同步」「单词修改」相关的条目：本地与数据库之间只保留设置里的两个手动同步（同步资料、同步进度），没有任何自动同步；页面上不再修改单词，AI 补全写回自定义词库。
 
 ---
 
@@ -286,6 +286,17 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 2 | 除这两个按钮外没有任何自动同步；日常操作直接读写数据库。收件箱轮询、「临时用本地模式」保留（都不在本地与数据库之间搬数据） | — |
 | 3 | AI 补全写回当前自定义词库：本地模式写本机，数据库模式写共享词库或自己的个人词库，官方词库不改 | `src/db/index.ts`（`applyAiFillToCustomBook`）、`aiWordCore.ts`、`useEnsureAiWordSections.ts` |
 | 4 | 错误只在页面顶部提示，不整页遮罩、不自动重试；连不上时提示里带「重新加载 / 临时用本地模式」 | `CloudSyncGate.tsx`、`notices.ts`、`progress.ts` |
+
+以上都不需要改 `supabase/schema.sql`。
+
+### 5.10 第四轮决定
+
+| # | 决定 | 涉及文件 |
+|---|---|---|
+| 1 | AI 补全维持现状：只写当前词库，模式决定写本地还是数据库 | — |
+| 2 | 同步进度时单词记录不比较时间：错词、生词、已掌握任一方为真即为真，次数取较大值，连续答对次数跟着错词标记走（复查报告 8.2） | `manualSync.ts` |
+| 3 | 同步进度与其他设备并发练习可能丢一次计数：不处理 | — |
+| 4 | 写入失败或数据库无法访问时自动切到本地模式并提示用户，之后读写都走本机，不回传、不重试、不覆盖；数据库恢复后由用户手动同步 | `fallback.ts`、`notices.ts`、`progress.ts`、`CloudSyncGate.tsx`、`CollectedWordsWatcher.tsx`、阅读页、视频页 |
 
 以上都不需要改 `supabase/schema.sql`。
 
