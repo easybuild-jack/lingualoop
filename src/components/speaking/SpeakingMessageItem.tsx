@@ -85,7 +85,7 @@ export function SpeakingMessageItem({ msg }: { msg: SpeakingMessage }) {
                   </React.Fragment>
                 ))}
               </p>
-              {subtitle === 'bi' && <p className="mt-1 text-[13px] text-muted-foreground">{msg.zh}</p>}
+              {subtitle === 'bi' && msg.zh && <p className="mt-1 text-[13px] text-muted-foreground">{msg.zh}</p>}
             </>
           )}
         </div>
