@@ -31,7 +31,10 @@ async function main() {
   const notices = await import('../../src/core/cloud/notices')
   const { clearLegacyCloudProgressCache } = await import('../../src/core/cloud/scopedStorage')
   const store = storeModule.useWorkspaceStore
-  const received: { text: string; unavailable: boolean; tone: string }[] = []
+  const received: { text: string; tone: string }[] = []
+  const fallback = await import('../../src/core/cloud/fallback')
+  const { localRepositories } = await import('../../src/db/repository')
+  const dbIndex = await import('../../src/db')
   notices.subscribeCloudNotices((notice) => received.push(notice))
 
   console.log('# startup: progress comes only from the database')
@@ -73,7 +76,8 @@ async function main() {
   check('position written to app_state', sql(`select current_unit_index from app_state where account_id='${eve.accountId}'`) === '6')
   check('progress not cached in localStorage', JSON.parse(storage.getItem(WS)!).state.currentUnitIndex === 9 && storage.keys().every((key) => !key.includes('::cloud::')), storage.keys())
 
-  console.log('# a failed write is reported once and not retried')
+  console.log('# a failed write switches to local mode, no retry, nothing overwritten')
+  const localBefore = storage.getItem(WS)
   const realPut = cloud.appState.putBookModes
   let attempts = 0
   cloud.appState.putBookModes = async () => {
@@ -85,9 +89,30 @@ async function main() {
   cloud.appState.putBookModes = realPut
   await sleep(300)
   await progress.waitForCloudWrites()
-  check('failure reported as a plain error notice (no blocking state)', received.some((n) => !n.unavailable && n.tone === 'error' && n.text.includes('保存学习进度失败')), received)
+  check('write failure switches to local mode', !config.isCloudMode() && config.isOfflineFallback() && config.isCloudConfigured())
+  const pending = fallback.takePendingFallbackNotice()
+  check('notice kept for after the reload', pending?.startsWith(fallback.FALLBACK_NOTICE) === true && pending.includes('保存学习进度失败'), pending)
+  check('notice shown once', fallback.takePendingFallbackNotice() === null)
   check('write attempted once, no background retry', attempts === 1 && sql(`select count(*) from book_progress where book_id='book_kaoyan'`) === '0', attempts)
+  store.setState({ currentUnitIndex: 8, bookModeProgress: { ...store.getState().bookModeProgress, book_gre: { learn: 2, dictation: 0, phonetic: 0 } } })
+  await progress.waitForCloudWrites()
+  check('later changes do not catch up the failed write', sql(`select count(*) from book_progress where book_id in ('book_kaoyan','book_gre')`) === '0' && sql(`select current_unit_index from app_state where account_id='${eve.accountId}'`) === '6')
+  check('switching does not overwrite local progress', storage.getItem(WS) === localBefore)
+  check('database progress untouched by the switch', bookRow(eve.accountId, 'book_cet4', 'learn') === '5')
+  check('after the switch reads and writes go to the local database', (await dbIndex.toggleStarWord('w_fallback', 'book_cet4')) === true && (await localRepositories.wordRecords.get('w_fallback'))?.isStarred === true && sql(`select count(*) from word_records where word_id='w_fallback'`) === '0')
+  check('a second failure does not switch again', fallback.switchToLocalMode('x') === false && fallback.takePendingFallbackNotice() === null)
   stop()
+  config.setOfflineFallback(false)
+
+  console.log('# failures before login never switch modes')
+  const savedSession = config.getCloudSession()!
+  config.clearCloudSession()
+  check('not signed in: no switch', fallback.switchToLocalMode('x') === false && config.isCloudMode())
+  config.saveCloudSession({ accountId: savedSession.accountId, username: savedSession.username, displayName: null })
+
+  console.log('# read failures that are not connection errors only show a notice')
+  notices.reportCloudError(new Error('bad'), '读取词库', { read: true })
+  check('plain read failure: notice only, stays in cloud mode', config.isCloudMode() && received.some((n) => n.tone === 'error' && n.text === '读取词库失败：bad'), received)
 
   console.log('# account switched in another tab before this tab reloads')
   const stop2 = progress.startWorkspaceProgressWrites()

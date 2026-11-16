@@ -98,7 +98,7 @@ async function main() {
   check('repeat progress sync changes nothing', sync.formatProgressSyncResult(p2).includes('没有改动'), sync.formatProgressSyncResult(p2))
 
   const wordRow = (id: string) => sql(`select total_practice_count||':'||is_error||':'||is_starred from word_records where account_id='${carol.accountId}' and word_id='${id}'`)
-  sql(`update word_records set total_practice_count = 10, is_error = false, last_practiced_at = ${Date.now() + 60_000} where account_id='${carol.accountId}' and word_id='w_local'`)
+  sql(`update word_records set total_practice_count = 10, is_error = false, consecutive_correct_count = 3, last_practiced_at = ${Date.now() + 60_000} where account_id='${carol.accountId}' and word_id='w_local'`)
   const localStar = (await localRepositories.wordRecords.get('w_star'))!
   await localRepositories.wordRecords.put({ ...localStar, isError: true, totalPracticeCount: 3, lastPracticedAt: Date.now() + 120_000 })
   sql(`update book_progress set unit_index = 7, updated_at = ${Date.now()} where account_id='${carol.accountId}' and book_id='cet4' and mode='learn'`)
@@ -109,8 +109,13 @@ async function main() {
   const localUnit = (await localRepositories.unitProgress.get('cet4_semantic_1', 'learn'))!
   await localRepositories.unitProgress.put({ ...localUnit, completedWordIds: ['w2'], currentWordIndex: 1 })
   const p3 = await sync.syncLocalProgressToCloud()
-  check('newer database record not lowered by older local one', wordRow('w_local') === '10:false:false', wordRow('w_local'))
-  check('newer local state wins, counts take the larger value', wordRow('w_star') === '3:true:true' && p3.wordRecords.updated === 1, [wordRow('w_star'), p3.wordRecords])
+  check('error mark added back regardless of time, count not lowered', wordRow('w_local') === '10:true:false', wordRow('w_local'))
+  check('re-added error word takes the streak of the error side', sql(`select consecutive_correct_count from word_records where account_id='${carol.accountId}' and word_id='w_local'`) === '0')
+  check('error mark from local added, counts take the larger value', wordRow('w_star') === '3:true:true' && p3.wordRecords.updated === 2, [wordRow('w_star'), p3.wordRecords])
+  sql(`update word_records set is_error = true, consecutive_correct_count = 1 where account_id='${carol.accountId}' and word_id='w_star'`)
+  await localRepositories.wordRecords.put({ ...(await localRepositories.wordRecords.get('w_star'))!, isError: false, consecutiveCorrectCount: 3 })
+  const p4 = await sync.syncLocalProgressToCloud()
+  check('local without the error mark never removes it from the database', sql(`select is_error||':'||consecutive_correct_count from word_records where account_id='${carol.accountId}' and word_id='w_star'`) === 'true:1' && p4.wordRecords.updated === 0, p4.wordRecords)
   check('unit progress completed ids merged as union', sql(`select completed_word_ids::text from unit_progress where account_id='${carol.accountId}' and unit_id='cet4_semantic_1'`) === '["w_local", "w2"]' && p3.unitProgress.updated === 1, p3.unitProgress)
   check('book position only raised, never lowered', sql(`select string_agg(mode||'='||unit_index, ',' order by mode) from book_progress where account_id='${carol.accountId}' and book_id='cet4'`) === 'dictation=5,learn=7', p3.bookProgress)
   const remote2 = await getRepositories().appState.get()
