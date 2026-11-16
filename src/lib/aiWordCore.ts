@@ -1,7 +1,8 @@
 'use client'
 
 import { dictionaryLoader } from '@/core/dictionaryLoader'
-import { getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
+import { applyAiFillToCustomBook, getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
+import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import {
   fetchAiDictionaryWordCore,
   getAiConfigFingerprint,
@@ -73,6 +74,13 @@ export function queryAiWordCore(
     if (!raw) return null
     const coreWord = await dictionaryLoader.convertRawEntryToWordItem(raw)
     const merged = current ? mergeAiWordCore(current, coreWord) : coreWord
+    if (current) {
+      void applyAiFillToCustomBook(useWorkspaceStore.getState().currentBook?.id, current.id, {
+        phoneticUs: isAiPhoneticReady(current.name, current.phoneticUs) ? undefined : merged.phoneticUs,
+        phoneticUk: isAiPhoneticReady(current.name, current.phoneticUk) ? undefined : merged.phoneticUk,
+        posList: isAiMeaningReady(current.posList) ? undefined : merged.posList,
+      })
+    }
 
     return await mergeWordIntoAiCache(
       {

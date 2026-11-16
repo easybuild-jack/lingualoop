@@ -465,6 +465,52 @@ export async function importWordsIntoBook(
 }
 
 /**
+ * 把 AI 补全的字段写回自定义词库里的这个词（官方词库是本地 JSON，不写）。
+ *
+ * 本地模式写本机词库；云模式写数据库，只写共享词库或自己的个人词库，按单词走 merge_words_into_book，
+ * 不整本覆盖。失败只提示，不重试。
+ */
+export async function applyAiFillToCustomBook(
+  bookId: string | undefined,
+  wordId: string,
+  patch: Partial<WordItem>
+): Promise<boolean> {
+  const fields = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined)
+  ) as Partial<WordItem>
+  if (!bookId || Object.keys(fields).length === 0) return false
+  try {
+    const repositories = getRepositories()
+    const book = await repositories.books.get(bookId)
+    if (!book?.isCustom) return false
+    const index = (book.words ?? []).findIndex((w) => w.id === wordId)
+    if (index < 0) return false
+    const updatedWord = { ...book.words![index], ...fields }
+
+    const ops = cloudOps()
+    if (!ops) {
+      await db.transaction('rw', db.books, async () => {
+        const latest = await db.books.get(bookId)
+        if (!latest?.words) return
+        const at = latest.words.findIndex((w) => w.id === wordId)
+        if (at < 0) return
+        const words = [...latest.words]
+        words[at] = { ...words[at], ...fields }
+        await db.books.put({ ...latest, words, updatedAt: Date.now() })
+      })
+      return true
+    }
+
+    const owner = book.accountId ?? null
+    if (owner !== null && owner !== getCloudAccountId()) return false
+    return (await ops.mergeWordsIntoBook(bookId, [updatedWord])) !== null
+  } catch (err) {
+    reportFailure(err, '保存 AI 补全结果')
+    return false
+  }
+}
+
+/**
  * 保存自定义新词库
  *
  * accountId 只在云模式下有意义：null = 共享给所有账号，账号 id = 个人词库。

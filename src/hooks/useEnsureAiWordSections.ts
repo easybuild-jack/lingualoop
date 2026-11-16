@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { dictionaryLoader } from '@/core/dictionaryLoader'
-import { getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
+import { applyAiFillToCustomBook, getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
 import {
   fetchAiDictionaryWordEtymology,
   fetchAiDictionaryWordExamples,
@@ -155,6 +155,7 @@ async function generateSection(
       patch = { etymology: raw.etymology }
     }
 
+    void applyAiFillToCustomBook(useWorkspaceStore.getState().currentBook?.id, word.id, patch)
     return await mergeWordIntoAiCache(
       {
         name: word.name,
