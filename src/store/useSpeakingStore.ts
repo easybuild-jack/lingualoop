@@ -27,7 +27,7 @@ import {
   type SpeakingAsrConfig,
 } from '@/lib/speaking/asrConfig'
 import { isRecordingSupported, startVoiceRecording, type VoiceRecording } from '@/lib/speaking/recorder'
-import { requestSpeakingTurn, type SpeakingHistoryItem } from '@/lib/speaking/chatEngine'
+import { requestSpeakingTurn, translateReplyToChinese, type SpeakingHistoryItem } from '@/lib/speaking/chatEngine'
 import { speakSentences, stopSpeaking, unlockAudioPlayback } from '@/lib/speaking/speechPlayer'
 import { isSpeechRecognitionSupported, startSpeechCapture, type SpeechCapture } from '@/lib/speaking/speechRecognition'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
@@ -287,6 +287,22 @@ export const useSpeakingStore = create<SpeakingState>()(
             turnIndex: s.turnIndex + 1,
             endedAt: null,
           }))
+
+          // 双语字幕兜底：模型漏写 zh 时补一次翻译。放在朗读之外异步跑，
+          // 不拖慢这一轮的开口时间；翻译回来再补进消息里。
+          if (!aiMsg.zh) {
+            void (async () => {
+              try {
+                const zh = await translateReplyToChinese(aiConfig, aiMsg.sentences, abort.signal)
+                if (!zh || abort.signal.aborted || myTurn !== turnSeq) return
+                set((s) => ({
+                  messages: s.messages.map((m) => (m.id === aiMsg.id ? { ...m, zh } : m)),
+                }))
+              } catch {
+                // 补翻译失败只影响双语字幕，不打断对话
+              }
+            })()
+          }
 
           await playMessage(aiMsg)
         } catch (err) {

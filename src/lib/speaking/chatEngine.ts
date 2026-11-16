@@ -79,16 +79,20 @@ export function buildSpeakingSystemPrompt(input: SpeakingTurnInput): string {
 - Never mention being an AI or that this is a practice exercise.
 
 # Output format
-First write your spoken reply.
-Then, if you have feedback, write a line containing exactly ###FEEDBACK### followed by one single-line JSON object:
+Every reply has exactly two parts, and the second part is NEVER optional.
 
-{"zh":"...","correction":null,"vocab":[{"word":"...","meaning":"..."}]}
+Part 1 — your spoken reply, plain text, 1-3 sentences. English only.
+Part 2 — on its own line, the word ###FEEDBACK###, then ONE single-line JSON object:
 
-Rules for the JSON:
-- "zh": always include a natural Chinese translation of your spoken reply.
-- "vocab": 0-2 useful words or chunks taken from YOUR reply that a learner at this level may not know; "meaning" in Chinese.
+{"zh":"...","correction":null,"vocab":[]}
+
+Rules for part 2:
+- Always output it, on every single turn. Skipping it is an error: the Chinese translation shown to the learner lives inside this JSON, so even a reply with nothing to correct must still carry the block with "correction": null and "vocab": [].
+- "zh": a natural, complete Chinese translation of part 1. Required and never empty.
+- "vocab": 0-2 useful words or chunks taken from YOUR reply that a learner at this level may not know; "meaning" in Chinese. Use [] when nothing is worth listing.
 ${correctionInstruction(correction)}
-- Output valid JSON on a single line, Chinese text directly (not \\u escapes).`
+- Valid JSON on one line, Chinese characters written directly (not \\u escapes).
+- Never put Chinese into part 1, and never explain the JSON in prose.`
 }
 
 /** 历史太长会把 token 烧在上下文上，只保留最近几轮 */
@@ -130,6 +134,68 @@ function parseJsonLoose(raw: string): unknown {
     }
   }
   return null
+}
+
+/**
+ * 兜底：模型忘了写 ###FEEDBACK### 分隔行时，直接在整段输出里找「带 zh 字段的 JSON 对象」。
+ * 返回对象与其在原文中的区间，便于把这段 JSON 从待朗读正文里剔除。
+ */
+function findZhJsonObject(
+  raw: string
+): { meta: Record<string, unknown>; start: number; end: number } | null {
+  for (let start = raw.indexOf('{'); start >= 0; start = raw.indexOf('{', start + 1)) {
+    let depth = 0
+    let inString = false
+    let escaped = false
+
+    for (let i = start; i < raw.length; i += 1) {
+      const ch = raw[i]
+      if (inString) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inString = false
+        continue
+      }
+      if (ch === '"') {
+        inString = true
+        continue
+      }
+      if (ch === '{') {
+        depth += 1
+        continue
+      }
+      if (ch !== '}') continue
+
+      depth -= 1
+      if (depth > 0) continue
+
+      try {
+        const parsed = JSON.parse(raw.slice(start, i + 1))
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          !Array.isArray(parsed) &&
+          typeof (parsed as Record<string, unknown>).zh === 'string'
+        ) {
+          return { meta: parsed as Record<string, unknown>, start, end: i + 1 }
+        }
+      } catch {
+        // 这一段的 JSON 不合法，换下一个 { 起点
+      }
+      break
+    }
+  }
+  return null
+}
+
+/** 中文译文可能被模型放在几个不同字段名下 */
+function pickChinese(meta: Record<string, unknown> | null): string {
+  if (!meta) return ''
+  for (const key of ['zh', 'translation', 'cn', 'chinese'] as const) {
+    const value = meta[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
 }
 
 /** 去掉朗读时会显得奇怪的 Markdown、动作提示与角色名前缀 */
@@ -225,16 +291,27 @@ export function parseSpeakingReply(
   const marker = raw.match(FEEDBACK_MARKER)
   if (marker && marker.index !== undefined) {
     spoken = raw.slice(0, marker.index)
-    const parsed = parseJsonLoose(raw.slice(marker.index + marker[0].length))
+    const rest = raw.slice(marker.index + marker[0].length)
+    const parsed = parseJsonLoose(rest)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       meta = parsed as Record<string, unknown>
+    } else {
+      const found = findZhJsonObject(rest)
+      meta = found?.meta ?? null
+    }
+  } else {
+    // 模型没按格式输出分隔行：直接把正文里的 JSON 抠出来，并从朗读内容中剔除
+    const found = findZhJsonObject(raw)
+    if (found) {
+      meta = found.meta
+      spoken = `${raw.slice(0, found.start)} ${raw.slice(found.end)}`
     }
   }
 
   const cleaned = cleanSpokenText(spoken)
   const sentences = splitSentences(cleaned)
 
-  const zh = typeof meta?.zh === 'string' ? meta.zh.trim() : ''
+  const zh = pickChinese(meta)
   const correction =
     options.correction === 'live' ? toCorrection(meta?.correction, options.userText) : undefined
 
@@ -244,6 +321,32 @@ export function parseSpeakingReply(
     correction,
     vocab: toVocab(meta?.vocab),
   }
+}
+
+/** 模型没给中文时的一次兜底翻译：只翻一句话，便宜且快 */
+export async function translateReplyToChinese(
+  config: AiClientConfig,
+  sentences: string[],
+  signal?: AbortSignal
+): Promise<string> {
+  const text = sentences.join(' ').trim()
+  if (!text) return ''
+  const raw = await callAiChatCompletion(
+    { ...config, temperature: 0, maxTokens: 400 },
+    [
+      {
+        role: 'system',
+        content:
+          '你是专业的英译中译者。把用户给出的英文翻译成自然、口语化的简体中文，只输出译文本身：不要解释、不要加引号、不要任何前缀，也不要保留英文原文。',
+      },
+      { role: 'user', content: text },
+    ],
+    signal
+  )
+  return raw
+    .trim()
+    .replace(/^["“'']+|["”'']+$/g, '')
+    .trim()
 }
 
 /**
@@ -257,7 +360,7 @@ export async function requestSpeakingTurn(
 ): Promise<ParsedSpeakingReply> {
   const messages = buildSpeakingMessages(input)
   const raw = await callAiChatCompletion(
-    { ...config, temperature: 0.8, maxTokens: Math.min(1024, Math.max(320, config.maxTokens ?? 700)) },
+    { ...config, temperature: 0.8, maxTokens: Math.min(1536, Math.max(400, config.maxTokens ?? 700)) },
     messages,
     signal
   )
