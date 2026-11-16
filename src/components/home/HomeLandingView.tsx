@@ -48,7 +48,7 @@ function GithubIcon({ className }: { className?: string }) {
 const NAV_ANCHORS = [
   { label: '学习闭环', href: '#loop' },
   { label: '听说读写', href: '#skills' },
-  { label: 'AI 口语', href: '#speaking' },
+  { label: '口语陪练', href: '#speaking' },
   { label: '产品体验', href: '#preview' },
   { label: '全部功能', href: '#modules' },
 ]

@@ -23,7 +23,6 @@ import {
   BookOpen,
   CheckCircle,
   AudioLines,
-  Ear,
   SlidersHorizontal,
 } from 'lucide-react'
 import { db } from '@/db'
@@ -41,7 +40,6 @@ import { SHORTCUT_DEFINITIONS, eventToShortcutString, formatShortcutDisplay } fr
 import { SKINS } from '@/lib/skins'
 import type { ShortcutConfig } from '@/types'
 import { SpeakingTtsPanel } from './settings/SpeakingTtsPanel'
-import { SpeakingAsrPanel } from './settings/SpeakingAsrPanel'
 
 type SettingsTab = SettingsTabId
 
@@ -286,23 +284,18 @@ export function SettingsModal() {
             </button>
 
             <button
-              onClick={() => { setRecordingAction(null); setActiveTab('tts') }}
+              onClick={() => {
+                setRecordingAction(null)
+                if (activeTab !== 'tts' && activeTab !== 'asr') setActiveTab('tts')
+              }}
               className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'tts' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                activeTab === 'tts' || activeTab === 'asr'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-white hover:bg-muted'
               }`}
             >
-              <AudioLines className="size-4" />
-              <span>语音合成</span>
-            </button>
-
-            <button
-              onClick={() => { setRecordingAction(null); setActiveTab('asr') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'asr' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
-            >
-              <Ear className="size-4" />
-              <span>语音识别</span>
+              <AudioLines className="size-4 shrink-0" />
+              <span>语音配置</span>
             </button>
 
             <button
@@ -1098,12 +1091,8 @@ export function SettingsModal() {
               </div>
             )}
 
-            {activeTab === 'tts' && (
+            {(activeTab === 'tts' || activeTab === 'asr') && (
               <SpeakingTtsPanel onGoAiModels={() => { setRecordingAction(null); setActiveTab('ai') }} />
-            )}
-
-            {activeTab === 'asr' && (
-              <SpeakingAsrPanel onGoAiModels={() => { setRecordingAction(null); setActiveTab('ai') }} />
             )}
 
             {activeTab === 'sync' && (
