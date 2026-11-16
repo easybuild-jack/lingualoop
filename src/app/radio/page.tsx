@@ -17,6 +17,7 @@ import { RadioCardList } from '@/components/radio/RadioCardList'
 import { RadioUploadModal } from '@/components/radio/RadioUploadModal'
 import { ArrowLeft } from 'lucide-react'
 import { isCloudMode } from '@/core/cloud/config'
+import { reportCloudError } from '@/core/cloud/notices'
 import { getRepositories } from '@/db/repository'
 
 type ActiveTab = RadioCategory | 'player'
@@ -64,6 +65,7 @@ export default function RadioPage() {
       })
       .catch((error) => {
         console.warn('[radio] failed to load cloud items:', error)
+        reportCloudError(error, '读取视频', { read: true })
         if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频与本次会话上传的视频。')
       })
     return () => {
@@ -357,6 +359,7 @@ export default function RadioPage() {
         await getRepositories().radio.putItem(newItem)
       } catch (error) {
         console.warn('[radio] failed to save item:', error)
+        reportCloudError(error, '保存视频')
         setCloudError(`视频保存到云端失败：${error instanceof Error ? error.message : '请稍后重试'}`)
         return false
       }
@@ -378,6 +381,7 @@ export default function RadioPage() {
         .radio.deleteItem(id)
         .catch((error) => {
           console.warn('[radio] failed to delete item:', error)
+          reportCloudError(error, '删除视频')
           setItems((prev) => (prev.some((i) => i.id === id) ? prev : [removed, ...prev]))
           setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
         })

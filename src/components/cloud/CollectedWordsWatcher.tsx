@@ -7,6 +7,8 @@ import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { isCloudSignedIn, subscribeCloudMode } from '@/core/cloud/config'
 import { pullCollectedWords } from '@/core/cloud/collector'
+import { isNetworkCloudError } from '@/core/cloud/client'
+import { switchToLocalMode } from '@/core/cloud/fallback'
 
 interface SyncToastItem {
   id: string
@@ -56,6 +58,8 @@ export function CollectedWordsWatcher() {
       ])
     } catch (error) {
       console.warn('[CollectedWordsWatcher] pull failed:', error)
+      // 收件箱是后台轮询：只有连不上数据库才切到本地模式，其他失败不打扰用户
+      if (isNetworkCloudError(error)) switchToLocalMode('收件箱连接失败')
     } finally {
       isPollingRef.current = false
     }

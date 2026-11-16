@@ -373,7 +373,9 @@ export function CloudSyncPanel() {
             </button>
           </div>
           {!cloudActive && (
-            <p className="text-xs text-amber-400/90 leading-relaxed">当前处于本地模式，先在下方恢复云端连接后再同步。</p>
+            <p className="text-xs text-amber-400/90 leading-relaxed">
+              当前处于本地模式，先在下方恢复云端连接后再同步。恢复后页面会从数据库重新载入，本地模式期间的学习记录不会自动上传，请点上面两个按钮手动同步。
+            </p>
           )}
           {cloudActive && !session && <p className="text-xs text-amber-400/90 leading-relaxed">请先登录账号再同步。</p>}
           {syncFeedback && (

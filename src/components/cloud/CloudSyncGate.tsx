@@ -2,14 +2,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { CloudOff, RefreshCw, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { ensureLocalWorkspaceHydrated } from '@/store/useWorkspaceStore'
 import {
   cloudScopeSignature,
   getCloudSession,
   isCloudConfigured,
   isCloudMode,
-  setOfflineFallback,
   subscribeCloudMode,
 } from '@/core/cloud/config'
 import { probeCloudConnection } from '@/core/cloud/client'
@@ -23,10 +22,10 @@ import {
 } from '@/core/cloud/progress'
 import { clearLegacyCloudProgressCache } from '@/core/cloud/scopedStorage'
 import { pushCloudNotice, subscribeCloudNotices, type CloudNotice } from '@/core/cloud/notices'
+import { switchToLocalMode, takePendingFallbackNotice } from '@/core/cloud/fallback'
 import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 const INFO_TIMEOUT_MS = 8000
-const ERROR_TIMEOUT_MS = 15000
 const MAX_NOTICES = 3
 
 function loginHref(pathname: string | null): string {
@@ -39,8 +38,7 @@ function loginHref(pathname: string | null): string {
  *
  * 配置了数据库时负责：未登录跳转登录页 → 启动体检 → 从数据库载入进度 → 之后学习进度的变更直接写数据库。
  * 这里没有任何本地与数据库之间的同步（手动同步在设置面板里）。
- * 失败不重发、不遮挡页面：在顶部提示原因；连不上数据库时提示里带「重新加载 / 临时用本地模式」。
- * 启动时没能从数据库载入进度就不启动进度写入，避免用默认值覆盖数据库。
+ * 连不上数据库、载入失败、写入失败时自动切到本地模式（fallback.ts），不重发、不遮挡页面，重载后在顶部提示。
  * 未配置数据库时什么都不做，与纯本地版本完全一致。
  */
 export function CloudSyncGate() {
@@ -66,6 +64,8 @@ export function CloudSyncGate() {
 
     if (!isCloudConfigured() || !isCloudMode()) {
       markCloudHydrated()
+      const pending = takePendingFallbackNotice()
+      if (pending) pushCloudNotice(pending, 'error')
       return
     }
 
@@ -77,8 +77,7 @@ export function CloudSyncGate() {
 
     const probe = await probeCloudConnection()
     if (!probe.ok) {
-      markCloudHydrated()
-      pushCloudNotice(`云数据库暂时连不上：${probe.message}`, 'error', true)
+      switchToLocalMode(`连接失败：${probe.message}`)
       return
     }
 
@@ -95,9 +94,8 @@ export function CloudSyncGate() {
       markCloudHydrated()
       cleanupsRef.current.push(startWorkspaceProgressWrites(), startTranslateProgressWrites())
     } catch (error) {
-      markCloudHydrated()
       const reason = error instanceof Error ? error.message : '请稍后重试'
-      pushCloudNotice(`从数据库载入学习进度失败：${reason}。本次的学习位置不会保存，请重新加载。`, 'error', true)
+      if (!switchToLocalMode(`载入学习进度失败：${reason}`)) markCloudHydrated()
     }
   }, [router, stopWrites])
 
@@ -116,10 +114,11 @@ export function CloudSyncGate() {
     const unsubscribeNotices = subscribeCloudNotices((notice) => {
       // 同样的提示只留最新一条，避免连续失败时刷屏
       setNotices((prev) => [...prev.filter((item) => item.text !== notice.text), notice].slice(-MAX_NOTICES))
-      setTimeout(() => dismiss(notice.id), notice.tone === 'error' ? ERROR_TIMEOUT_MS : INFO_TIMEOUT_MS)
+      // 错误提示（包括「已切换到本地模式」）留到用户手动关闭
+      if (notice.tone !== 'error') setTimeout(() => dismiss(notice.id), INFO_TIMEOUT_MS)
     })
     const handleOffline = () => {
-      if (isCloudMode()) pushCloudNotice('网络已断开，云数据库暂时连不上，期间的操作不会保存。', 'error', true)
+      switchToLocalMode('网络已断开')
     }
     window.addEventListener('offline', handleOffline)
     return () => {
@@ -135,11 +134,6 @@ export function CloudSyncGate() {
     if (!isCloudMode() || getCloudSession() || isChromelessRoute(pathname)) return
     router.replace(loginHref(pathname))
   }, [pathname, router])
-
-  const useLocalMode = () => {
-    stopWrites()
-    setOfflineFallback(true)
-  }
 
   if (notices.length === 0) return null
 
@@ -166,26 +160,6 @@ export function CloudSyncGate() {
               <X className="size-4" />
             </button>
           </div>
-          {notice.unavailable && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="h-7 px-3 rounded-md border border-red-400/30 hover:bg-red-500/10 text-xs inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <RefreshCw className="size-3.5" />
-                <span>重新加载</span>
-              </button>
-              <button
-                type="button"
-                onClick={useLocalMode}
-                className="h-7 px-3 rounded-md border border-red-400/30 hover:bg-red-500/10 text-xs inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <CloudOff className="size-3.5" />
-                <span>临时用本地模式</span>
-              </button>
-            </div>
-          )}
         </div>
       ))}
     </div>

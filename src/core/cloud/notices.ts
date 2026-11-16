@@ -1,11 +1,12 @@
 /**
  * 云模式下读写失败与操作结果的页面提示。
  *
- * 配置数据库后所有读写都直接打到数据库，失败不重发，只在页面顶部提示，不遮挡页面：
- * - 连不上数据库：提示里附带「重新加载」「临时用本地模式」两个出口；
- * - 其他失败（约束拒绝、账号失效等）：只提示原因，本次操作不生效。
+ * 配置数据库后所有读写都直接打到数据库，失败不重发：
+ * - 写入失败、或连不上数据库（读写都算）：自动切到本地模式（见 fallback.ts），重载后提示用户；
+ * - 其他读取失败：只在页面顶部提示原因。
  */
 import { cloudErrorMessage, isNetworkCloudError } from './client'
+import { switchToLocalMode } from './fallback'
 
 export type CloudNoticeTone = 'error' | 'info'
 
@@ -13,8 +14,6 @@ export interface CloudNotice {
   id: number
   tone: CloudNoticeTone
   text: string
-  /** 连接类故障：附带「重新加载 / 临时用本地模式」 */
-  unavailable: boolean
 }
 
 type Listener = (notice: CloudNotice) => void
@@ -34,13 +33,17 @@ export function subscribeCloudNotices(listener: Listener): () => void {
   }
 }
 
-/** 数据库读写失败：action 是给用户看的操作名，如「保存学习进度」 */
-export function reportCloudError(error: unknown, action: string, options: { unavailable?: boolean } = {}): void {
-  const unavailable = options.unavailable === true || isNetworkCloudError(error)
+/**
+ * 数据库读写失败：action 是给用户看的操作名，如「保存学习进度」。
+ * options.read 为真表示只是读取失败，此时只有连不上数据库才切到本地模式。
+ */
+export function reportCloudError(error: unknown, action: string, options: { read?: boolean } = {}): void {
   const reason = error instanceof Error ? error.message : cloudErrorMessage(error)
-  emit({ tone: 'error', unavailable, text: `${action}失败：${reason}` })
+  const text = `${action}失败：${reason}`
+  if ((!options.read || isNetworkCloudError(error)) && switchToLocalMode(text)) return
+  emit({ tone: 'error', text })
 }
 
-export function pushCloudNotice(text: string, tone: CloudNoticeTone = 'info', unavailable = false): void {
-  emit({ tone, text, unavailable })
+export function pushCloudNotice(text: string, tone: CloudNoticeTone = 'info'): void {
+  emit({ tone, text })
 }

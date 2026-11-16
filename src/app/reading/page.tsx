@@ -12,6 +12,7 @@ import { ReadingArticleList } from '@/components/reading/ReadingArticleList'
 import { ReadingReaderView } from '@/components/reading/ReadingReaderView'
 import { ReadingUploadModal } from '@/components/reading/ReadingUploadModal'
 import { isCloudMode } from '@/core/cloud/config'
+import { reportCloudError } from '@/core/cloud/notices'
 import { getRepositories } from '@/db/repository'
 
 const STORAGE_KEY = 'lingualoop_reading_articles_v1'
@@ -72,6 +73,7 @@ export default function ReadingPage() {
       })
       .catch((error) => {
         console.warn('[reading] failed to load cloud articles:', error)
+        reportCloudError(error, '读取文章', { read: true })
         if (!cancelled) {
           setLoadError('云数据库读取失败，暂时只能看到内置示例文章，上传与删除已暂停。')
         }
@@ -121,6 +123,7 @@ export default function ReadingPage() {
       .reading.putArticle(newArticle)
       .catch((error) => {
         console.warn('[reading] failed to save article:', error)
+        reportCloudError(error, '保存文章')
         setArticles((prev) => prev.filter((article) => article.id !== newArticle.id))
         setActionError(`文章保存失败：${error instanceof Error ? error.message : '请稍后重试'}`)
       })
@@ -144,6 +147,7 @@ export default function ReadingPage() {
       .reading.deleteArticle(id)
       .catch((error) => {
         console.warn('[reading] failed to delete article:', error)
+        reportCloudError(error, '删除文章')
         setArticles((prev) => (prev.some((article) => article.id === id) ? prev : [removed, ...prev]))
         setActionError(`文章删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
       })
