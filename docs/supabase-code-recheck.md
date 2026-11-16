@@ -37,6 +37,8 @@
 
 ## 二、待作者确认的问题（本轮未修改）
 
+> 作者已逐条确认，处理结果见第六节。
+
 ### 中
 
 1. **改单词时整本覆盖 `words`，并会改动共享词库。**
@@ -116,15 +118,15 @@
 - 本机 PostgreSQL 16 新建测试库，执行 `supabase/schema.sql`。
 - 使用 PostgREST 12.2.3：连接角色 `anon`，用 HS256 签名的 anon key 访问，`db-max-rows = 1000` 与 Supabase 默认一致。
 - 前面加一个小代理，补上 `/rest/v1` 前缀，让项目代码按原样连接。
-- 测试直接导入项目的真实模块：`supabaseRepository`、`account`、`migrate`、`collector`、`sync`、`useWorkspaceStore`、`useTranslateStore`、`db/index`。IndexedDB 用 fake-indexeddb 模拟，localStorage 用内存实现。
+- 测试直接导入项目的真实模块：`supabaseRepository`、`account`、`migrate`、`collector`、`progress`、`useWorkspaceStore`、`useTranslateStore`、`db/index`。IndexedDB 用 fake-indexeddb 模拟，localStorage 用内存实现。
 
 ### 脚本（已提交到 `scripts/cloud-e2e/`）
 
 | 文件 | 覆盖 | 结果 |
 |---|---|---|
-| `t1-cloud.ts` | 体检、账号、进度隔离、`book_progress` 新者胜、内容可见性与改删、阅读/视频/句库、翻译并集、H3、H4、退出 | 42 / 42 |
-| `t2-flows.ts` | 纯本地模式、按账号分 key 的缓存、迁移（H2）、示例词库、收件箱（H6） | 33 / 33 |
-| `t3-sync.ts` | H5 水合时序、只推送变化的书内位置、等待推送完成、切换账号不串进度、H1、翻译水合 | 17 / 17 |
+| `t1-cloud.ts` | 体检、账号、进度隔离、`book_progress` 新者胜、`book_progress` 不存 0、内容可见性与改删、阅读/视频/句库、翻译并集、H3、H4、退出 | 45 / 45 |
+| `t2-flows.ts` | 纯本地模式、云模式不在本机存进度、一次性上传与上传记录（H2）、示例词库、导入已有词库按归属更新或跳过、收件箱（H6） | 48 / 48 |
+| `t3-progress.ts`（原 `t3-sync.ts`） | 启动只从数据库载入、H5 等待时序、进度直接写库、不写 0、写失败只报一次不重发、切换账号不串进度、新账号不建空行、翻译进度与句库直接读写 | 27 / 27 |
 
 复现方式：准备一个执行过 `schema.sql` 的**测试专用库**（脚本开头会清空表），并设置以下环境变量：
 - `CLOUD_E2E_URL`：带 `/rest/v1` 前缀的接口地址。
@@ -137,7 +139,7 @@
 npm i --no-save fake-indexeddb@6
 npx -y tsx scripts/cloud-e2e/t1-cloud.ts
 npx -y tsx scripts/cloud-e2e/t2-flows.ts
-npx -y tsx scripts/cloud-e2e/t3-sync.ts
+npx -y tsx scripts/cloud-e2e/t3-progress.ts
 ```
 
 ### 浏览器手测
@@ -146,7 +148,7 @@ npx -y tsx scripts/cloud-e2e/t3-sync.ts
 ### 静态检查
 - `npx tsc --noEmit`：通过。
 - `npx next build`：通过。
-- `npx eslint .`：37 个 error、48 个 warning，与 `dev2` 完全相同。错误位置逐条对比一致，只有 `RadioUploadModal.tsx` 里一条原有错误的行号发生了移动，没有新增问题。
+- `npx eslint .`：第六节改动后为 36 个 error、47 个 warning（`dev2` 为 37 / 48），没有新增问题。
 
 ## 五、与开发计划的差异
 
@@ -154,3 +156,68 @@ npx -y tsx scripts/cloud-e2e/t3-sync.ts
 - 5.3 要求 23514 重新加载当前词库：未实现，见第二节第 2 条。
 - 5.5 要求示例词库作为共享内容：`getCustomBooks` 已按共享补插；上传本地数据时仍按用户的选择，可能存成个人，见第二节第 3 条。
 - 其余条目均已按计划实现。
+
+## 六、第二轮：按作者决定修改
+
+作者逐条确认了第二节，决定共 7 条，其中第 3 条（删除示例词库）已撤销。**没有修改 `supabase/schema.sql`**，下面所有改动只涉及前端代码和测试脚本。
+
+### 6.1 各条决定的实现
+
+| # | 决定 | 实现 |
+|---|---|---|
+| 1 | 去掉页面上的单词编辑，单词内容只靠重新导入更新：已有的词用新数据更新，新词追加，文件里没有的词不删，可以按章节或单元只传一部分 | 删除「修改」按钮和 `EditWordSplitModal`，删除 `saveWordOverride` / `getWordOverride*` 及 store 里的 `updateWordSplit` 等。`dictionaryLoader` 和 AI 补全不再读写 `word_overrides`，AI 补全结果只进本机 AI 缓存，不再写进自定义词库。导入走 `merge_words_into_book`：同 id 的词原位覆盖，新词追加，其余不动，导入弹窗里写明了「可以只上传某一章或某一单元」。仓储层去掉了 `wordOverrides`，`word_overrides` 表保留但代码不再使用（不改脚本） |
+| 2 | 导入按所选归属：共享内容谁都能更新、新增；个人内容先查归属，是自己的才更新，不是就跳过并计数，导入后提示跳过了多少条 | 新增 `importWordsIntoBook`（`src/db/index.ts`）：云模式先读目标词库，所选为「共享」时要求 `account_id` 为空，所选为「个人」时要求是当前账号，不符合就整批跳过并返回数量和原因；数据库函数返回 NULL（读取后被删或被改成别人的个人词库）也按跳过处理。导入弹窗在「并入已有词库」时也显示「个人 / 共享」，下拉框只列出与所选归属一致的词库。导入后提示「已导入到 X：更新 N 词、新增 M 词，文件里没有的单词保持不变」；有跳过时提示「本次导入跳过了 N 条，因为不属于你的内容…」，全部跳过时弹窗不关闭。数据库报错（含 23514）不再静默吞掉：`src/db/index.ts` 里所有 `catch` 在云模式下都会在页面顶部提示「X 失败：原因」 |
+| 3 | ~~删除示例词库~~（已撤销） | 未改动。示例词库相关代码保持上一轮的状态（云模式只在缺少时补插），上传本地数据时对示例词库的处理也保持原样 |
+| 4 | 全 0 的书内位置不推、不写 | `book_progress` 只存大于 0 的位置：载入时数据库没有的模式不补行；写入时只写和数据库不同的，「数据库没有」视为 0，所以默认值永远不会写入；某个模式改回 0 时删除那一行。一次性上传也只传大于 0 的位置 |
+| 5 | 去掉本地与数据库之间的同步：本地数据只在第一次配置数据库时上传一次（本地有数据才问），之后直接读写数据库，不排队、不后台重试；连不上或写失败就在页面上提示，不反复重发；纯本地模式不变 | 删除 `src/core/cloud/sync.ts`（防抖、待推送队列、5 秒重试、关页推送），新增 `src/core/cloud/progress.ts`：启动时从数据库载入学习位置和翻译进度，之后每次变化立即写库，同类写入按顺序执行，失败只提示一次不重发。云模式下进度字段不再缓存在 localStorage（`scopedStorage.ts`），退出登录时清掉旧版本留下的按账号缓存。守卫（`CloudSyncGate.tsx`）在登录后检查「这台设备对这个数据库是否处理过上传」，没处理过且本地有数据时弹一次框（选个人 / 共享 → 上传或不上传），两种选择都会记下，之后不再询问；设置面板里的「上传本地数据」按钮改为只显示上传记录。连不上数据库或进度写入失败时显示「云数据库暂不可用」，停止写入，「重试连接」整页重载并从数据库重新载入；其他操作失败（如导入、删除）在页面顶部提示，不阻断使用。翻译句库的新增、删除改为先写数据库、成功后再改页面；视频链接也是先入库成功再加入列表，失败时提示并保留弹窗 |
+| 6 | 视频上传时由用户填写真实时长并入库，视频仍只存 OSS 链接 | 上传弹窗新增必填的「分 / 秒」时长输入；选本地文件时从文件读出时长预填。入库的 `duration` 是用户填写的整数秒，不再固定为 60。视频仍只存 `http/https` 链接，本地文件不上传 |
+| 7 | 词库列表和词库页加归属标记：官方 / 共享 / 个人 | 词库页的每张词库卡片和顶部当前词库标题旁显示标记：内置词库为「官方」，`account_id` 为空的自定义词库为「共享」，其余自定义词库为「个人」（纯本地模式下自定义词库都显示「个人」） |
+
+### 6.2 其他约束的落实
+
+- **词库删除保持现状**：删除仍是直接删数据库里的那一行（共享词库任何账号都能删，删除后所有账号在该库上的进度被清理）。它本来就不经过同步队列，和第 5 条不冲突，确认框文案也没有改。
+- **账号隔离与上一轮的修复仍然有效**：进度写入在开始监听时记下账号，执行时账号已变（另一个标签页切换了账号）就不写；退出登录、切换账号前等待正在进行的写入结束。`t3-progress.ts` 的「account switched」「logout」两组覆盖。
+- **「临时用本地模式」保留**：这是连不上数据库时的出口，数据只存本机、不会再上传，不属于同步机制。
+
+### 6.3 第二节各条的状态
+
+| 第二节 | 状态 |
+|---|---|
+| 1 改单词整本覆盖 | 已随单词编辑一起删除 |
+| 2 23514 被吞 | 导入前按归属检查并提示跳过数量；其余写入失败都会在页面上提示 |
+| 3 固定 id 内容迁移被跳过 | 按撤销后的决定保持现状 |
+| 4 推送默认 0 | 已修复，见 6.1 第 4 条 |
+| 5 `app_state` 后写者胜 | 保持现状（每次变化直接写库，同一页面内按顺序写；两台设备交替使用时仍是后写者胜） |
+| 6 关页前推送不保证送达 | 防抖已去掉，变化立即写库；正在发出的请求仍可能随页面关闭被取消 |
+| 7 未配置 AI Key 的收件箱行 | 保持现状 |
+| 8 守卫错误状态 | 错误状态下停止进度写入，弹窗遮住页面；重试从数据库重新载入 |
+| 9 永久性错误无限重试 | 已不再重试 |
+| 10 共享内容后写者胜 | 保持现状 |
+| 11 归属标记 | 已加标记；删除确认文案按「删除保持现状」未改 |
+| 12 视频时长 | 由用户填写并入库；播放时读到的时长仍只更新页面 |
+| 13 `reconcileUnitProgressRecord` 读改写 | 保持现状 |
+
+### 6.4 改动文件
+
+- 新增：`src/core/cloud/progress.ts`、`src/core/cloud/notices.ts`、`scripts/cloud-e2e/t3-progress.ts`（由 `t3-sync.ts` 改写）。
+- 删除：`src/core/cloud/sync.ts`、`src/components/modals/EditWordSplitModal.tsx`、`src/hooks/usePermissions.ts`。
+- 修改：
+  - 云端层：`src/core/cloud/client.ts`、`supabaseRepository.ts`、`scopedStorage.ts`、`migrate.ts`、`account.ts`。
+  - 数据层与 store：`src/db/index.ts`、`src/db/repository.ts`、`src/core/dictionaryLoader.ts`、`src/lib/aiWordCore.ts`、`src/hooks/useEnsureAiWordSections.ts`、`src/store/useWorkspaceStore.ts`、`src/store/useTranslateStore.ts`。
+  - 页面与组件：`src/components/cloud/CloudSyncGate.tsx`、`src/components/settings/CloudSyncPanel.tsx`、`src/components/auth/LoginView.tsx`、`src/components/modals/ImportModal.tsx`、`src/components/translate/TranslateImportModal.tsx`、`src/components/radio/RadioUploadModal.tsx`、`src/components/typing/LearnCard.tsx`、`src/components/typing/PracticeFooter.tsx`、`src/app/books/page.tsx`、`src/app/radio/page.tsx`、`src/app/translate/page.tsx`。
+  - 测试：`scripts/cloud-e2e/t1-cloud.ts`、`t2-flows.ts`。
+
+### 6.5 测试结果
+
+- e2e：`t1-cloud` 45 / 45，`t2-flows` 48 / 48，`t3-progress` 27 / 27，环境与第四节相同。
+- `npx tsc --noEmit`、`npx next build`：通过。
+- `npx eslint .`：36 个 error、47 个 warning，少于 `dev2` 的 37 / 48。
+
+### 6.6 需要作者确认
+
+1. **「本地有数据」的判断范围**：除自定义词库、句库、阅读文章外，也包括错词本、单元进度、书内位置、翻译完成记录。只练过官方词库的设备也会弹一次上传框。如果只想在有自定义内容时才问，改 `hasLocalDataToUpload` 即可。
+2. **导入时选「共享」、目标是自己的个人词库**：按「所选归属必须与词库一致」处理为跳过（提示改选「个人」）。下拉框本来就只列出同归属的词库，这只在极少的竞态下出现。
+3. **AI 补全不再写入自定义词库**：以前 AI 补全的音节、词源会写进单词覆盖并改动词库；现在只存在本机的 AI 缓存里，换设备后会重新补全。
+4. **不再使用的部分**：`word_overrides` 表、`/api/dict/update-word` 接口（以前给作者在页面上改官方词库 JSON 用，入口已随单词编辑删除）、设置里的「同步令牌」输入框目前都没有作用。是否删除请确认；删表需要改脚本，本轮没动。
+5. **收件箱轮询**（`CollectedWordsWatcher`，每 20 秒从 `collected_words` 收词）保留。它是外部工具往数据库写、本应用从数据库读，不是本地与数据库之间的同步。
+6. **写失败后的处理**：进度写入失败或网络错误时整页进入「暂不可用」，用户只能重试（整页重载）、临时用本地模式或退出登录；其他操作失败只在顶部提示。如果希望进度写失败也只提示、不遮住页面，改 `progress.ts` 里的 `unavailable: true` 即可。

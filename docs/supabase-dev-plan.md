@@ -5,6 +5,8 @@
 > 相关文档：`docs/update.md`（原需求与实现记录）、`docs/supabase-review-report.md`（审查报告，问题编号 H1–H6、M1–M11、L1–L11）
 >
 > 执行顺序：**作者先审 `supabase/schema.sql` → 确认后再按第 5 节改业务代码**。脚本确认前不要动业务代码。
+>
+> 第二轮决定（见 5.8 和 `docs/supabase-code-recheck.md` 第六节）取代了第 5 节里与「同步」「单词修改」相关的条目：不再有本地与数据库之间的同步，本地数据只上传一次；页面上不再修改单词。
 
 ---
 
@@ -196,9 +198,9 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 登录 / 注册页改为"账号名 + 密码"，去掉邮箱、验证码和微信扫码 | `src/components/auth/LoginView.tsx`、`EmailAuthForm.tsx`（可改名为账号表单）、`WechatQrPanel.tsx`（删除） |
 | 注册调用 `rpc('register_account')`，登录调用 `rpc('login_account')`；返回 NULL 时提示"账号或密码错误"，错误码 23505 提示"账号已存在" | 同上 |
 | 登录成功后把 `{account_id, username, display_name}` 保存在本机（localStorage），提供"退出登录" | 新增一个小的会话 store，例如 `src/store/useAccountStore.ts` |
-| 所有云端读写都从这个 store 取 `account_id` | `src/core/cloud/supabaseRepository.ts`、`collector.ts`、`sync.ts`、`migrate.ts` |
+| 所有云端读写都从这个 store 取 `account_id` | `src/core/cloud/supabaseRepository.ts`、`collector.ts`、`progress.ts`（原 `sync.ts`）、`migrate.ts` |
 | 配置了数据库但未登录时跳转登录页；纯本地模式保持"跳过，继续本地使用" | `src/components/cloud/CloudSyncGate.tsx`、`src/app/login/page.tsx` |
-| 切换账号或退出登录时清空内存与 localStorage 中的进度缓存，避免上一个账号的进度被推到下一个账号 | `src/core/cloud/sync.ts`、相关 zustand store |
+| 切换账号或退出登录时清空内存与 localStorage 中的进度缓存，避免上一个账号的进度被推到下一个账号（第二轮后云模式不再在本机缓存进度） | `src/core/cloud/progress.ts`、`scopedStorage.ts`、相关 zustand store |
 | `src/core/cloud/client.ts` 保持 `persistSession: false` 即可（不使用数据库自带登录） | `src/core/cloud/client.ts` |
 | 体检时读取 `schema_meta.schema_version`，版本低于 2 时提示执行脚本 | `src/core/cloud/client.ts` |
 
@@ -206,10 +208,10 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 
 | 任务 | 说明 |
 |---|---|
-| 进度表读取加 `.eq('account_id', 当前账号)` | `word_records`、`unit_progress`、`book_progress`、`word_overrides`、`app_state`、`translate_state` |
+| 进度表读取加 `.eq('account_id', 当前账号)` | `word_records`、`unit_progress`、`book_progress`、`app_state`、`translate_state`（`word_overrides` 第二轮起不再读写） |
 | 进度表 upsert 的冲突键加上 `account_id` | `onConflict: 'account_id,word_id'`、`'account_id,unit_id,mode'`、`'account_id'`（app_state / translate_state）。写入时必须带上 `account_id` |
 | `app_state` / `translate_state` 去掉 `id: 1` 和 `.eq('id', 1)` | 改为按账号读写 |
-| 停止写 `book_mode_progress`，改写 `book_progress` 表 | 每次只 upsert 发生变化的 `(book_id, mode)`，带 `updated_at` |
+| 停止写 `book_mode_progress`，改写 `book_progress` 表 | 每次只 upsert 发生变化的 `(book_id, mode)`，带 `updated_at`；只存大于 0 的位置，改回 0 时删行（第二轮） |
 | 内容表读取加 `.or('account_id.is.null,account_id.eq.<当前账号>')` | `vocab_books`、`translate_books`、`reading_articles`、`radio_items` |
 | 内容表写入显式传 `account_id`（NULL 或当前账号） | 更新时不要改动 `account_id`，除非用户主动切换共享 / 个人 |
 | `getAll()` 改为分页（每页不超过 1000 行）或改用标量函数 | H3 |
@@ -226,18 +228,18 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 生词本 / 错词本列表 | `rpc('get_starred_word_ids')`、`rpc('get_trouble_word_records')` |
 | `markUnitWordCompleted` | `rpc('mark_unit_word_completed', …)`，传入当前单元全部 `word_id` |
 | `markUnitWordForRetry` | `rpc('mark_unit_word_for_retry', …)` |
-| `mergeWordsIntoBook` | `rpc('merge_words_into_book', …)` |
+| `mergeWordsIntoBook` / `importWordsIntoBook` | `rpc('merge_words_into_book', …)`；导入前按所选归属检查目标词库，不符合就跳过并计数（第二轮） |
 | 翻译进度推送 | `rpc('merge_translate_state', …)` |
-| 错误码 23514 | 表示"单元已属于别的书 / 进度不能改挂 / 不能改别人的个人内容"，前端应当重新加载当前词库，不要静默吞掉 |
+| 错误码 23514 | 表示"单元已属于别的书 / 进度不能改挂 / 不能改别人的个人内容"，不要静默吞掉。第二轮：导入前按归属检查并提示跳过数量；其余写入失败在页面上提示 |
 
 ### 5.4 共享 / 个人选项（创建或上传时）
 
 | 入口 | 涉及文件 |
 |---|---|
 | 导入自定义词库 | `src/components/modals/ImportModal.tsx`、`src/db/index.ts` 的 `saveCustomVocabularyBook` |
-| 自定义翻译句库 | 翻译模块导入入口、`src/core/cloud/sync.ts` |
+| 自定义翻译句库 | 翻译模块导入入口、`src/store/useTranslateStore.ts`（新增、删除先写数据库） |
 | 上传阅读文章 | `src/app/reading/page.tsx` |
-| 上传视频 | `src/components/radio/RadioUploadModal.tsx`、`src/app/radio/page.tsx`（目前视频只存在页面内存里，需要先接入持久化） |
+| 上传视频 | `src/components/radio/RadioUploadModal.tsx`、`src/app/radio/page.tsx`（只存链接；时长由用户填写后入库） |
 
 界面上提供"共享（全家可用）/ 个人（仅自己可见）"两个选项。选共享时写 `account_id = NULL`，选个人时写当前账号。纯本地模式不显示这个选项。
 
@@ -253,7 +255,7 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 任务 | 涉及文件 |
 |---|---|
 | 改为 `claim_collected_words` → 处理 → `complete_collected_words` / `fail_collected_word`；AI 解析失败时调用 `fail`，不再留在队头 | `src/core/cloud/collector.ts` |
-| 本地数据首次上传到云端：进度写到当前登录账号；内容在上传时询问共享 / 个人，或者默认个人 | `src/core/cloud/migrate.ts` |
+| 本地数据首次上传到云端：进度写到当前登录账号；内容在上传时询问共享 / 个人。第二轮：每台设备对每个数据库只询问一次（本地有数据才问），上传或不上传都会记下 | `src/core/cloud/migrate.ts`、`src/components/cloud/CloudSyncGate.tsx` |
 | 补上官方词库单元进度的迁移 | `src/core/cloud/migrate.ts`（H2） |
 
 ### 5.7 外部同步工具约定
@@ -261,6 +263,20 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 - 写入：内容表按需填 `account_id`（NULL = 共享）。进度表必须填 `account_id`，取值为 `accounts.id`。不要写 `server_updated_at`、`total_words`、`total_sentences`，写了也会被触发器覆盖。
 - 增量拉取：`where (server_updated_at, 主键) > (游标) order by server_updated_at, 主键 limit 500`。
 - 收件箱：只需 insert `word`，其余列都有默认值。
+
+### 5.8 第二轮决定（作者逐条确认后执行）
+
+| # | 决定 | 涉及文件 |
+|---|---|---|
+| 1 | 去掉页面上的单词编辑；单词内容只靠重新导入更新：已有的更新、新的追加、文件里没有的保留，可以只传某一章或某一单元。代码不再读写 `word_overrides`（表保留） | `ImportModal.tsx`、`src/db/index.ts`、`dictionaryLoader.ts`、`aiWordCore.ts`、`LearnCard.tsx` |
+| 2 | 导入按所选归属：共享内容谁都能更新、新增；个人内容只能更新自己的，不是自己的就跳过并提示「本次导入跳过了 N 条，因为不属于你的内容」 | `src/db/index.ts` 的 `importWordsIntoBook`、`ImportModal.tsx` |
+| 3 | ~~删除示例词库~~（已撤销，保持现状） | — |
+| 4 | 全 0 的书内位置不写库 | `progress.ts`、`supabaseRepository.ts`、`migrate.ts` |
+| 5 | 去掉同步：本地数据只在第一次连数据库时上传一次，之后直接读写数据库；不排队、不后台重试；失败在页面上提示。纯本地模式不变 | `progress.ts`（取代 `sync.ts`）、`notices.ts`、`scopedStorage.ts`、`CloudSyncGate.tsx`、`CloudSyncPanel.tsx`、`useTranslateStore.ts` |
+| 6 | 视频时长由用户填写并入库；视频仍只存 OSS 链接 | `RadioUploadModal.tsx`、`src/app/radio/page.tsx` |
+| 7 | 词库列表和词库页显示「官方 / 共享 / 个人」 | `src/app/books/page.tsx` |
+
+词库删除保持现状（直接删数据库那一行），与第 5 条不冲突。以上都不需要改 `supabase/schema.sql`。
 
 ---
 
@@ -310,5 +326,5 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 3 | 是否需要删除日志表来同步删除（包括翻译题库删了又复活，M2） | 未加，删除仍是物理删除 | 需要时新增 `deletions(table_name, row_id, account_id, deleted_at)`，由触发器记录 |
 | 4 | 是否记录官方 JSON 的版本号 | 未记录，靠每次调用时剪除失效词 | 如果官方 JSON 会频繁调整，建议在 `book_progress` 上加 `dict_version` |
 | 5 | 共享内容是否禁止重名 | 不限制 | 需要时执行脚本里注释掉的 `unique nulls not distinct` 两句 |
-| 6 | `word_overrides`（单词手工修改）按账号还是全家共享 | 按账号 | 按账号更简单；如需共享，可以改为内容类（可空） |
+| 6 | `word_overrides`（单词手工修改）按账号还是全家共享 | 按账号 | 第二轮已去掉页面上的单词编辑，代码不再读写这张表；是否删表待确认（需改脚本） |
 | 7 | 账号规则 | 账号名 1–32 个字符、不区分大小写；密码至少 6 位 | 如果想放宽或收紧，只需改 `register_account` / `change_account_password` 里的判断 |
