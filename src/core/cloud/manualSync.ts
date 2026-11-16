@@ -256,16 +256,9 @@ export async function syncLocalContentToCloud(visibility: ContentVisibility): Pr
 
 /**
  * 单词记录，不比较时间，只增不减：
- * 累计练习次数、默写错误次数取较大值；错词、生词、已掌握取「任一方为真」；最后练习时间取较晚的。
- * 连续答对次数是「移出错词本」的进度（默写连对 3 次移出），跟着错词标记走：
- * 合并后是错词时只取标记为错词那一方的次数（两方都是错词取较大值），
- * 避免已移出那一方的旧连对次数让重新加上的错词答对一次就被移出；合并后不是错词时取较大值。
+ * 累计练习次数、默写错误次数、连续答对次数取较大值；错词、生词、已掌握取「任一方为真」；最后练习时间取较晚的。
  */
 export function mergeWordRecord(remote: WordMasteryRecord, local: WordMasteryRecord): WordMasteryRecord {
-  const isError = remote.isError || local.isError
-  const streaks = isError
-    ? [remote, local].filter((record) => record.isError).map((record) => record.consecutiveCorrectCount ?? 0)
-    : [remote.consecutiveCorrectCount ?? 0, local.consecutiveCorrectCount ?? 0]
   return {
     ...remote,
     wordName: remote.wordName ?? local.wordName,
@@ -274,8 +267,8 @@ export function mergeWordRecord(remote: WordMasteryRecord, local: WordMasteryRec
     isMastered: remote.isMastered || local.isMastered,
     totalPracticeCount: Math.max(remote.totalPracticeCount ?? 0, local.totalPracticeCount ?? 0),
     dictationErrorCount: Math.max(remote.dictationErrorCount ?? 0, local.dictationErrorCount ?? 0),
-    isError,
-    consecutiveCorrectCount: Math.max(...streaks),
+    isError: remote.isError || local.isError,
+    consecutiveCorrectCount: Math.max(remote.consecutiveCorrectCount ?? 0, local.consecutiveCorrectCount ?? 0),
     lastPracticedAt: Math.max(remote.lastPracticedAt ?? 0, local.lastPracticedAt ?? 0),
   }
 }
