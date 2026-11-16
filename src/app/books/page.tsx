@@ -37,6 +37,32 @@ interface BookTheme {
   coverClass: string
 }
 
+type BookOwnership = 'official' | 'shared' | 'personal'
+
+/** 官方 = 内置词库；共享 = 云端 account_id 为空的自定义词库；其余自定义词库（含本地模式）= 个人 */
+function getBookOwnership(book: Pick<VocabularyBook, 'isCustom' | 'accountId'>): BookOwnership {
+  if (!book.isCustom) return 'official'
+  return book.accountId === null ? 'shared' : 'personal'
+}
+
+const OWNERSHIP_BADGES: Record<BookOwnership, { label: string; className: string }> = {
+  official: { label: '官方', className: 'bg-sky-500/15 text-sky-300 ring-sky-500/30' },
+  shared: { label: '共享', className: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
+  personal: { label: '个人', className: 'bg-amber-500/15 text-amber-300 ring-amber-500/30' },
+}
+
+function OwnerBadge({ book }: { book: Pick<VocabularyBook, 'isCustom' | 'accountId'> }) {
+  const badge = OWNERSHIP_BADGES[getBookOwnership(book)]
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${badge.className}`}
+      title={`归属：${badge.label}`}
+    >
+      {badge.label}
+    </span>
+  )
+}
+
 function getBookTheme(bookId: string, isCustom?: boolean): BookTheme {
   if (isCustom) {
     if (bookId === 'book_custom_sample') {
@@ -540,7 +566,10 @@ function BooksHubContent() {
           {/* 当前浏览词库概览 */}
           <div className="pt-5 flex items-center justify-between gap-8">
             <div className="min-w-0">
-              <h2 className="text-2xl font-semibold text-white tracking-tight">{activeBook?.name}</h2>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-2xl font-semibold text-white tracking-tight truncate">{activeBook?.name}</h2>
+                {activeBook && <OwnerBadge book={activeBook} />}
+              </div>
               <p className="mt-1.5 text-[14px] text-muted-foreground max-w-3xl leading-relaxed line-clamp-2">
                 {activeBook?.description}
               </p>
@@ -801,11 +830,14 @@ function BooksHubContent() {
                             <ThemeIcon className="size-3.5" />
                             {theme.tag}
                           </span>
-                          {isSelected && (
-                            <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary ring-1 ring-primary/30">
-                              正在浏览
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {isSelected && (
+                              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary ring-1 ring-primary/30">
+                                正在浏览
+                              </span>
+                            )}
+                            <OwnerBadge book={b} />
+                          </div>
                         </div>
 
                         <h4 className="mt-5 font-serif text-[18px] font-semibold leading-snug text-white line-clamp-2">

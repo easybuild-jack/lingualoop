@@ -351,20 +351,22 @@ export default function RadioPage() {
   }, [handleTogglePlay, currentTime, duration, handlePrev, handleNext])
 
   // 添加用户自定义视频
-  const handleAddItem = (newItem: RadioItem) => {
-    setItems((prev) => [newItem, ...prev])
+  const handleAddItem = async (newItem: RadioItem) => {
     if (isCloudMode() && newItem.accountId !== undefined) {
-      getRepositories()
-        .radio.putItem(newItem)
-        .catch((error) => {
-          console.warn('[radio] failed to save item:', error)
-          setCloudError(`视频保存到云端失败（仅本次会话可用）：${error instanceof Error ? error.message : '请稍后重试'}`)
-        })
+      try {
+        await getRepositories().radio.putItem(newItem)
+      } catch (error) {
+        console.warn('[radio] failed to save item:', error)
+        setCloudError(`视频保存到云端失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+        return false
+      }
     }
+    setItems((prev) => [newItem, ...prev])
     setLastCategoryTab(newItem.category)
     setCurrentId(newItem.id)
     setIsPlaying(true)
     setActiveTab('player')
+    return true
   }
 
   // 删除视频

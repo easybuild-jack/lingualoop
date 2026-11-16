@@ -29,11 +29,33 @@ function normalizeMediaUrl(raw: string): string | null {
   }
 }
 
+function readVideoDuration(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      resolve(Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration) : null)
+    }
+    video.onerror = () => resolve(null)
+    video.src = url
+  })
+}
+
+/** 「分 / 秒」两个输入框换算成整数秒，填写不完整或为 0 时返回 null */
+function parseDurationSeconds(minutes: string, seconds: string): number | null {
+  const m = minutes.trim() ? Number(minutes) : 0
+  const s = seconds.trim() ? Number(seconds) : 0
+  if (!Number.isInteger(m) || !Number.isInteger(s) || m < 0 || s < 0 || s >= 60) return null
+  const total = m * 60 + s
+  return total > 0 ? total : null
+}
+
 interface RadioUploadModalProps {
   isOpen: boolean
   defaultCategory: RadioCategory
   onClose: () => void
-  onAddItem: (item: RadioItem) => void
+  /** 返回 false 表示保存失败（错误已提示），弹窗保持打开 */
+  onAddItem: (item: RadioItem) => boolean | Promise<boolean>
 }
 
 const CATEGORIES: RadioCategory[] = ['phrases', 'dialogue', 'radio']
@@ -63,6 +85,9 @@ export function RadioUploadModal({
   const [error, setError] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
   const [visibility, setVisibility] = useState<ContentVisibility>('personal')
+  const [durationMin, setDurationMin] = useState('')
+  const [durationSec, setDurationSec] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -75,6 +100,9 @@ export function RadioUploadModal({
       setError('')
       setLinkUrl('')
       setVisibility('personal')
+      setDurationMin('')
+      setDurationSec('')
+      setIsSaving(false)
     }
   }, [isOpen, defaultCategory])
 
@@ -98,6 +126,13 @@ export function RadioUploadModal({
     // 创建本地 Blob URL 供即时播放预览
     const url = URL.createObjectURL(file)
     setFileUrl(url)
+
+    // 本地文件能直接读出时长，预填后用户仍可修改
+    void readVideoDuration(url).then((total) => {
+      if (!total) return
+      setDurationMin(String(Math.floor(total / 60)))
+      setDurationSec(String(total % 60))
+    })
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -109,8 +144,9 @@ export function RadioUploadModal({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSaving) return
 
     const remoteUrl = selectedFile ? null : normalizeMediaUrl(linkUrl)
     if (!selectedFile && linkUrl.trim() && !remoteUrl) {
@@ -127,6 +163,12 @@ export function RadioUploadModal({
       return
     }
 
+    const duration = parseDurationSeconds(durationMin, durationSec)
+    if (!duration) {
+      setError('请填写视频的实际时长（分、秒，秒数 0–59，总时长大于 0）')
+      return
+    }
+
     const finalScenario = category === 'dialogue' ? (customScenario.trim() || scenario) : ''
 
     // 本地文件只是 Blob URL，无法入库；只有链接视频才带归属并保存到云端
@@ -138,13 +180,19 @@ export function RadioUploadModal({
       title: title.trim(),
       type: 'video',
       src: remoteUrl ?? fileUrl,
-      duration: 60, // 初始估算，实际播放时会自动根据 duration 动态纠正
+      duration,
       scenario: finalScenario,
       createdAt: Date.now(),
       playCount: 0,
     }
 
-    onAddItem(newItem)
+    setIsSaving(true)
+    const saved = await onAddItem(newItem)
+    setIsSaving(false)
+    if (!saved) {
+      setError('保存失败，请稍后重试')
+      return
+    }
     onClose()
   }
 
@@ -171,7 +219,7 @@ export function RadioUploadModal({
         </div>
 
         {/* 表单内容区 */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           {error && (
             <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-center gap-2">
               <AlertCircle className="size-4 shrink-0" />
@@ -289,6 +337,41 @@ export function RadioUploadModal({
             />
           </div>
 
+          {/* 视频时长：与视频一起保存，列表与统计直接使用 */}
+          <div>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
+              视频时长 <span className="text-primary">*</span>
+            </label>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={durationMin}
+                onChange={(e) => setDurationMin(e.target.value)}
+                placeholder="0"
+                aria-label="分钟"
+                className="w-20 h-9 px-3 rounded-xl bg-card border border-border text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
+              />
+              <span>分</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={59}
+                value={durationSec}
+                onChange={(e) => setDurationSec(e.target.value)}
+                placeholder="0"
+                aria-label="秒"
+                className="w-20 h-9 px-3 rounded-xl bg-card border border-border text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20"
+              />
+              <span>秒</span>
+            </div>
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              {selectedFile ? '已从视频文件读取时长，可按需修改。' : '视频链接无法自动读取时长，请填写实际时长。'}
+            </p>
+          </div>
+
           {/* 仅「场景对话」展示场景分类选择 */}
           {category === 'dialogue' && (
             <div>
@@ -335,8 +418,9 @@ export function RadioUploadModal({
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
-            className="flex items-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+            onClick={(e) => void handleSubmit(e)}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-60"
           >
             <Check className="size-3.5" />
             <span>保存并播放</span>
