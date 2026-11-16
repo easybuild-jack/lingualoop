@@ -113,7 +113,7 @@ export function LoginView() {
               <div className="space-y-5">
                 <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-[13px] leading-relaxed text-muted-foreground">
                   {loginState === 'local'
-                    ? '当前未配置云数据库，所有数据都保存在这台设备上，无需登录。需要跨设备同步时，请先在「设置 → 云同步」里配置数据库，再回到这里登录。'
+                    ? '当前未配置云数据库，所有数据都保存在这台设备上，无需登录。需要跨设备同步时，请先在「设置 → 数据同步」里配置数据库，再回到这里登录。'
                     : '当前处于临时本地模式，数据保存在这台设备上。恢复云端连接后需要登录账号。'}
                 </p>
                 <Link

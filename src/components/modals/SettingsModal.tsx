@@ -111,24 +111,6 @@ export function SettingsModal() {
     (!AI_PROVIDER_PRESETS[aiConfig.provider]?.hidden && AI_PROVIDER_PRESETS[aiConfig.provider]) ||
     AI_PROVIDER_PRESETS.deepseek
 
-  // 外部工具同步设置状态：Token 直接从 localStorage 惰性初始，省掉一次挂载后的状态同步
-  const [syncToken, setSyncToken] = useState(
-    () =>
-      (typeof window === 'undefined' ? '' : localStorage.getItem('lingualoop_sync_token')) || ''
-  )
-
-  const handleUpdateToken = (val: string) => {
-    setSyncToken(val)
-    if (typeof window !== 'undefined') {
-      if (val.trim()) {
-        localStorage.setItem('lingualoop_sync_token', val.trim())
-      } else {
-        localStorage.removeItem('lingualoop_sync_token')
-      }
-      window.dispatchEvent(new Event('lingualoop_sync_token_changed'))
-    }
-  }
-
   // 离线词库状态
   const [offlineWordsCount, setOfflineWordsCount] = useState<number | null>(null)
   const [isLoadingWordCount, setIsLoadingWordCount] = useState(false)
@@ -225,29 +207,26 @@ export function SettingsModal() {
           <div className="w-52 xl:w-56 shrink-0 space-y-0.5 border-r border-border pr-5 h-full overflow-y-auto custom-scrollbar">
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('audio') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'audio' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'audio' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Volume2 className="size-4 shrink-0" />
-              <span>音效与机械键盘</span>
+              <span>音效设置</span>
             </button>
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('voice') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'voice' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'voice' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Mic className="size-4 shrink-0" />
-              <span>音标与真人发音</span>
+              <span>发音设置</span>
             </button>
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('appearance') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'appearance' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'appearance' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Palette className="size-4 shrink-0" />
               <span>外观皮肤</span>
@@ -255,9 +234,8 @@ export function SettingsModal() {
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('shortcuts') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'shortcuts' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'shortcuts' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Keyboard className="size-4 shrink-0" />
               <span>快捷键设置</span>
@@ -265,9 +243,8 @@ export function SettingsModal() {
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('learn') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'learn' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'learn' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <GraduationCap className="size-4 shrink-0" />
               <span>学习参数</span>
@@ -275,12 +252,11 @@ export function SettingsModal() {
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('ai') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'ai' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'ai' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Bot className="size-4 shrink-0" />
-              <span>AI 模型配置</span>
+              <span>模型配置</span>
             </button>
 
             <button
@@ -288,11 +264,10 @@ export function SettingsModal() {
                 setRecordingAction(null)
                 if (activeTab !== 'tts' && activeTab !== 'asr') setActiveTab('tts')
               }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'tts' || activeTab === 'asr'
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'tts' || activeTab === 'asr'
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <AudioLines className="size-4 shrink-0" />
               <span>语音配置</span>
@@ -300,22 +275,20 @@ export function SettingsModal() {
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('sync') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'sync' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'sync' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Link2 className="size-4 shrink-0" />
-              <span>数据与云同步</span>
+              <span>数据同步</span>
             </button>
 
             <button
               onClick={() => { setRecordingAction(null); setActiveTab('dictionary') }}
-              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${
-                activeTab === 'dictionary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
-              }`}
+              className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-[14px] transition-colors cursor-pointer ${activeTab === 'dictionary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-white hover:bg-muted'
+                }`}
             >
               <Database className="size-4 shrink-0" />
-              <span>离线词库与缓存</span>
+              <span>词库缓存</span>
             </button>
           </div>
 
@@ -349,11 +322,10 @@ export function SettingsModal() {
                           setKeySoundPack(sw.id)
                           audioEngine.playKeySound(sw.id, keySoundVolume)
                         }}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border bg-transparent hover:border-primary/40'
-                        }`}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${isSelected
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border bg-transparent hover:border-primary/40'
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-2 min-w-0">
                           <span className="text-sm sm:text-sm font-semibold text-white truncate" title={sw.name}>
@@ -407,9 +379,8 @@ export function SettingsModal() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-muted-foreground">音标口音偏好</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <label className={`p-5 rounded-lg border flex items-start gap-3.5 cursor-pointer transition-all ${
-                      phoneticPreference === 'us' ? 'border-primary bg-primary/10' : 'border-border bg-transparent hover:border-primary/40'
-                    }`}>
+                    <label className={`p-5 rounded-lg border flex items-start gap-3.5 cursor-pointer transition-all ${phoneticPreference === 'us' ? 'border-primary bg-primary/10' : 'border-border bg-transparent hover:border-primary/40'
+                      }`}>
                       <input
                         type="radio"
                         name="accent"
@@ -424,9 +395,8 @@ export function SettingsModal() {
                       </div>
                     </label>
 
-                    <label className={`p-5 rounded-lg border flex items-start gap-3.5 cursor-pointer transition-all ${
-                      phoneticPreference === 'uk' ? 'border-primary bg-primary/10' : 'border-border bg-transparent hover:border-primary/40'
-                    }`}>
+                    <label className={`p-5 rounded-lg border flex items-start gap-3.5 cursor-pointer transition-all ${phoneticPreference === 'uk' ? 'border-primary bg-primary/10' : 'border-border bg-transparent hover:border-primary/40'
+                      }`}>
                       <input
                         type="radio"
                         name="accent"
@@ -512,11 +482,10 @@ export function SettingsModal() {
                         key={skin.id}
                         type="button"
                         onClick={() => setSkinId(skin.id)}
-                        className={`group relative flex flex-col gap-3 p-3.5 rounded-lg text-left transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-primary/10 border-2 border-primary'
-                            : 'bg-transparent border border-border hover:bg-muted hover:border-white/25'
-                        }`}
+                        className={`group relative flex flex-col gap-3 p-3.5 rounded-lg text-left transition-all cursor-pointer ${isActive
+                          ? 'bg-primary/10 border-2 border-primary'
+                          : 'bg-transparent border border-border hover:bg-muted hover:border-white/25'
+                          }`}
                       >
                         {/* 配色预览：迷你版应用界面 */}
                         <div
@@ -631,11 +600,10 @@ export function SettingsModal() {
                         </div>
                         <button
                           onClick={() => setRecordingAction(def.key)}
-                          className={`px-4 py-2.5 rounded-xl font-mono font-bold text-sm transition-all cursor-pointer ${
-                            isRecording
-                              ? 'bg-primary text-[#0B0C0E] animate-pulse'
-                              : 'bg-transparent hover:bg-white/[0.12] text-white border border-border hover:border-primary/50'
-                          }`}
+                          className={`px-4 py-2.5 rounded-xl font-mono font-bold text-sm transition-all cursor-pointer ${isRecording
+                            ? 'bg-primary text-[#0B0C0E] animate-pulse'
+                            : 'bg-transparent hover:bg-white/[0.12] text-white border border-border hover:border-primary/50'
+                            }`}
                           title="点击录制新快捷键"
                         >
                           {isRecording ? '录制中... (ESC取消)' : formatShortcutDisplay(currentKey)}
@@ -726,11 +694,10 @@ export function SettingsModal() {
                               setAiProvider(p.id)
                               setAiTestResult(null)
                             }}
-                            className={`p-4 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              isSelected
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border bg-transparent hover:border-primary/40 hover:bg-muted'
-                            }`}
+                            className={`p-4 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${isSelected
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border bg-transparent hover:border-primary/40 hover:bg-muted'
+                              }`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
                               <span className={`text-sm font-semibold truncate ${isSelected ? 'text-primary' : 'text-white'}`}>
@@ -871,11 +838,10 @@ export function SettingsModal() {
                               updateAiConfig({ model: m })
                               setAiTestResult(null)
                             }}
-                            className={`px-2 py-0.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${
-                              aiConfig.model === m
-                                ? 'bg-primary/20 text-primary border border-primary/40 font-bold'
-                                : 'bg-transparent text-muted-foreground hover:text-white hover:bg-white/10 border border-border'
-                            }`}
+                            className={`px-2 py-0.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${aiConfig.model === m
+                              ? 'bg-primary/20 text-primary border border-primary/40 font-bold'
+                              : 'bg-transparent text-muted-foreground hover:text-white hover:bg-white/10 border border-border'
+                              }`}
                           >
                             {m}
                           </button>
@@ -929,11 +895,10 @@ export function SettingsModal() {
 
                     {aiTestResult && (
                       <div
-                        className={`flex-1 min-w-0 px-4 py-2.5 rounded-xl border text-sm flex items-center gap-2.5 overflow-hidden ${
-                          aiTestResult.success
-                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
-                            : 'bg-rose-500/10 border-rose-500/25 text-rose-300'
-                        }`}
+                        className={`flex-1 min-w-0 px-4 py-2.5 rounded-xl border text-sm flex items-center gap-2.5 overflow-hidden ${aiTestResult.success
+                          ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                          : 'bg-rose-500/10 border-rose-500/25 text-rose-300'
+                          }`}
                       >
                         {aiTestResult.success ? (
                           <>
@@ -997,11 +962,10 @@ export function SettingsModal() {
                             key={p.label}
                             type="button"
                             onClick={() => updateAiConfig({ temperature: p.v })}
-                            className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${
-                              Math.abs(aiConfig.temperature - p.v) < 0.001
-                                ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                                : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${Math.abs(aiConfig.temperature - p.v) < 0.001
+                              ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                              : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {p.label} {p.v}
                           </button>
@@ -1032,11 +996,10 @@ export function SettingsModal() {
                             key={v}
                             type="button"
                             onClick={() => updateAiConfig({ maxTokens: v })}
-                            className={`px-2 py-0.5 rounded-md text-[12px] font-mono border transition-all cursor-pointer ${
-                              aiConfig.maxTokens === v
-                                ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                                : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`px-2 py-0.5 rounded-md text-[12px] font-mono border transition-all cursor-pointer ${aiConfig.maxTokens === v
+                              ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                              : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {v}
                           </button>
@@ -1079,7 +1042,7 @@ export function SettingsModal() {
                     placeholder="输入 LinguaLoop Copilot 系统提示词..."
                   />
                   <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground leading-relaxed flex items-start gap-2.5">
-                    
+
                     <div>
                       <strong className="text-white">场景二：AI 字典（结构化单词数据查询）</strong>
                       <p className="mt-0.5 text-muted-foreground/90">
@@ -1095,41 +1058,7 @@ export function SettingsModal() {
               <SpeakingTtsPanel onGoAiModels={() => { setRecordingAction(null); setActiveTab('ai') }} />
             )}
 
-            {activeTab === 'sync' && (
-              <div className="space-y-6">
-                <CloudSyncPanel />
-
-                {/* 作者身份密钥：仅用于解锁官方词库的音节切分维护权限，与数据同步无关 */}
-                <div className="p-6 rounded-lg border border-border space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <label className="text-sm font-semibold text-foreground block">
-                        作者身份密钥（可选）
-                      </label>
-                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                        仅用于解锁官方词库的音节切分与词根构词维护权限，留空不影响任何学习功能。
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 self-start sm:self-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                        syncToken.trim()
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                          : 'bg-transparent text-muted-foreground border-border'
-                      }`}
-                    >
-                      {syncToken.trim() ? '● 已识别' : '○ 未配置'}
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    value={syncToken}
-                    onChange={(e) => handleUpdateToken(e.target.value)}
-                    placeholder="留空即可，仅作者本人需要填写"
-                    className="w-full bg-transparent border border-border rounded-md px-4 py-3 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
-                  />
-                </div>
-              </div>
-            )}
+            {activeTab === 'sync' && <CloudSyncPanel />}
 
             {activeTab === 'dictionary' && (
               <div className="space-y-6">
