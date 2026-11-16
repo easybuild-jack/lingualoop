@@ -27,6 +27,7 @@ import {
   KeyRound,
   Loader2,
   Lock,
+  Mic,
   MonitorSpeaker,
   Play,
   RotateCcw,
@@ -63,6 +64,13 @@ import {
   type DoubaoAuthMode,
   type TtsProvider,
 } from '@/lib/speaking/ttsConfig'
+import {
+  ASR_LANGUAGE_OPTIONS,
+  isAsrReady,
+  transcribeSpeech,
+  type AsrLanguage,
+} from '@/lib/speaking/asrConfig'
+import { isRecordingSupported, startVoiceRecording, type VoiceRecording } from '@/lib/speaking/recorder'
 
 const inputClass =
   'w-full bg-black/20 border border-border rounded-md px-4 py-3 text-sm font-mono text-white placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 disabled:cursor-not-allowed'
@@ -106,22 +114,37 @@ type TestState =
   | { status: 'ok'; slot: SpeakingVoiceId; latencyMs: number }
   | { status: 'error'; message: string }
 
+type AsrTestState =
+  | { status: 'idle' }
+  | { status: 'recording' }
+  | { status: 'uploading' }
+  | { status: 'ok'; text: string; latencyMs: number; durationMs?: number }
+  | { status: 'error'; message: string }
+
 export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void }) {
   const tts = useSpeakingStore((s) => s.tts)
+  const asr = useSpeakingStore((s) => s.asr)
   const setTts = useSpeakingStore((s) => s.setTts)
+  const setAsrProvider = useSpeakingStore((s) => s.setAsrProvider)
   const updateDoubao = useSpeakingStore((s) => s.updateDoubao)
+  const updateDoubaoAsr = useSpeakingStore((s) => s.updateDoubaoAsr)
   const updateQwen = useSpeakingStore((s) => s.updateQwen)
   const setTtsVoice = useSpeakingStore((s) => s.setTtsVoice)
   const clearTtsCredentials = useSpeakingStore((s) => s.clearTtsCredentials)
   const resetTts = useSpeakingStore((s) => s.resetTts)
+  const resetAsr = useSpeakingStore((s) => s.resetAsr)
   const aiConfig = useAiAssistantStore((s) => s.aiConfig)
 
   const [showSecret, setShowSecret] = useState(false)
   const [sampleText, setSampleText] = useState(TTS_SAMPLE_TEXT)
   const [test, setTest] = useState<TestState>({ status: 'idle' })
+  const [asrTest, setAsrTest] = useState<AsrTestState>({ status: 'idle' })
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlRef = useRef<string | null>(null)
+  const recordingRef = useRef<VoiceRecording | null>(null)
+  const micSupported = isRecordingSupported()
+  const asrReadiness = isAsrReady(asr, tts)
 
   const chat = isChatModelReady(aiConfig)
   const locked = !chat.ready
@@ -168,8 +191,74 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
       if (audioRef.current) audioRef.current.pause()
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+      recordingRef.current?.abort()
     }
   }, [])
+
+  const handleSelectProvider = (nextProvider: TtsProvider) => {
+    stopPlayback()
+    setTts({ provider: nextProvider })
+    if (nextProvider === 'doubao') {
+      setAsrProvider('doubao')
+      updateDoubaoAsr({ credentialSource: 'follow' })
+    } else {
+      setAsrProvider('browser')
+    }
+    setTest({ status: 'idle' })
+    setAsrTest({ status: 'idle' })
+  }
+
+  const startAsrTest = () => {
+    if (locked || provider !== 'doubao' || asrTest.status === 'recording' || asrTest.status === 'uploading') {
+      return
+    }
+    if (!micSupported) {
+      setAsrTest({ status: 'error', message: '当前浏览器不支持录音，换个浏览器再试' })
+      return
+    }
+    if (!asrReadiness.ready) {
+      setAsrTest({ status: 'error', message: asrReadiness.reason ?? '识别尚未配置完成' })
+      return
+    }
+    recordingRef.current?.abort()
+    recordingRef.current = startVoiceRecording()
+    setAsrTest({ status: 'recording' })
+  }
+
+  const stopAsrTest = () => {
+    const recording = recordingRef.current
+    recordingRef.current = null
+    if (!recording || asrTest.status !== 'recording') return
+
+    setAsrTest({ status: 'uploading' })
+    void (async () => {
+      try {
+        const { blob, durationMs, peak } = await recording.stop()
+        if (blob.size === 0 || durationMs < 300) {
+          setAsrTest({ status: 'error', message: '没录到声音，按住多说一会儿再松开' })
+          return
+        }
+        if (peak < 0.01) {
+          setAsrTest({ status: 'error', message: '麦克风里几乎没有声音，请检查输入设备' })
+          return
+        }
+
+        const snapshot = useSpeakingStore.getState()
+        const res = await transcribeSpeech(snapshot.asr, snapshot.tts, { audio: blob })
+        setAsrTest({
+          status: 'ok',
+          text: res.text || '（识别结果为空）',
+          latencyMs: res.latencyMs,
+          durationMs: res.durationMs ?? durationMs,
+        })
+      } catch (err) {
+        setAsrTest({
+          status: 'error',
+          message: err instanceof Error ? err.message : '语音识别失败',
+        })
+      }
+    })()
+  }
 
   const handlePlay = async (slot: SpeakingVoiceId) => {
     if (locked) return
@@ -232,32 +321,31 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
         <div>
           <h3 className="text-sm font-semibold text-white flex items-center gap-2.5">
             <AudioLines className="size-4.5 text-primary" />
-            <span>语音合成（TTS）</span>
+            <span>语音配置</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-[12px] font-medium border ${
-                locked
-                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-                  : configured
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
-                    : 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-              }`}
+              className={`px-2 py-0.5 rounded-full text-[12px] font-medium border ${locked
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                : configured
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+                  : 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                }`}
             >
               {locked ? '待前置' : configured ? '已就绪' : '待配置'}
             </span>
           </h3>
           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-            口语陪练的语音链路分三层：听（语音识别）、想（对话模型）、说（本页的 TTS）。本页只配「说」——把 AI
-            的回复实时合成语音播放，不参与对话生成、不做纠错、不改写文本；语种跟随当前练习的语言，不限于英语。
-            对话模型在「AI 模型配置」里统一设置。
+            为口语陪练提供语音对话能力：将你的麦克风语音识别为文字，并将 AI 的回复合成为自然语音朗读出来。
           </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            if (!confirm('恢复语音合成的默认参数？（会清空所有服务商的凭据）')) return
+            if (!confirm('恢复语音配置的默认参数？（会清空所有服务商的凭据）')) return
             stopPlayback()
             resetTts()
+            resetAsr()
             setTest({ status: 'idle' })
+            setAsrTest({ status: 'idle' })
           }}
           className="shrink-0 text-sm text-muted-foreground hover:text-primary flex items-center gap-1.5 transition-colors cursor-pointer"
         >
@@ -309,12 +397,12 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
         className={locked ? 'space-y-5 opacity-45 pointer-events-none select-none' : 'space-y-5'}
         aria-disabled={locked}
       >
-        {/* 合成服务 */}
+        {/* 语音服务 */}
         <div className="p-5 rounded-lg border border-border space-y-4">
           <SectionTitle
             icon={<Volume2 className="size-3.5" />}
-            title="合成服务"
-            desc="TTS 服务商可自由切换，各家的凭据与音色分开保存，切走再切回不用重填。"
+            title="语音服务"
+            desc="选择豆包时，语音合成与语音识别共用同一套火山凭据；各家凭据分开保存，切走再切回不用重填。"
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {TTS_PROVIDERS.map((p) => {
@@ -324,14 +412,9 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => {
-                    stopPlayback()
-                    setTts({ provider: p.id })
-                    setTest({ status: 'idle' })
-                  }}
-                  className={`p-4 rounded-lg border text-left transition-all cursor-pointer flex flex-col gap-2 ${
-                    active ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted'
-                  }`}
+                  onClick={() => handleSelectProvider(p.id)}
+                  className={`p-4 rounded-lg border text-left transition-all cursor-pointer flex flex-col gap-2 ${active ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted'
+                    }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span
@@ -341,13 +424,12 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                       {p.name}
                     </span>
                     <span
-                      className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] border ${
-                        p.id === 'browser'
-                          ? 'text-muted-foreground border-border'
-                          : ready
-                            ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                            : 'text-muted-foreground border-border'
-                      }`}
+                      className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] border ${p.id === 'browser'
+                        ? 'text-muted-foreground border-border'
+                        : ready
+                          ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                          : 'text-muted-foreground border-border'
+                        }`}
                     >
                       {p.id === 'browser' ? '免密钥' : ready ? '已填' : '未填'}
                     </span>
@@ -416,20 +498,18 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                           resourceId: opt.id === 'token' ? 'seed-tts-1.0' : 'seed-tts-2.0',
                         })
                       }
-                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
-                        active ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted'
-                      }`}
+                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${active ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted'
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className={`text-xs font-semibold ${active ? 'text-primary' : 'text-white'}`}>
                           {opt.title}
                         </span>
                         <span
-                          className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] border ${
-                            active
-                              ? 'text-primary border-primary/40 bg-primary/10'
-                              : 'text-muted-foreground border-border'
-                          }`}
+                          className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] border ${active
+                            ? 'text-primary border-primary/40 bg-primary/10'
+                            : 'text-muted-foreground border-border'
+                            }`}
                         >
                           {opt.badge}
                         </span>
@@ -478,11 +558,10 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                         type="button"
                         onClick={() => applyDoubaoMode({ resourceId: opt.id })}
                         title={opt.desc}
-                        className={`px-2.5 py-1.5 rounded-md text-[12px] border transition-all cursor-pointer ${
-                          doubao.resourceId === opt.id
-                            ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                            : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                        }`}
+                        className={`px-2.5 py-1.5 rounded-md text-[12px] border transition-all cursor-pointer ${doubao.resourceId === opt.id
+                          ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                          : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                          }`}
                       >
                         {opt.label}
                       </button>
@@ -553,11 +632,10 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                         key={f}
                         type="button"
                         onClick={() => updateDoubao({ encoding: f })}
-                        className={`px-3 py-1.5 rounded-md text-xs font-mono border transition-all cursor-pointer ${
-                          doubao.encoding === f
-                            ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                            : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                        }`}
+                        className={`px-3 py-1.5 rounded-md text-xs font-mono border transition-all cursor-pointer ${doubao.encoding === f
+                          ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                          : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                          }`}
                       >
                         {f}
                       </button>
@@ -654,11 +732,10 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                       key={m.id}
                       type="button"
                       onClick={() => updateQwen({ model: m.id })}
-                      className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${
-                        tts.qwen.model === m.id
-                          ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                          : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                      }`}
+                      className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${tts.qwen.model === m.id
+                        ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                        : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                        }`}
                     >
                       {m.label}
                     </button>
@@ -679,11 +756,10 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                       key={r.id}
                       type="button"
                       onClick={() => updateQwen({ region: r.id })}
-                      className={`px-3 py-1.5 rounded-md text-xs border transition-all cursor-pointer ${
-                        tts.qwen.region === r.id
-                          ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                          : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                      }`}
+                      className={`px-3 py-1.5 rounded-md text-xs border transition-all cursor-pointer ${tts.qwen.region === r.id
+                        ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                        : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                        }`}
                     >
                       {r.label}
                     </button>
@@ -780,9 +856,8 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                                 : '音色 ID，例如 en_female_mars_bigtts'
                               : '音色名，例如 Cherry'
                           }
-                          className={`w-full bg-black/20 border rounded-md px-3 py-2 text-xs font-mono text-white placeholder:text-muted-foreground/60 focus:outline-none ${
-                            value ? 'border-border focus:border-primary/60' : 'border-rose-500/40 focus:border-rose-400'
-                          }`}
+                          className={`w-full bg-black/20 border rounded-md px-3 py-2 text-xs font-mono text-white placeholder:text-muted-foreground/60 focus:outline-none ${value ? 'border-border focus:border-primary/60' : 'border-rose-500/40 focus:border-rose-400'
+                            }`}
                           spellCheck={false}
                         />
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -793,11 +868,10 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
                               type="button"
                               onClick={() => setTtsVoice(cloudProvider, slot, s.id)}
                               title={s.id}
-                              className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${
-                                value === s.id
-                                  ? 'bg-primary/20 text-primary border-primary/40 font-bold'
-                                  : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
-                              }`}
+                              className={`px-2 py-0.5 rounded-md text-[12px] border transition-all cursor-pointer ${value === s.id
+                                ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                                : 'bg-transparent text-muted-foreground border-border hover:text-white hover:bg-white/10'
+                                }`}
                             >
                               {s.label}
                             </button>
@@ -883,6 +957,91 @@ export function SpeakingTtsPanel({ onGoAiModels }: { onGoAiModels: () => void })
               <X className="size-4 shrink-0 text-rose-400 mt-0.5" />
               <span className="break-all">试听失败：{test.message}</span>
             </div>
+          )}
+        </div>
+
+        {/* 识别语言与麦克风测试 */}
+        <div className="p-5 rounded-lg border border-border space-y-4">
+          <SectionTitle
+            icon={<Mic className="size-3.5" />}
+            title="语音识别与麦克风测试"
+            desc={
+              provider === 'doubao'
+                ? '复用上方同一套豆包凭据进行录音识别（资源 ID 固定为 volc.seedasr.auc）。'
+                : '当前识别自动使用浏览器内置语音识别（Web Speech API），免配置即可开说。'
+            }
+          />
+
+          {provider === 'doubao' && (
+            <>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">识别语言</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {ASR_LANGUAGE_OPTIONS.map((opt) => {
+                    const active = asr.doubao.language === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => updateDoubaoAsr({ language: opt.id as AsrLanguage })}
+                        title={opt.desc}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${active
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:text-white hover:bg-muted'
+                          }`}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onPointerDown={startAsrTest}
+                  onPointerUp={stopAsrTest}
+                  onPointerCancel={stopAsrTest}
+                  onPointerLeave={() => {
+                    if (asrTest.status === 'recording') stopAsrTest()
+                  }}
+                  disabled={asrTest.status === 'uploading'}
+                  className={`px-4 py-2 rounded-lg border text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer select-none disabled:opacity-50 ${asrTest.status === 'recording'
+                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-200'
+                    : 'bg-white/10 hover:bg-white/15 border-border text-white'
+                    }`}
+                >
+                  {asrTest.status === 'uploading' ? (
+                    <Loader2 className="size-3.5 animate-spin text-primary" />
+                  ) : (
+                    <Mic className="size-3.5 text-primary" />
+                  )}
+                  {asrTest.status === 'recording'
+                    ? '松开结束录音'
+                    : asrTest.status === 'uploading'
+                      ? '识别中…'
+                      : '按住测试麦克风识别'}
+                </button>
+                <span className="text-xs text-muted-foreground">按住说一句英语，松开后验证识别结果</span>
+              </div>
+
+              {asrTest.status === 'ok' && (
+                <div className="flex items-start gap-2.5 px-4 py-2.5 rounded-xl border bg-emerald-500/10 border-emerald-500/25 text-sm text-emerald-300">
+                  <CheckCircle className="size-4 shrink-0 text-emerald-400 mt-0.5" />
+                  <span>
+                    识别成功（{asrTest.latencyMs}ms）：「{asrTest.text}」
+                  </span>
+                </div>
+              )}
+
+              {asrTest.status === 'error' && (
+                <div className="flex items-start gap-2.5 px-4 py-2.5 rounded-xl border bg-rose-500/10 border-rose-500/25 text-sm text-rose-300">
+                  <X className="size-4 shrink-0 text-rose-400 mt-0.5" />
+                  <span className="break-all">识别失败：{asrTest.message}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -124,7 +124,7 @@ export default function TranslatePage() {
   const handleDeleteCustomGroup = useCallback(
     (bookId: string, name: string) => {
       if (window.confirm(`确定删除自定义分组「${name}」吗？`)) {
-        deleteCustomBook(bookId)
+        void deleteCustomBook(bookId)
       }
     },
     [deleteCustomBook]
@@ -270,12 +270,12 @@ export default function TranslatePage() {
         <div
           className={
             activeTab === 'practice'
-              ? 'flex-1 flex flex-col justify-center items-center py-2 animate-fadeIn'
+              ? 'flex-1 flex flex-col justify-start items-center pt-1 pb-2 animate-fadeIn'
               : 'hidden'
           }
         >
           {/* 主卡片与左右翻页操作区 */}
-          <div className="relative w-full flex items-center justify-center gap-4 xl:gap-6 shrink-0 my-auto">
+          <div className="relative w-full flex items-center justify-center gap-4 xl:gap-6 shrink-0">
             {/* 左侧上一句按钮 */}
             <button
               type="button"

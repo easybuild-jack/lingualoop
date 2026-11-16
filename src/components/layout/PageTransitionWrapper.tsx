@@ -1,8 +1,11 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState, useSyncExternalStore } from 'react'
+import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigationStore } from '@/store/useNavigationStore'
+import { getCloudSession, isCloudConfigured, subscribeCloudMode } from '@/core/cloud/config'
+import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 /**
  * 页面平滑过渡与加载遮罩
@@ -12,8 +15,22 @@ import { useNavigationStore } from '@/store/useNavigationStore'
  * 3. 避免在渐隐层内部使用 backdrop-filter，杜绝 GPU 合成重绘频闪，带来极致丝滑的离场体验。
  */
 export function PageTransitionWrapper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const isLoading = useNavigationStore((s) => s.isLoading)
   const loadingText = useNavigationStore((s) => s.loadingText) || '数据加载中...'
+  const [hydrated, setHydrated] = useState(false)
+  const needsLogin = useSyncExternalStore(
+    subscribeCloudMode,
+    () => isCloudConfigured() && !getCloudSession() && !isChromelessRoute(pathname),
+    () => false
+  )
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  // 客户端路由切换期间若未登录且目标为业务页，阻止挂载业务页面，避免触发未登录状态下的云端请求
+  const blockContent = hydrated && needsLogin
 
   return (
     <div className="w-full min-h-full shrink-0 flex flex-col relative">
@@ -46,9 +63,11 @@ export function PageTransitionWrapper({ children }: { children: React.ReactNode 
       </AnimatePresence>
 
       {/* 真实页面内容：稳态渲染在底层，等遮罩淡出后已完全就绪 */}
-      <div className="w-full min-h-full shrink-0 flex flex-col relative">
-        {children}
-      </div>
+      {!blockContent && (
+        <div className="w-full min-h-full shrink-0 flex flex-col relative">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

@@ -8,6 +8,8 @@ import {
   parseReadingArticleContent,
 } from '@/resources/readingData'
 import { dictionaryLoader } from '@/core/dictionaryLoader'
+import { CloudVisibilityField } from '@/components/cloud/VisibilityPicker'
+import { contentOwnerFor, type ContentVisibility } from '@/core/cloud/visibility'
 
 interface ReadingUploadModalProps {
   isOpen: boolean
@@ -24,6 +26,7 @@ export function ReadingUploadModal({
   const [title, setTitle] = useState('')
   const [rawContent, setRawContent] = useState('')
   const [error, setError] = useState('')
+  const [visibility, setVisibility] = useState<ContentVisibility>('personal')
 
   useEffect(() => {
     if (isOpen) {
@@ -97,8 +100,10 @@ export function ReadingUploadModal({
       return
     }
 
+    const owner = contentOwnerFor(visibility)
     const newArticle: ReadingArticle = {
       id: `reading_custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      ...(owner !== undefined ? { accountId: owner } : {}),
       title: title.trim(),
       paragraphs: parsedParagraphs,
       isCustom: true,
@@ -144,6 +149,7 @@ export function ReadingUploadModal({
             placeholder="例如：The Art of Slow Reading · 慢读的艺术"
             className="w-full h-9 px-3 rounded-md border border-border bg-muted text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary transition-colors"
           />
+          <CloudVisibilityField value={visibility} onChange={setVisibility} label="保存为" className="mt-3" />
         </div>
 
         {/* 规定格式说明卡片 */}

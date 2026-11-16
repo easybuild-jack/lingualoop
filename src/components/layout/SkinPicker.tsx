@@ -5,12 +5,19 @@ import { Palette, Check } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { SKINS } from '@/lib/skins'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { UserAccountMenu } from '@/components/auth/UserAccountMenu'
 
 /**
- * 头部工具栏的皮肤切换按钮 + 下拉浮层。
+ * 头部工具栏的皮肤切换按钮 + 下拉浮层（已登录时在其右侧附带用户账号菜单）。
  * 浮层定位于按钮下方，点击外部自动关闭，遵循现有 toolbar 风格。
  */
-export function SkinPicker({ sizeClassName = 'size-8' }: { sizeClassName?: string } = {}) {
+export function SkinPicker({
+  sizeClassName = 'size-8',
+  showUserMenu = true,
+}: {
+  sizeClassName?: string
+  showUserMenu?: boolean
+} = {}) {
   const skinId = useWorkspaceStore((s) => s.skinId)
   const setSkinId = useWorkspaceStore((s) => s.setSkinId)
 
@@ -30,7 +37,8 @@ export function SkinPicker({ sizeClassName = 'size-8' }: { sizeClassName?: strin
   }, [open])
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="inline-flex items-center gap-2">
+      <div ref={containerRef} className="relative">
       <Tooltip content="切换皮肤（仅配色）" side="bottom">
         <button
           type="button"
@@ -91,6 +99,8 @@ export function SkinPicker({ sizeClassName = 'size-8' }: { sizeClassName?: strin
           </div>
         </div>
       )}
+      </div>
+      {showUserMenu && <UserAccountMenu />}
     </div>
   )
 }

@@ -10,7 +10,8 @@ import { PwaInstallPrompt } from '@/components/layout/PwaInstallPrompt'
 import { ImportModal } from '@/components/modals/ImportModal'
 import { SettingsModal } from '@/components/modals/SettingsModal'
 import { AiApiKeyPromptModal } from '@/components/modals/AiApiKeyPromptModal'
-import { ExternalSyncManager } from '@/components/sync/ExternalSyncManager'
+import { CollectedWordsWatcher } from '@/components/cloud/CollectedWordsWatcher'
+import { CloudSyncGate } from '@/components/cloud/CloudSyncGate'
 import { AiAssistantDrawer } from '@/components/ai/AiAssistantDrawer'
 import { AiFloatingTrigger } from '@/components/ai/AiFloatingTrigger'
 import { SpeakingWindow } from '@/components/speaking/SpeakingWindow'
@@ -28,10 +29,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icons/icon-192.png', type: 'image/png', sizes: '192x192' },
-      { url: '/icons/icon-512.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon-elephant.png', type: 'image/png', sizes: '192x192' },
     ],
-    apple: '/icons/icon-192.png',
+    shortcut: '/favicon.ico',
+    apple: '/favicon-elephant.png',
   },
 }
 
@@ -79,8 +80,11 @@ export default function RootLayout({
         <SettingsModal />
         <AiApiKeyPromptModal />
 
-        {/* 外部小工具实时同步监听器 */}
-        <ExternalSyncManager />
+        {/* 云数据库连接守卫：配置了数据库时负责体检与进度同步 */}
+        <CloudSyncGate />
+
+        {/* 外部工具收词监听器（仅云模式轮询） */}
+        <CollectedWordsWatcher />
       </body>
     </html>
   )

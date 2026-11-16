@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { BUILTIN_BOOKS } from '@/resources/books'
-import { db, getBookUnitProgressRecords, reconcileUnitProgressRecord, getCustomBooks } from '@/db'
+import { getBookUnitProgressRecords, reconcileUnitProgressRecord, getCustomBooks } from '@/db'
 import { buildFixedUnitId, dictionaryLoader } from '@/core/dictionaryLoader'
 import { startRouteProgressBar } from '@/components/layout/RouteProgressBar'
 import { SkinPicker } from '@/components/layout/SkinPicker'
@@ -30,11 +30,148 @@ import type { DictUnit, UnitProgressRecord, VocabularyBook, PracticeMode } from 
 
 interface BookTheme {
   icon: React.ComponentType<{ className?: string }>
-  accentColor: string
   tag: string
-  ribbonColor: string
-  /** 封面主色渐层，叠在深色底上做出「一本有颜色的书」的感觉 */
-  coverClass: string
+  editionCode: string
+  /** 封面主布料渐变（深色精装底色，不受浅色皮肤全局覆盖影响） */
+  coverBg: string
+  /** 书脊深色包布背景 */
+  spineBg: string
+  /** 封底硬壳边颜色 */
+  backCoverColor: string
+  /** 烫金/主题强调色（HEX，用于内框线、徽标、腰封点缀） */
+  foilColor: string
+  /** 封面标题与正文浅色字（HEX） */
+  titleColor: string
+  /** 书签丝带颜色 */
+  ribbonHex: string
+}
+
+interface BookPhysicalMetrics {
+  /** 右侧书口纸张层叠厚度 (px) */
+  dx: number
+  /** 底部书根纸张断面厚度 (px) */
+  dy: number
+  /** 书脊宽度 (px) */
+  spineWidth: number
+  /** 书脊竹节凸起横楞数量 */
+  spineRibs: number
+  /** 右侧书口倾斜角 (deg) */
+  skewYDeg: number
+  /** 底部书根倾斜角 (deg) */
+  skewXDeg: number
+  /** 折算书页数（用于直观感知词库厚度） */
+  estimatedPages: number
+  /** 厚度档位描述 */
+  thicknessLabel: string
+  /** 书口检索切口数量 */
+  thumbNotches: number
+}
+
+/**
+ * 根据词库单词量计算书本的 3D 物理厚度参数：
+ * - 少量词（如几十词的生词本）呈现为轻薄小册（dx=6px）
+ * - 3600 ~ 6700+ 词的内置词典拉开明显的厚度梯度（12px -> 15px -> 19px -> 25px -> 30px）
+ */
+function getBookPhysicalMetrics(totalWords: number): BookPhysicalMetrics {
+  const words = Math.max(1, totalWords || 0)
+  let dx: number
+  let thicknessLabel: string
+  let spineRibs: number
+  let thumbNotches: number
+
+  if (words <= 150) {
+    dx = 6
+    thicknessLabel = '薄册'
+    spineRibs = 2
+    thumbNotches = 0
+  } else if (words <= 1200) {
+    const ratio = (words - 150) / (1200 - 150)
+    dx = Math.round(7 + ratio * 3) // 7 ~ 10px
+    thicknessLabel = '轻册'
+    spineRibs = 2
+    thumbNotches = 1
+  } else if (words <= 3400) {
+    const ratio = (words - 1200) / (3400 - 1200)
+    dx = Math.round(10 + ratio * 2) // 10 ~ 12px
+    thicknessLabel = '单行本'
+    spineRibs = 3
+    thumbNotches = 2
+  } else if (words <= 3700) {
+    // 如雅思 3600 词
+    dx = 12
+    thicknessLabel = '标准卷'
+    spineRibs = 3
+    thumbNotches = 2
+  } else if (words <= 4100) {
+    // 如程序员词库 3824~3980 词
+    dx = 16
+    thicknessLabel = '中厚卷'
+    spineRibs = 3
+    thumbNotches = 3
+  } else if (words <= 4800) {
+    // 如基础词库 4427 词
+    dx = 20
+    thicknessLabel = '充实卷'
+    spineRibs = 4
+    thumbNotches = 3
+  } else if (words <= 6100) {
+    // 如四六级词库 5851 词
+    dx = 25
+    thicknessLabel = '厚重词典'
+    spineRibs = 4
+    thumbNotches = 4
+  } else {
+    // 如考研英语 6705 词及更大词库
+    const extra = Math.min(4, Math.floor((words - 6100) / 600))
+    dx = 29 + extra // 29 ~ 33px
+    thicknessLabel = '大部头'
+    spineRibs = 5
+    thumbNotches = 5
+  }
+
+  const dy = Math.max(3, Math.round(dx * 0.46))
+  const spineWidth = Math.min(22, Math.max(13, Math.round(11 + dx * 0.34)))
+  const skewYDeg = Number(((Math.atan2(dy, dx) * 180) / Math.PI).toFixed(2))
+  const skewXDeg = Number(((Math.atan2(dx, dy) * 180) / Math.PI).toFixed(2))
+  const estimatedPages = Math.max(12, Math.round(words / 18))
+
+  return {
+    dx,
+    dy,
+    spineWidth,
+    spineRibs,
+    skewYDeg,
+    skewXDeg,
+    estimatedPages,
+    thicknessLabel,
+    thumbNotches,
+  }
+}
+
+type BookOwnership = 'official' | 'shared' | 'personal'
+
+/** 官方 = 内置词库；共享 = 云端 account_id 为空的自定义词库；其余自定义词库（含本地模式）= 个人 */
+function getBookOwnership(book: Pick<VocabularyBook, 'isCustom' | 'accountId'>): BookOwnership {
+  if (!book.isCustom) return 'official'
+  return book.accountId === null ? 'shared' : 'personal'
+}
+
+const OWNERSHIP_BADGES: Record<BookOwnership, { label: string; className: string }> = {
+  official: { label: '官方', className: 'bg-sky-500/15 text-sky-300 ring-sky-500/30' },
+  shared: { label: '共享', className: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
+  personal: { label: '个人', className: 'bg-amber-500/15 text-amber-300 ring-amber-500/30' },
+}
+
+function OwnerBadge({ book }: { book: Pick<VocabularyBook, 'isCustom' | 'accountId'> }) {
+  const badge = OWNERSHIP_BADGES[getBookOwnership(book)]
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${badge.className}`}
+      title={`归属：${badge.label}`}
+    >
+      {badge.label}
+    </span>
+  )
 }
 
 function getBookTheme(bookId: string, isCustom?: boolean): BookTheme {
@@ -42,18 +179,26 @@ function getBookTheme(bookId: string, isCustom?: boolean): BookTheme {
     if (bookId === 'book_custom_sample') {
       return {
         icon: Sparkles,
-        accentColor: 'text-amber-400',
         tag: '示例词库',
-        ribbonColor: 'bg-amber-400',
-        coverClass: 'from-amber-400/25 via-amber-500/[0.08] to-transparent',
+        editionCode: 'NOTE · 01',
+        coverBg: 'linear-gradient(145deg, #2C2117 0%, #1D150E 60%, #140F0A 100%)',
+        spineBg: 'linear-gradient(90deg, #120D08 0%, #261C13 45%, #0F0B07 100%)',
+        backCoverColor: '#231A11',
+        foilColor: '#FBBF24',
+        titleColor: '#FEF3C7',
+        ribbonHex: '#F59E0B',
       }
     }
     return {
       icon: Sparkles,
-      accentColor: 'text-fuchsia-400',
       tag: '专属定制',
-      ribbonColor: 'bg-fuchsia-500',
-      coverClass: 'from-fuchsia-500/25 via-fuchsia-500/[0.08] to-transparent',
+      editionCode: 'CUSTOM',
+      coverBg: 'linear-gradient(145deg, #2D162C 0%, #1E0F1E 60%, #140914 100%)',
+      spineBg: 'linear-gradient(90deg, #120812 0%, #271326 45%, #0E060E 100%)',
+      backCoverColor: '#241123',
+      foilColor: '#E879F9',
+      titleColor: '#FAE8FF',
+      ribbonHex: '#D946EF',
     }
   }
 
@@ -61,50 +206,74 @@ function getBookTheme(bookId: string, isCustom?: boolean): BookTheme {
     case 'book_basewords':
       return {
         icon: Compass,
-        accentColor: 'text-emerald-400',
         tag: '核心打底',
-        ribbonColor: 'bg-emerald-400',
-        coverClass: 'from-emerald-400/25 via-emerald-500/[0.08] to-transparent',
+        editionCode: 'VOL · I',
+        coverBg: 'linear-gradient(145deg, #132C24 0%, #0D201A 60%, #091612 100%)',
+        spineBg: 'linear-gradient(90deg, #07120E 0%, #163329 45%, #060F0C 100%)',
+        backCoverColor: '#0F241D',
+        foilColor: '#34D399',
+        titleColor: '#ECFDF5',
+        ribbonHex: '#10B981',
       }
     case 'book_cet4':
       return {
         icon: GraduationCap,
-        accentColor: 'text-amber-400',
         tag: '大学考级',
-        ribbonColor: 'bg-amber-400',
-        coverClass: 'from-amber-400/25 via-amber-500/[0.08] to-transparent',
+        editionCode: 'CET · 4/6',
+        coverBg: 'linear-gradient(145deg, #2F2111 0%, #21170B 60%, #171007 100%)',
+        spineBg: 'linear-gradient(90deg, #120C05 0%, #2A1D0E 45%, #0E0904 100%)',
+        backCoverColor: '#251A0D',
+        foilColor: '#FBBF24',
+        titleColor: '#FFFBEB',
+        ribbonHex: '#F59E0B',
       }
     case 'book_kaoyan':
       return {
         icon: Flame,
-        accentColor: 'text-rose-400',
         tag: '考研攻坚',
-        ribbonColor: 'bg-rose-500',
-        coverClass: 'from-rose-500/25 via-rose-500/[0.08] to-transparent',
+        editionCode: 'KY · 2025',
+        coverBg: 'linear-gradient(145deg, #35151E 0%, #250E15 60%, #19090E 100%)',
+        spineBg: 'linear-gradient(90deg, #14070B 0%, #2F121A 45%, #100508 100%)',
+        backCoverColor: '#2B1018',
+        foilColor: '#FB7185',
+        titleColor: '#FFF1F2',
+        ribbonHex: '#F43F5E',
       }
     case 'book_ielts':
       return {
         icon: Globe,
-        accentColor: 'text-sky-400',
         tag: '出国高阶',
-        ribbonColor: 'bg-sky-400',
-        coverClass: 'from-sky-400/25 via-sky-500/[0.08] to-transparent',
+        editionCode: 'IELTS · 9',
+        coverBg: 'linear-gradient(145deg, #13253A 0%, #0D1A29 60%, #08111C 100%)',
+        spineBg: 'linear-gradient(90deg, #070E17 0%, #162B42 45%, #060C14 100%)',
+        backCoverColor: '#0F1E30',
+        foilColor: '#38BDF8',
+        titleColor: '#F0F9FF',
+        ribbonHex: '#0EA5E9',
       }
     case 'book_coder':
       return {
         icon: Terminal,
-        accentColor: 'text-violet-400',
         tag: '技术极客',
-        ribbonColor: 'bg-violet-400',
-        coverClass: 'from-violet-500/25 via-violet-500/[0.08] to-transparent',
+        editionCode: 'DEV · IO',
+        coverBg: 'linear-gradient(145deg, #211838 0%, #161027 60%, #0F0A1B 100%)',
+        spineBg: 'linear-gradient(90deg, #0C0816 0%, #1F1635 45%, #090611 100%)',
+        backCoverColor: '#1B132E',
+        foilColor: '#A78BFA',
+        titleColor: '#F5F3FF',
+        ribbonHex: '#8B5CF6',
       }
     default:
       return {
         icon: BookOpen,
-        accentColor: 'text-primary',
         tag: '精品词库',
-        ribbonColor: 'bg-primary',
-        coverClass: 'from-primary/25 via-primary/[0.08] to-transparent',
+        editionCode: 'LEXICON',
+        coverBg: 'linear-gradient(145deg, #16292B 0%, #0F1D1F 60%, #0A1315 100%)',
+        spineBg: 'linear-gradient(90deg, #081011 0%, #152729 45%, #070D0E 100%)',
+        backCoverColor: '#122224',
+        foilColor: '#5EEAD4',
+        titleColor: '#F0FDFA',
+        ribbonHex: '#14B8A6',
       }
   }
 }
@@ -540,7 +709,10 @@ function BooksHubContent() {
           {/* 当前浏览词库概览 */}
           <div className="pt-5 flex items-center justify-between gap-8">
             <div className="min-w-0">
-              <h2 className="text-2xl font-semibold text-white tracking-tight">{activeBook?.name}</h2>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-2xl font-semibold text-white tracking-tight truncate">{activeBook?.name}</h2>
+                {activeBook && <OwnerBadge book={activeBook} />}
+              </div>
               <p className="mt-1.5 text-[14px] text-muted-foreground max-w-3xl leading-relaxed line-clamp-2">
                 {activeBook?.description}
               </p>
@@ -733,11 +905,17 @@ function BooksHubContent() {
 
         {/* 词库书架 */}
         <section className="pt-6 border-t border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-foreground">
-              {activeTab === 'official' ? '全部词库' : '我的自定义词库'}
-              <span className="ml-2 text-xs text-muted-foreground font-normal">共 {filteredBooks.length} 本</span>
-            </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-medium text-foreground">
+                {activeTab === 'official' ? '全部词库' : '我的自定义词库'}
+                <span className="ml-2 text-xs text-muted-foreground font-normal">共 {filteredBooks.length} 本</span>
+              </h3>
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground/80">
+                <span className="inline-block size-1.5 rounded-full bg-primary/70" />
+                书脊与书页厚度随单词量动态变化
+              </span>
+            </div>
           </div>
 
           {filteredBooks.length === 0 ? (
@@ -760,85 +938,336 @@ function BooksHubContent() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 pt-1 pb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-7 pt-2 pb-6">
               {filteredBooks.map((b) => {
                 const theme = getBookTheme(b.id, b.isCustom)
+                const metrics = getBookPhysicalMetrics(b.totalWords)
                 const ThemeIcon = theme.icon
                 const isSelected = activeBook?.id === b.id
+
+                // 根据书脊竹节数生成均匀分布的位置百分比
+                const ribPositions = Array.from(
+                  { length: metrics.spineRibs },
+                  (_, i) => 18 + Math.round(((i + 0.5) / metrics.spineRibs) * 64)
+                )
+                // 右侧书口词典检索切口位置
+                const notchPositions = Array.from(
+                  { length: metrics.thumbNotches },
+                  (_, i) => 22 + Math.round((i / Math.max(1, metrics.thumbNotches)) * 56)
+                )
 
                 return (
                   <div
                     key={b.id}
                     onClick={() => handleSelectPreviewBook(b.id)}
-                    className="group/book relative z-0 hover:z-20 cursor-pointer select-none"
+                    className="group/book relative z-0 hover:z-20 cursor-pointer select-none flex flex-col items-start"
                   >
-                    {/* 一本立着的书：悬停时抬起 + 放大，阴影同步加深 */}
+                    {/* 3D 实体书容器：预留右侧与底部空间供不同词量的书页厚度自然延展 */}
                     <div
-                      className={`relative aspect-[3/4] w-full overflow-hidden rounded-l-[2px] rounded-r-lg border transition-[transform,box-shadow,border-color] duration-300 ease-out will-change-transform group-hover/book:-translate-y-2 group-hover/book:scale-[1.04] ${
-                        isSelected
-                          ? 'border-primary/45 shadow-[0_16px_36px_-18px_rgba(0,0,0,0.92)]'
-                          : 'border-white/10 shadow-[0_12px_26px_-18px_rgba(0,0,0,0.9)] group-hover/book:border-white/25 group-hover/book:shadow-[0_26px_48px_-16px_rgba(0,0,0,0.95)]'
-                      }`}
+                      className="relative w-full max-w-[218px]"
+                      style={{
+                        paddingRight: '34px',
+                        paddingBottom: '18px',
+                      }}
                     >
-                      {/* 封面底色与主题色渐层 */}
-                      <div className="absolute inset-0 bg-[#0b0d0f]" />
-                      <div className={`absolute inset-0 bg-gradient-to-br ${theme.coverClass}`} />
-                      {/* 顶部受光 */}
-                      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/[0.08] to-transparent" />
+                      <div
+                        className={`relative h-[186px] w-full transition-transform duration-300 ease-out will-change-transform ${
+                          isSelected
+                            ? '-translate-y-1.5'
+                            : 'group-hover/book:-translate-y-2 group-hover/book:-rotate-[0.6deg]'
+                        }`}
+                      >
+                        {/* 1. 书本底部桌面投影（随书本厚度同步延展） */}
+                        <div
+                          className="pointer-events-none absolute rounded-r-md transition-all duration-300"
+                          style={{
+                            top: `${metrics.dy + 6}px`,
+                            left: '6px',
+                            right: `${-metrics.dx - 3}px`,
+                            bottom: `${-metrics.dy - 6}px`,
+                            background: isSelected
+                              ? `radial-gradient(ellipse at center, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.32) 65%, transparent 100%)`
+                              : `radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.22) 65%, transparent 100%)`,
+                            filter: 'blur(6px)',
+                          }}
+                        />
 
-                      {/* 书脊：左侧压暗、折痕线、主题色细条 */}
-                      <div className="absolute inset-y-0 left-0 w-2.5 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
-                      <div className={`absolute inset-y-0 left-0 w-[3px] ${theme.ribbonColor} opacity-85`} />
-                      <div className="absolute inset-y-0 left-2.5 w-px bg-white/10" />
-
-                      {/* 书口：右侧纸张断面 */}
-                      <div className="absolute inset-y-2 right-0 w-[3px] rounded-r-[2px] opacity-40 bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.5)_0px,rgba(255,255,255,0.5)_1px,rgba(255,255,255,0.05)_1px,rgba(255,255,255,0.05)_3px)]" />
-
-                      {/* 封面内容 */}
-                      <div className="relative flex h-full flex-col p-4 pl-5">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className={`inline-flex items-center gap-1.5 text-[13px] ${theme.accentColor}`}>
-                            <ThemeIcon className="size-3.5" />
-                            {theme.tag}
-                          </span>
-                          {isSelected && (
-                            <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary ring-1 ring-primary/30">
-                              正在浏览
-                            </span>
-                          )}
+                        {/* 2. 右侧书口 3D 纸张层叠断面（宽度 dx 直接由单词量决定） */}
+                        <div
+                          className="pointer-events-none absolute top-[2px] bottom-[1px] overflow-hidden"
+                          style={{
+                            left: 'calc(100% - 1px)',
+                            width: `${metrics.dx}px`,
+                            transformOrigin: '0 0',
+                            transform: `skewY(${metrics.skewYDeg}deg)`,
+                            backgroundImage: [
+                              'linear-gradient(to bottom, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.03) 45%, rgba(0,0,0,0.24) 100%)',
+                              'repeating-linear-gradient(to right, #EFE8D5 0px, #EFE8D5 1.3px, #C5BBA2 1.3px, #C5BBA2 2.4px)',
+                            ].join(', '),
+                            borderTop: `1.5px solid ${theme.backCoverColor}`,
+                            borderRight: `2.5px solid ${theme.backCoverColor}`,
+                            borderTopRightRadius: '2px',
+                            borderBottomRightRadius: '2px',
+                            boxShadow:
+                              'inset 3px 0 5px -1px rgba(0,0,0,0.48), inset -1px 0 2px rgba(0,0,0,0.28)',
+                          }}
+                        >
+                          {/* 词典侧边章节检索切口（Thumb Index） */}
+                          {notchPositions.map((topPct, nIdx) => (
+                            <div
+                              key={nIdx}
+                              style={{
+                                position: 'absolute',
+                                top: `${topPct}%`,
+                                left: '1px',
+                                width: `${Math.min(5, Math.max(2, Math.floor(metrics.dx * 0.28)))}px`,
+                                height: '7px',
+                                borderRadius: '0 3px 3px 0',
+                                backgroundColor: theme.foilColor,
+                                opacity: 0.55,
+                                boxShadow: 'inset 1px 0 1px rgba(0,0,0,0.45)',
+                              }}
+                            />
+                          ))}
                         </div>
 
-                        <h4 className="mt-5 font-serif text-[18px] font-semibold leading-snug text-white line-clamp-2">
-                          {b.name}
-                        </h4>
-                        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
-                          {b.description}
-                        </p>
+                        {/* 3. 底部书根 3D 纸张断面与书脊底脚（高度 dy 由单词量决定） */}
+                        <div
+                          className="pointer-events-none absolute left-[1px] right-[1px] overflow-hidden"
+                          style={{
+                            top: 'calc(100% - 1px)',
+                            height: `${metrics.dy}px`,
+                            transformOrigin: '0 0',
+                            transform: `skewX(${metrics.skewXDeg}deg)`,
+                            backgroundImage:
+                              'repeating-linear-gradient(to bottom, #DED6C1 0px, #DED6C1 1.2px, #ADA289 1.2px, #ADA289 2.3px)',
+                            borderBottom: `2.5px solid ${theme.backCoverColor}`,
+                            borderRight: `2px solid ${theme.backCoverColor}`,
+                            borderBottomLeftRadius: '3px',
+                            borderBottomRightRadius: '2px',
+                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+                          }}
+                        >
+                          {/* 书脊底脚包布与堵头布（Headband） */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: '0 auto 0 0',
+                              width: `${metrics.spineWidth}px`,
+                              background: theme.spineBg,
+                              borderRight: `1.5px solid ${theme.foilColor}66`,
+                            }}
+                          />
+                        </div>
 
-                        <div className="mt-auto flex items-end justify-between pt-3">
-                          <span className="font-mono text-[13px] text-gray-300">
-                            {b.totalWords}
-                            <span className="ml-1 font-sans text-[12px] text-muted-foreground">词</span>
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {!isSelected && (
-                              <span className="text-[12px] text-muted-foreground opacity-0 transition-opacity group-hover/book:opacity-100">
-                                切换 →
-                              </span>
-                            )}
-                            {b.isCustom && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setBookToDelete(b)
+                        {/* 4. 底部露出的藏书丝带书签 */}
+                        <div
+                          className="pointer-events-none absolute transition-all duration-300"
+                          style={{
+                            left: `${metrics.spineWidth + 18}px`,
+                            bottom: isSelected ? `${-metrics.dy - 9}px` : `${-metrics.dy - 5}px`,
+                            width: '9px',
+                            height: isSelected ? `${metrics.dy + 11}px` : `${metrics.dy + 7}px`,
+                            backgroundColor: theme.ribbonHex,
+                            clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%)',
+                            boxShadow: '1px 2px 4px rgba(0,0,0,0.45)',
+                            opacity: isSelected ? 1 : 0.82,
+                          }}
+                        />
+
+                        {/* 5. 精装书正面硬壳封面与立体书脊 */}
+                        <div
+                          className="relative h-full w-full overflow-hidden rounded-l-[4px] rounded-r-[5px] transition-shadow duration-300"
+                          style={{
+                            background: theme.coverBg,
+                            boxShadow: isSelected
+                              ? `0 0 0 1.5px ${theme.foilColor}, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.6)`
+                              : '0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.55)',
+                          }}
+                        >
+                          {/* 封面顶部微光与布纹细腻质感 */}
+                          <div
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                              background:
+                                'radial-gradient(circle at 75% 18%, rgba(255,255,255,0.09) 0%, transparent 58%)',
+                            }}
+                          />
+
+                          {/* 左侧立体圆弧书脊（宽度随书本厚度微调） */}
+                          <div
+                            className="pointer-events-none absolute inset-y-0 left-0"
+                            style={{
+                              width: `${metrics.spineWidth}px`,
+                              background: theme.spineBg,
+                            }}
+                          >
+                            {/* 书脊最左侧受光高光边 */}
+                            <div
+                              className="absolute inset-y-0 left-0 w-[2.5px]"
+                              style={{
+                                background:
+                                  'linear-gradient(to right, rgba(255,255,255,0.24), rgba(255,255,255,0.03))',
+                              }}
+                            />
+                            {/* 书脊上下烫金装饰箍线 */}
+                            <div
+                              className="absolute inset-x-0 top-3 h-[1.5px] opacity-60"
+                              style={{ backgroundColor: theme.foilColor }}
+                            />
+                            <div
+                              className="absolute inset-x-0 bottom-3 h-[1.5px] opacity-60"
+                              style={{ backgroundColor: theme.foilColor }}
+                            />
+                            {/* 书脊竹节凸起横楞（数量随词量厚度增加） */}
+                            {ribPositions.map((topPct, rIdx) => (
+                              <div
+                                key={rIdx}
+                                className="absolute inset-x-0 h-[3px]"
+                                style={{
+                                  top: `${topPct}%`,
+                                  background:
+                                    'linear-gradient(to bottom, rgba(255,255,255,0.20) 0%, rgba(0,0,0,0.65) 100%)',
                                 }}
-                                className="ml-1 size-6 rounded-md flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                                title="删除该词库"
+                              />
+                            ))}
+                            {/* 书槽压痕（French Groove：真实精装书翻开折痕） */}
+                            <div
+                              className="absolute inset-y-0 right-0 w-[3px]"
+                              style={{
+                                background:
+                                  'linear-gradient(to right, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.45) 55%, rgba(255,255,255,0.16) 100%)',
+                              }}
+                            />
+                          </div>
+
+                          {/* 精装封面压凹烫金内框线 */}
+                          <div
+                            className="pointer-events-none absolute rounded-[3px]"
+                            style={{
+                              top: '7px',
+                              bottom: '7px',
+                              left: `${metrics.spineWidth + 6}px`,
+                              right: '7px',
+                              border: `1px solid ${theme.foilColor}2E`,
+                            }}
+                          />
+
+                          {/* 封面排版内容区 */}
+                          <div
+                            className="relative flex h-full flex-col justify-between py-3 pr-3"
+                            style={{ paddingLeft: `${metrics.spineWidth + 12}px` }}
+                          >
+                            {/* 顶部：分类铭牌与归属/在读状态 */}
+                            <div className="flex items-center justify-between gap-1">
+                              <span
+                                className="inline-flex items-center gap-1 text-[11px] font-medium tracking-wide min-w-0"
+                                style={{ color: theme.foilColor }}
                               >
-                                <Trash2 className="size-3.5" />
-                              </button>
-                            )}
+                                <ThemeIcon className="size-3 shrink-0" />
+                                <span className="truncate">{theme.tag}</span>
+                              </span>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {isSelected && (
+                                  <span
+                                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider"
+                                    style={{
+                                      backgroundColor: `${theme.foilColor}24`,
+                                      color: theme.foilColor,
+                                      border: `1px solid ${theme.foilColor}55`,
+                                    }}
+                                  >
+                                    在读
+                                  </span>
+                                )}
+                                <OwnerBadge book={b} />
+                              </div>
+                            </div>
+
+                            {/* 中部：典籍感衬线书名与装饰隔线 */}
+                            <div className="my-auto py-1">
+                              <h4
+                                className="font-serif text-[16px] font-semibold leading-snug line-clamp-1 tracking-tight"
+                                style={{
+                                  color: theme.titleColor,
+                                  textShadow: '0 1px 2px rgba(0,0,0,0.55)',
+                                }}
+                                title={b.name}
+                              >
+                                {b.name}
+                              </h4>
+
+                              {/* 经典词典菱形装饰细线 */}
+                              <div className="my-1.5 flex items-center gap-1.5 opacity-60">
+                                <span
+                                  className="h-px flex-1"
+                                  style={{
+                                    background: `linear-gradient(to right, ${theme.foilColor}, transparent)`,
+                                  }}
+                                />
+                                <span
+                                  className="size-1 rotate-45 shrink-0"
+                                  style={{ backgroundColor: theme.foilColor }}
+                                />
+                              </div>
+
+                              <p
+                                className="text-[11.5px] leading-relaxed line-clamp-2 opacity-75"
+                                style={{ color: '#D1D5DB' }}
+                              >
+                                {b.description}
+                              </p>
+                            </div>
+
+                            {/* 底部腰封（Obi Band）：词量 + 书本厚度感知标签 */}
+                            <div
+                              className="flex items-center justify-between gap-1 rounded px-2 py-1"
+                              style={{
+                                backgroundColor: 'rgba(0, 0, 0, 0.36)',
+                                borderTop: `1px solid ${theme.foilColor}33`,
+                                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                              }}
+                            >
+                              <div className="flex items-baseline gap-1 min-w-0">
+                                <span
+                                  className="font-mono text-[12.5px] font-semibold tabular-nums"
+                                  style={{ color: theme.titleColor }}
+                                >
+                                  {b.totalWords.toLocaleString()}
+                                </span>
+                                <span className="text-[10.5px]" style={{ color: '#9CA3AF' }}>
+                                  词
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span
+                                  className="rounded px-1.5 py-0.5 font-mono text-[10px]"
+                                  style={{
+                                    backgroundColor: `${theme.foilColor}1A`,
+                                    color: theme.foilColor,
+                                  }}
+                                  title={`约折合 ${metrics.estimatedPages} 页纸质词书厚度`}
+                                >
+                                  {metrics.thicknessLabel} · {metrics.estimatedPages}P
+                                </span>
+
+                                {b.isCustom && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setBookToDelete(b)
+                                    }}
+                                    className="size-5 rounded flex items-center justify-center text-gray-400 hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
+                                    title="删除该词库"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
