@@ -31,7 +31,7 @@ async function main() {
   const notices = await import('../../src/core/cloud/notices')
   const { clearLegacyCloudProgressCache } = await import('../../src/core/cloud/scopedStorage')
   const store = storeModule.useWorkspaceStore
-  const received: { text: string; unavailable: boolean }[] = []
+  const received: { text: string; unavailable: boolean; tone: string }[] = []
   notices.subscribeCloudNotices((notice) => received.push(notice))
 
   console.log('# startup: progress comes only from the database')
@@ -85,7 +85,7 @@ async function main() {
   cloud.appState.putBookModes = realPut
   await sleep(300)
   await progress.waitForCloudWrites()
-  check('failure reported as unavailable', received.some((n) => n.unavailable && n.text.includes('保存学习进度失败')), received)
+  check('failure reported as a plain error notice (no blocking state)', received.some((n) => !n.unavailable && n.tone === 'error' && n.text.includes('保存学习进度失败')), received)
   check('write attempted once, no background retry', attempts === 1 && sql(`select count(*) from book_progress where book_id='book_kaoyan'`) === '0', attempts)
   stop()
 
