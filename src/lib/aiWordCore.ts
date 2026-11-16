@@ -1,15 +1,15 @@
 'use client'
 
 import { dictionaryLoader } from '@/core/dictionaryLoader'
-import { getWordFromAiCache, getWordOverride, mergeWordIntoAiCache, saveWordOverride } from '@/db'
+import { applyAiFillToCustomBook, getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
+import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import {
   fetchAiDictionaryWordCore,
   getAiConfigFingerprint,
   type AiClientConfig,
 } from '@/lib/aiClient'
 import { isLikelyEnglishWord } from '@/lib/wordValidation'
-import { buildWordId } from '@/lib/wordId'
-import type { WordItem, WordOverrideRecord } from '@/types'
+import type { WordItem } from '@/types'
 
 const inFlightCore = new Map<string, Promise<WordItem | null>>()
 
@@ -69,45 +69,27 @@ export function queryAiWordCore(
       : cached || fallback
     if (current && isAiWordCoreReady(current)) return current
     if (config.enabled === false || !config.apiKey?.trim()) return current || null
-    const overrideBefore = await getWordOverride(current?.id || cached?.id || buildWordId(word))
 
     const raw = await fetchAiDictionaryWordCore(config, word)
     if (!raw) return null
     const coreWord = await dictionaryLoader.convertRawEntryToWordItem(raw)
     const merged = current ? mergeAiWordCore(current, coreWord) : coreWord
-    const overridePatch: Partial<WordOverrideRecord> = {
-      phoneticUs:
-        !current || !isAiPhoneticReady(current.name, current.phoneticUs)
-          ? merged.phoneticUs
-          : undefined,
-      phoneticUk:
-        !current || !isAiPhoneticReady(current.name, current.phoneticUk)
-          ? merged.phoneticUk
-          : undefined,
-      posList:
-        !current || !isAiMeaningReady(current.posList)
-          ? merged.posList
-          : undefined,
-    }
-    const keys = (['phoneticUs', 'phoneticUk', 'posList'] as const)
-      .filter((key) => overridePatch[key] !== undefined)
-    const savedOverride = await saveWordOverride(merged.id, merged.name, overridePatch, {
-      keys: [...keys],
-      snapshot: JSON.stringify(keys.map((key) => overrideBefore?.[key])),
-    })
-    const finalWord = {
-      ...merged,
-      ...Object.fromEntries(keys.map((key) => [key, savedOverride[key]])),
+    if (current) {
+      void applyAiFillToCustomBook(useWorkspaceStore.getState().currentBook?.id, current.id, {
+        phoneticUs: isAiPhoneticReady(current.name, current.phoneticUs) ? undefined : merged.phoneticUs,
+        phoneticUk: isAiPhoneticReady(current.name, current.phoneticUk) ? undefined : merged.phoneticUk,
+        posList: isAiMeaningReady(current.posList) ? undefined : merged.posList,
+      })
     }
 
     return await mergeWordIntoAiCache(
       {
-        name: finalWord.name,
-        phoneticUs: finalWord.phoneticUs,
-        phoneticUk: finalWord.phoneticUk,
-        posList: finalWord.posList,
+        name: merged.name,
+        phoneticUs: merged.phoneticUs,
+        phoneticUk: merged.phoneticUk,
+        posList: merged.posList,
       },
-      finalWord
+      merged
     )
   })().finally(() => {
     if (inFlightCore.get(key) === task) inFlightCore.delete(key)

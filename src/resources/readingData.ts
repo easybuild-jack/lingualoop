@@ -10,6 +10,8 @@ export interface ReadingSentence {
 
 export interface ReadingArticle {
   id: string
+  /** 云模式归属：null = 共享，非空 = 个人 */
+  accountId?: string | null
   title: string
   paragraphs: ReadingSentence[][]
   isCustom?: boolean

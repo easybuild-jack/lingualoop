@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
-import { getCustomBooks, mergeWordsIntoBook, saveCustomVocabularyBook } from '@/db'
+import { getCustomBooks, importWordsIntoBook, saveCustomVocabularyBook, type ImportIntoBookResult } from '@/db'
 import { reconcileWordForImport, type ReconciledImportWord } from '@/core/dictionarySearch'
 import {
   buildCsvTemplate,
@@ -24,6 +24,18 @@ import {
   splitCsvLine,
 } from '@/lib/importFormat'
 import type { VocabularyBook, WordItem } from '@/types'
+import { CloudVisibilityField } from '@/components/cloud/VisibilityPicker'
+import { contentOwnerFor, contentVisibilityOf, type ContentVisibility } from '@/core/cloud/visibility'
+import { isCloudMode } from '@/core/cloud/config'
+import { pushCloudNotice, reportCloudError } from '@/core/cloud/notices'
+
+function describeSkip(result: ImportIntoBookResult): string {
+  const name = result.book ? `「${result.book.name}」` : ''
+  if (result.skipReason === 'not-shared') {
+    return `本次导入跳过了 ${result.skipped} 条，因为目标词库${name}不是共享词库；要更新个人词库请把归属选为「个人」。`
+  }
+  return `本次导入跳过了 ${result.skipped} 条，因为不属于你的内容（目标词库${name}不是你的个人词库）。`
+}
 
 /** 预览表里回显词素构成，如 dis- + cover + -y */
 function describeMorphemes(word: WordItem): string {
@@ -41,6 +53,8 @@ export function ImportModal() {
   const [targetMode, setTargetMode] = useState<'new' | 'existing'>('new')
   const [targetBookId, setTargetBookId] = useState('')
   const [customBooks, setCustomBooks] = useState<VocabularyBook[]>([])
+  // 云模式下的归属：新建时决定存为个人还是共享；并入时只能选同归属的词库
+  const [visibility, setVisibility] = useState<ContentVisibility>('personal')
   
   // Tab 1: 文本粘贴
   const [rawText, setRawText] = useState(
@@ -79,7 +93,14 @@ compile v. 编译；编纂`
 
   if (!isImportModalOpen) return null
 
-  const targetBook = customBooks.find((b) => b.id === targetBookId)
+  const selectableBooks = customBooks.filter((book) => {
+    const owner = contentVisibilityOf(book.accountId)
+    return owner === null || owner === visibility
+  })
+  const effectiveTargetId = selectableBooks.some((b) => b.id === targetBookId)
+    ? targetBookId
+    : (selectableBooks[0]?.id ?? '')
+  const targetBook = selectableBooks.find((b) => b.id === effectiveTargetId)
 
   // 提前告知会覆盖多少词，别让用户在不知情的情况下改掉已有数据
   const existingIds = new Set((targetBook?.words || []).map((w) => w.id))
@@ -241,16 +262,43 @@ compile v. 编译；编纂`
 
     const finalWords = finalEntries.map((e) => e.word)
 
-    if (targetMode === 'existing') {
-      const result = await mergeWordsIntoBook(targetBookId, finalWords)
-      if (!result) {
-        alert('目标词库不存在或已被删除，请重新选择')
-        return
+    try {
+      if (targetMode === 'existing') {
+        if (!effectiveTargetId) {
+          alert('没有可并入的词库，请切换归属或新建词库')
+          return
+        }
+        const result = await importWordsIntoBook(
+          effectiveTargetId,
+          finalWords,
+          isCloudMode() ? visibility : undefined
+        )
+        if (result.skipReason === 'missing') {
+          alert('目标词库不存在或已被删除，请重新选择')
+          return
+        }
+        if (result.skipped === finalWords.length) {
+          alert(describeSkip(result))
+          return
+        }
+        if (result.book) await setBookId(result.book.id)
+        pushCloudNotice(
+          `已导入到「${result.book?.name ?? ''}」：更新 ${result.updated} 词、新增 ${result.added} 词，文件里没有的单词保持不变。` +
+            (result.skipped ? describeSkip(result) : '')
+        )
+      } else {
+        const newBook = await saveCustomVocabularyBook(
+          bookName,
+          '用户自定义导入词库',
+          finalWords,
+          contentOwnerFor(visibility)
+        )
+        await setBookId(newBook.id)
       }
-      await setBookId(result.book.id)
-    } else {
-      const newBook = await saveCustomVocabularyBook(bookName, '用户自定义导入词库', finalWords)
-      await setBookId(newBook.id)
+    } catch (error) {
+      if (isCloudMode()) reportCloudError(error, '导入单词')
+      else alert(error instanceof Error ? error.message : '导入失败，请稍后重试')
+      return
     }
 
     setImportModalOpen(false)
@@ -339,32 +387,48 @@ compile v. 编译；编纂`
           </div>
 
           {targetMode === 'new' ? (
-            <input
-              type="text"
-              value={bookName}
-              onChange={(e) => setBookName(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50"
-              placeholder="例如: 我的考研阅读高频难词"
-            />
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <input
+                type="text"
+                value={bookName}
+                onChange={(e) => setBookName(e.target.value)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50"
+                placeholder="例如: 我的考研阅读高频难词"
+              />
+              <CloudVisibilityField value={visibility} onChange={setVisibility} label="" />
+            </div>
           ) : (
-            <select
-              value={targetBookId}
-              onChange={(e) => setTargetBookId(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50 cursor-pointer"
-            >
-              {customBooks.map((book) => (
-                <option key={book.id} value={book.id} className="bg-[#12141A] text-white">
-                  {book.name}（{book.totalWords} 词）
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <select
+                value={effectiveTargetId}
+                onChange={(e) => setTargetBookId(e.target.value)}
+                disabled={!selectableBooks.length}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-border text-white text-sm focus:outline-none focus:border-primary/50 cursor-pointer disabled:opacity-50"
+              >
+                {!selectableBooks.length && (
+                  <option value="" className="bg-[#12141A] text-white">
+                    没有{visibility === 'shared' ? '共享' : '个人'}词库可并入
+                  </option>
+                )}
+                {selectableBooks.map((book) => {
+                  const owner = contentVisibilityOf(book.accountId)
+                  return (
+                    <option key={book.id} value={book.id} className="bg-[#12141A] text-white">
+                      {book.name}（{book.totalWords} 词）{owner ? ` · ${owner === 'shared' ? '共享' : '个人'}` : ''}
+                    </option>
+                  )
+                })}
+              </select>
+              <CloudVisibilityField value={visibility} onChange={setVisibility} label="" />
+            </div>
           )}
 
           <p className="text-[12px] text-muted-foreground leading-relaxed">
             {targetMode === 'existing' ? (
               <>
                 拼写相同的单词会被本次导入的内容<span className="text-accent font-semibold">覆盖更新</span>
-                （保留原有位置），其余追加到末尾。
+                （保留原有位置），新单词追加到末尾，本次没导入的单词不会删除，所以可以只上传某一章或某一单元来更新。
+                云端只能并入与所选归属一致的词库：共享词库任何账号都能更新，个人词库只能更新自己的。
                 {overwriteCount > 0 && (
                   <span className="text-accent font-semibold">
                     {' '}

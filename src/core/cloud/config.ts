@@ -1,11 +1,11 @@
 /**
- * 云数据库（Supabase）配置。
+ * 云数据库（Supabase）配置与登录会话。
  *
- * 设计前提：不做账号体系。「有没有配置数据库」本身就是模式开关——
- *   已配置 → 业务数据直接读写云端，跨设备共享；
- *   未配置 → 一切留在浏览器（IndexedDB + localStorage），功能与以前完全一致。
+ * 「有没有配置数据库」本身就是模式开关——
+ *   已配置 → 需要登录系统账号（accounts 表），业务数据按 account_id 读写云端，跨设备共享；
+ *   未配置 → 一切留在浏览器（IndexedDB + localStorage），不需要登录，功能与以前完全一致。
  *
- * 配置本身（URL / anon key）永远只存在本机 localStorage，不入库、不分发。
+ * 配置本身（URL / anon key）与登录会话（账号 id）只存在本机 localStorage。
  */
 
 export interface CloudConfig {
@@ -68,7 +68,79 @@ export function clearCloudConfig(): void {
   if (!canUseStorage()) return
   localStorage.removeItem(CONFIG_KEY)
   localStorage.removeItem(OFFLINE_FALLBACK_KEY)
+  localStorage.removeItem(SESSION_KEY)
   window.dispatchEvent(new Event(CLOUD_CONFIG_CHANGED_EVENT))
+}
+
+/* -------------------------------------------------------------------------- */
+/* 登录会话                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const SESSION_KEY = 'lingualoop_cloud_session'
+
+export interface CloudSession {
+  accountId: string
+  username: string
+  displayName: string | null
+  /** 登录时的项目地址；换了数据库后旧会话自动失效 */
+  projectUrl: string
+  signedInAt: number
+}
+
+/** 当前数据库下的登录会话；未配置数据库、未登录或会话属于别的数据库时返回 null */
+export function getCloudSession(): CloudSession | null {
+  if (!canUseStorage()) return null
+  const config = getCloudConfig()
+  if (!config) return null
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CloudSession>
+    if (!parsed?.accountId || !parsed.username || parsed.projectUrl !== config.url) return null
+    return {
+      accountId: parsed.accountId,
+      username: parsed.username,
+      displayName: parsed.displayName ?? null,
+      projectUrl: parsed.projectUrl,
+      signedInAt: parsed.signedInAt ?? 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function getCloudAccountId(): string | null {
+  return getCloudSession()?.accountId ?? null
+}
+
+export function saveCloudSession(session: Omit<CloudSession, 'projectUrl' | 'signedInAt'>): void {
+  if (!canUseStorage()) return
+  const config = getCloudConfig()
+  if (!config) return
+  const value: CloudSession = { ...session, projectUrl: config.url, signedInAt: Date.now() }
+  localStorage.setItem(SESSION_KEY, JSON.stringify(value))
+  window.dispatchEvent(new Event(CLOUD_CONFIG_CHANGED_EVENT))
+}
+
+export function clearCloudSession(): void {
+  if (!canUseStorage()) return
+  localStorage.removeItem(SESSION_KEY)
+  window.dispatchEvent(new Event(CLOUD_CONFIG_CHANGED_EVENT))
+}
+
+/** 云模式且已登录：只有这时才读写云端数据 */
+export function isCloudSignedIn(): boolean {
+  return isCloudMode() && getCloudSession() !== null
+}
+
+/**
+ * 本页面使用的数据源签名（模式 + 数据库 + 账号）。
+ * 任何一项变化都必须整页重载，避免内存里是 A 份数据、写入却落到 B 份。
+ */
+export function cloudScopeSignature(): string {
+  if (!isCloudMode()) return 'local'
+  const config = getCloudConfig()
+  return `cloud:${config?.url ?? ''}:${getCloudAccountId() ?? 'anonymous'}`
 }
 
 /** 是否处于「配置了数据库、且没有降级到本地」的云模式 */
@@ -103,7 +175,12 @@ export function setOfflineFallback(enabled: boolean): void {
 export function subscribeCloudMode(listener: () => void): () => void {
   if (typeof window === 'undefined') return () => {}
   const onStorage = (event: StorageEvent) => {
-    if (!event.key || event.key === CONFIG_KEY || event.key === OFFLINE_FALLBACK_KEY) {
+    if (
+      !event.key ||
+      event.key === CONFIG_KEY ||
+      event.key === OFFLINE_FALLBACK_KEY ||
+      event.key === SESSION_KEY
+    ) {
       listener()
     }
   }

@@ -16,6 +16,9 @@ import { RadioMainPlayer } from '@/components/radio/RadioMainPlayer'
 import { RadioCardList } from '@/components/radio/RadioCardList'
 import { RadioUploadModal } from '@/components/radio/RadioUploadModal'
 import { ArrowLeft } from 'lucide-react'
+import { isCloudMode } from '@/core/cloud/config'
+import { reportCloudError } from '@/core/cloud/notices'
+import { getRepositories } from '@/db/repository'
 
 type ActiveTab = RadioCategory | 'player'
 
@@ -45,6 +48,30 @@ export default function RadioPage() {
 
   // 弹窗状态
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const [cloudError, setCloudError] = useState<string | null>(null)
+
+  // 云模式：加载数据库里的链接视频（共享 + 当前账号个人），内置示例仍以代码为准
+  useEffect(() => {
+    if (!isCloudMode()) return
+    let cancelled = false
+    getRepositories()
+      .radio.getItems()
+      .then((remote) => {
+        if (cancelled) return
+        setItems((prev) => {
+          const remoteIds = new Set(remote.map((item) => item.id))
+          return [...remote, ...prev.filter((item) => !remoteIds.has(item.id))]
+        })
+      })
+      .catch((error) => {
+        console.warn('[radio] failed to load cloud items:', error)
+        reportCloudError(error, '读取视频')
+        if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频与本次会话上传的视频。')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // HTML5 播放器 Ref 句柄
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -326,17 +353,39 @@ export default function RadioPage() {
   }, [handleTogglePlay, currentTime, duration, handlePrev, handleNext])
 
   // 添加用户自定义视频
-  const handleAddItem = (newItem: RadioItem) => {
+  const handleAddItem = async (newItem: RadioItem) => {
+    if (isCloudMode() && newItem.accountId !== undefined) {
+      try {
+        await getRepositories().radio.putItem(newItem)
+      } catch (error) {
+        console.warn('[radio] failed to save item:', error)
+        reportCloudError(error, '保存视频')
+        setCloudError(`视频保存到云端失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+        return false
+      }
+    }
     setItems((prev) => [newItem, ...prev])
     setLastCategoryTab(newItem.category)
     setCurrentId(newItem.id)
     setIsPlaying(true)
     setActiveTab('player')
+    return true
   }
 
   // 删除视频
   const handleDeleteItem = (id: string) => {
+    const removed = items.find((i) => i.id === id)
     setItems((prev) => prev.filter((i) => i.id !== id))
+    if (isCloudMode() && removed && removed.accountId !== undefined) {
+      getRepositories()
+        .radio.deleteItem(id)
+        .catch((error) => {
+          console.warn('[radio] failed to delete item:', error)
+          reportCloudError(error, '删除视频')
+          setItems((prev) => (prev.some((i) => i.id === id) ? prev : [removed, ...prev]))
+          setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+        })
+    }
     if (currentId === id) {
       const remaining = items.filter((i) => i.id !== id)
       if (remaining.length > 0) {
@@ -359,6 +408,12 @@ export default function RadioPage() {
           totalCount={items.length}
           onOpenUpload={() => setIsUploadOpen(true)}
         />
+
+        {cloudError && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
+            {cloudError}
+          </div>
+        )}
 
         {/* Tab 导航：常用短语 / 场景对话 / 英语电台 / 共用播放页 */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-border">

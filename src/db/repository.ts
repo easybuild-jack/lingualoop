@@ -4,7 +4,8 @@
  * 上层业务代码（页面、store、db/index.ts 的业务函数）只认这里的接口，
  * 具体落到「本地 IndexedDB」还是「云端 Supabase」由 isCloudMode() 决定：
  *   未配置数据库 → localRepositories（与改造前行为完全一致）
- *   已配置数据库 → cloudRepositories（数据只有云端一份，本地不再保留副本）
+ *   已配置数据库 → cloudRepositories（数据只有云端一份，本地不再保留副本；
+ *                  每次读写都带上登录账号的 account_id，未登录时直接报错）
  *
  * 之所以做成整表级接口而不是行级 SQL 拼装，是因为业务函数里大量
  * 「读一条 → 算 → 写回一条」的逻辑可以原样复用，不必为两种模式各写一遍。
@@ -15,9 +16,9 @@ import type {
   UnitProgressRecord,
   VocabularyBook,
   WordMasteryRecord,
-  WordOverrideRecord,
 } from '@/types'
 import type { ReadingArticle } from '@/resources/readingData'
+import type { RadioItem } from '@/resources/radioData'
 import { db } from './local'
 import { isCloudMode } from '@/core/cloud/config'
 import { cloudRepositories } from '@/core/cloud/supabaseRepository'
@@ -44,16 +45,11 @@ export interface WordRecordsRepository {
 export interface UnitProgressRepository {
   get(unitId: string, mode: PracticeMode): Promise<UnitProgressRecord | undefined>
   getByBook(bookId: string): Promise<UnitProgressRecord[]>
+  /** 全部单元进度（官方词库 + 自定义词库），迁移时使用 */
+  getAll(): Promise<UnitProgressRecord[]>
   put(record: UnitProgressRecord): Promise<void>
   delete(unitId: string, mode: PracticeMode): Promise<void>
   deleteByBook(bookId: string): Promise<void>
-}
-
-export interface WordOverridesRepository {
-  get(wordId: string): Promise<WordOverrideRecord | undefined>
-  getAll(): Promise<WordOverrideRecord[]>
-  bulkGet(wordIds: string[]): Promise<(WordOverrideRecord | undefined)[]>
-  put(record: WordOverrideRecord): Promise<void>
 }
 
 /**
@@ -63,9 +59,18 @@ export interface WordOverridesRepository {
 export interface ProgressState {
   currentBookId?: string
   currentUnitIndex: number
-  bookModeProgress: Record<string, unknown>
+  /** 每本书在每种模式下上次学到的单元序号；云端存在 book_progress 表，一行一个 (book, mode) */
+  bookModeProgress: Record<string, Partial<Record<PracticeMode, number>>>
   loopCounts: Record<string, unknown>
   learnedRootIds: string[]
+  updatedAt: number
+}
+
+/** book_progress 的一行：只写发生变化的 (book, mode)，避免整表覆盖其他设备的新位置 */
+export interface BookModeEntry {
+  bookId: string
+  mode: PracticeMode
+  unitIndex: number
   updatedAt: number
 }
 
@@ -77,7 +82,10 @@ export interface TranslateProgressState {
 
 export interface AppStateRepository {
   get(): Promise<ProgressState | null>
+  /** 学习位置、循环次数、已学词根（不含书内位置） */
   put(state: ProgressState): Promise<void>
+  /** 书内位置：unitIndex 为 0 等同于「没有记录」，删掉该行而不是写一行 0 */
+  putBookModes(entries: BookModeEntry[]): Promise<void>
 }
 
 export interface TranslateRepository {
@@ -94,15 +102,21 @@ export interface ReadingRepository {
   deleteArticle(articleId: string): Promise<void>
 }
 
+export interface RadioRepository {
+  getItems(): Promise<RadioItem[]>
+  putItem(item: RadioItem): Promise<void>
+  deleteItem(itemId: string): Promise<void>
+}
+
 export interface Repositories {
   mode: DataMode
   books: BooksRepository
   wordRecords: WordRecordsRepository
   unitProgress: UnitProgressRepository
-  wordOverrides: WordOverridesRepository
   appState: AppStateRepository
   translate: TranslateRepository
   reading: ReadingRepository
+  radio: RadioRepository
 }
 
 /* -------------------------------------------------------------------------- */
@@ -141,6 +155,7 @@ export const localRepositories: Repositories = {
   unitProgress: {
     get: (unitId, mode) => db.unitProgress.get([unitId, mode]),
     getByBook: (bookId) => db.unitProgress.where('bookId').equals(bookId).toArray(),
+    getAll: () => db.unitProgress.toArray(),
     put: async (record) => {
       await db.unitProgress.put(record)
     },
@@ -151,18 +166,11 @@ export const localRepositories: Repositories = {
       await db.unitProgress.where('bookId').equals(bookId).delete()
     },
   },
-  wordOverrides: {
-    get: (wordId) => db.wordOverrides.get(wordId),
-    getAll: () => db.wordOverrides.toArray(),
-    bulkGet: async (wordIds) => db.wordOverrides.bulkGet(wordIds),
-    put: async (record) => {
-      await db.wordOverrides.put(record)
-    },
-  },
   appState: {
     // 本地模式的进度本来就存在 localStorage（zustand persist），这里只是占位实现
     get: async () => null,
     put: async () => {},
+    putBookModes: async () => {},
   },
   translate: {
     // 本地模式的翻译题库走 localStorage，云端实现才有真正的读写
@@ -176,6 +184,12 @@ export const localRepositories: Repositories = {
     getArticles: async () => [],
     putArticle: async () => {},
     deleteArticle: async () => {},
+  },
+  radio: {
+    // 本地模式的影音条目只在页面内存里（与改造前一致）
+    getItems: async () => [],
+    putItem: async () => {},
+    deleteItem: async () => {},
   },
 }
 

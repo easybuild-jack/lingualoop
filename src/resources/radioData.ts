@@ -28,6 +28,8 @@ export type PlayMode = 'list-loop' | 'single-loop' | 'sequential' | 'shuffle'
 
 export interface RadioItem {
   id: string
+  /** 云模式归属：null = 共享，非空 = 个人；undefined = 仅本次会话（未入库） */
+  accountId?: string | null
   category: RadioCategory
   title: string
   type: RadioMediaType

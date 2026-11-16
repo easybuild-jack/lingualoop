@@ -1,15 +1,17 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { DictUnit, DictationCueMode, PracticeMode, WordItem, VocabularyBook, ShortcutConfig, WordEtymology } from '@/types'
+import type { DictUnit, DictationCueMode, PracticeMode, WordItem, VocabularyBook, ShortcutConfig } from '@/types'
 import { isAutoAudioMuted, isMeaningStepActive } from '@/lib/dictationCue'
 import { BUILTIN_BOOKS, INITIAL_SAMPLE_WORDS } from '@/resources/books'
 import { BUILTIN_ROOTS, ROOT_DATA_MAP, type RootTabType } from '@/resources/roots'
-import { getVocabularyBookById, deleteVocabularyBookById, getAllWordRecords, recordWordAttempt, toggleStarWord, eliminateErrorWord, saveWordOverride, deleteCustomVocabularyBook, reconcileUnitProgressRecord, markUnitWordCompleted, markUnitWordForRetry, clearUnitProgress } from '@/db'
+import { getVocabularyBookById, deleteVocabularyBookById, getStarredWordIds, recordWordAttempt, toggleStarWord, eliminateErrorWord, deleteCustomVocabularyBook, reconcileUnitProgressRecord, markUnitWordCompleted, markUnitWordForRetry, clearUnitProgress } from '@/db'
 import { audioEngine } from '@/core/audioEngine'
+import { isCloudMode, isCloudSignedIn } from '@/core/cloud/config'
+import { waitForCloudHydration } from '@/core/cloud/readiness'
+import { createScopedProgressStorage } from '@/core/cloud/scopedStorage'
 import { buildFixedUnitId, dictionaryLoader } from '@/core/dictionaryLoader'
 import { DEFAULT_SHORTCUTS } from '@/lib/shortcuts'
 import { validatePhonetic, validateMeaning } from '@/lib/dictationValidator'
-import { isCurrentAuthor, getSyncToken } from '@/lib/permissions'
 
 /**
  * 学习页与默写页各自维护一份练习进度，错词攻坚再单独占一份。
@@ -200,8 +202,17 @@ function persistRetryWord(get: () => WorkspaceState, wordId: string, wordIndex: 
   })
 }
 
+/** 属于「学习进度」的持久化字段：云模式下不存本机，以 app_state / book_progress 为准（见 core/cloud/progress） */
+const WORKSPACE_PROGRESS_KEYS = [
+  'currentBookId',
+  'currentUnitIndex',
+  'bookModeProgress',
+  'loopCounts',
+  'learnedRootIds',
+] as const
+
 /** 跟学时单词就在眼前，抄一遍即可；默写要靠三连对建立肌肉记忆 */
-const DEFAULT_LOOP_COUNTS: Record<PracticeMode, 1 | 2 | 3 | 5> = {
+export const DEFAULT_LOOP_COUNTS: Record<PracticeMode, 1 | 2 | 3 | 5> = {
   learn: 1,
   dictation: 3,
   phonetic: 1,
@@ -221,6 +232,14 @@ const DICTATION_STEP_RESET = {
   isPhoneticFocused: false,
   isPhoneticError: false,
   isMeaningError: false,
+}
+
+export interface CloudProgressSnapshot {
+  currentBookId: string
+  currentUnitIndex: number
+  bookModeProgress: Record<string, BookModeUnitRecord>
+  loopCounts: Record<PracticeMode, 1 | 2 | 3 | 5>
+  learnedRootIds: string[]
 }
 
 interface WorkspaceState {
@@ -243,6 +262,8 @@ interface WorkspaceState {
   /** 各词库在各做题模式下最后访问的单元序号 */
   bookModeProgress: Record<string, BookModeUnitRecord>
   getBookModeUnit: (bookId: string, mode: PracticeMode) => number
+  /** 用云端拉回的学习进度覆盖本地，并在书/单元变化时重建派生状态（不自动发音） */
+  applyCloudProgress: (progress: CloudProgressSnapshot) => Promise<void>
   commitBookAndUnit: (bookId: string, unitIndex: number, targetMode: PracticeMode) => Promise<void>
   _hasHydrated: boolean
   setHasHydrated: (hydrated: boolean) => void
@@ -400,13 +421,9 @@ interface WorkspaceState {
   setRootSearchModalOpen: (open: boolean) => void
   restartRoots: () => void
 
-  // 音节切分展示与弹窗控制 (仅当前单词有效，切词自动重置)
+  // 音节切分展示 (仅当前单词有效，切词自动重置)
   isCurrentWordSplit: boolean
-  isEditWordSplitModalOpen: boolean
   toggleCurrentWordSplit: () => void
-  setEditWordSplitModalOpen: (open: boolean) => void
-
-  updateWordSplit: (wordId: string, updates: { syllables: string[]; etymology?: WordEtymology; silentIndices?: number[] }) => Promise<void>
 
   getUnitWords: () => WordItem[]
   getCurrentWord: () => WordItem | undefined
@@ -516,7 +533,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       // 音节切分与编辑弹窗（仅作用于当前单词）
       isCurrentWordSplit: false,
-      isEditWordSplitModalOpen: false,
 
       // 词根词缀学习状态初始值 (默认首项：前缀)
       rootTab: 'prefix',
@@ -817,9 +833,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         if (builtin) {
           const dynamicTotal = await dictionaryLoader.getBookTotalWords(builtin.id)
           book = { ...builtin, totalWords: dynamicTotal > 0 ? dynamicTotal : builtin.totalWords }
-          try {
-            await deleteVocabularyBookById(bookId)
-          } catch {}
+          // 清理旧版本误存进 IndexedDB 的官方词库副本；云端从不存官方词库，不发无意义的删除请求
+          if (!isCloudMode()) {
+            try {
+              await deleteVocabularyBookById(bookId)
+            } catch {}
+          }
         } else {
           const custom = await getVocabularyBookById(bookId)
           book = custom || BUILTIN_BOOKS[0]
@@ -846,7 +865,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           hasTypo: false,
           isUnitFinished: false,
           isCurrentWordSplit: false,
-          isEditWordSplitModalOpen: false,
           // 换书直接中断攻坚，循环次数一并还原
           isErrorPracticeActive: false,
           retryWordQueue: [],
@@ -901,6 +919,66 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           }
         }
         return 0
+      },
+
+      applyCloudProgress: async (progress: CloudProgressSnapshot) => {
+        const state = get()
+        let book: VocabularyBook = state.currentBook
+        if (progress.currentBookId !== state.currentBook?.id) {
+          const builtin = BUILTIN_BOOKS.find((b) => b.id === progress.currentBookId)
+          if (builtin) {
+            book = builtin
+          } else {
+            book = (await getVocabularyBookById(progress.currentBookId)) ?? BUILTIN_BOOKS[0]
+          }
+        }
+
+        const activeMode: PracticeMode = state.isErrorPracticeActive ? 'dictation' : state.mode
+        const recordedUnit = progress.bookModeProgress[book.id]?.[activeMode]
+        const unitIndex =
+          typeof recordedUnit === 'number'
+            ? recordedUnit
+            : book.id === progress.currentBookId
+              ? progress.currentUnitIndex
+              : 0
+        const positionChanged =
+          book.id !== state.currentBookId ||
+          book.id !== state.currentBook?.id ||
+          unitIndex !== state.currentUnitIndex
+        const pageLoaded = state.currentUnitMeta !== null
+
+        if (positionChanged) latestPracticeActionSequence += 1
+        const loopCount = progress.loopCounts[state.mode]
+        set({
+          bookModeProgress: progress.bookModeProgress,
+          loopCounts: progress.loopCounts,
+          learnedRootIds: progress.learnedRootIds,
+          // 攻坚中强制三连对，不跟着云端的循环次数走
+          ...(state.isErrorPracticeActive
+            ? {}
+            : { loopCountSetting: loopCount, currentWordRemainingLoops: loopCount }),
+          ...(positionChanged && !state.isErrorPracticeActive
+            ? {
+                currentBookId: book.id,
+                currentBook: book,
+                currentUnitIndex: unitIndex,
+                cursors: createFreshCursors(progress.bookModeProgress[book.id]),
+                loadedUnitKey: null,
+                activeWordIndex: 0,
+                isUnitFinished: false,
+                retryWordQueue: [],
+                isUnitRetrying: false,
+                currentInput: '',
+                hasTypo: false,
+                ...DICTATION_STEP_RESET,
+              }
+            : {}),
+        })
+
+        // 页面已经按旧位置载入过单元（云端响应慢于页面初始化）时，按新位置重载一次
+        if (positionChanged && pageLoaded && !state.isErrorPracticeActive) {
+          await get().loadCurrentUnitWords()
+        }
       },
 
       commitBookAndUnit: async (bookId: string, unitIndex: number, targetMode: PracticeMode) => {
@@ -965,7 +1043,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             hasTypo: false,
             isUnitFinished: false,
             isCurrentWordSplit: false,
-            isEditWordSplitModalOpen: false,
             isErrorPracticeActive: false,
             retryWordQueue: [],
             isUnitRetrying: false,
@@ -1026,7 +1103,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           hasTypo: false,
           isUnitFinished: false,
           isCurrentWordSplit: false,
-          isEditWordSplitModalOpen: false,
           isErrorPracticeActive: false,
           retryWordQueue: [],
           isUnitRetrying: false,
@@ -1399,7 +1475,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
           // 如果打完整个单词
           if (nextInput.length === targetWord.length) {
-            recordWordAttempt(currentWord.id, currentBookId, true, mode, currentWord)
+            const attemptPromise = recordWordAttempt(currentWord.id, currentBookId, true, mode, currentWord)
 
             if (currentWordRemainingLoops > 1) {
               if (isCorrectSoundEnabled) {
@@ -1417,7 +1493,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                 audioEngine.playCorrectSound(feedbackVolume)
               }
               if (isErrorPracticeActive && mode === 'dictation') {
-                eliminateErrorWord(currentWord.id)
+                // 必须等本次练习记录落库后再消灭，否则云端两次写入的先后不确定，已消灭的词可能被写回错词本
+                const conqueredId = currentWord.id
+                void attemptPromise.then(() => eliminateErrorWord(conqueredId))
                 const updatedConquered = Array.from(new Set([...get().conqueredErrorWordIds, currentWord.id]))
                 set({ conqueredErrorWordIds: updatedConquered })
               }
@@ -1561,9 +1639,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       syncStarredWordIds: async () => {
         try {
-          const records = await getAllWordRecords()
-          const starredIds = records.filter((r) => r.isStarred).map((r) => r.wordId)
-          set({ starredWordIds: starredIds })
+          set({ starredWordIds: await getStarredWordIds() })
         } catch (err) {
           console.error('Failed to sync starred words:', err)
         }
@@ -1703,7 +1779,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             hasTypo: false,
             isPeeking: false,
             isCurrentWordSplit: false,
-            isEditWordSplitModalOpen: false,
             currentWordRemainingLoops: loopCountSetting,
             ...DICTATION_STEP_RESET,
           })
@@ -1783,7 +1858,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             hasTypo: false,
             isPeeking: false,
             isCurrentWordSplit: false,
-            isEditWordSplitModalOpen: false,
             currentWordRemainingLoops: isErrorPracticeActive && mode === 'dictation' ? 3 : loopCountSetting,
             ...DICTATION_STEP_RESET,
           })
@@ -1817,7 +1891,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           hasTypo: false,
           isUnitFinished: false,
           isCurrentWordSplit: false,
-          isEditWordSplitModalOpen: false,
           retryWordQueue: [],
           isUnitRetrying: false,
           currentWordRemainingLoops: isDictationError ? 3 : get().loopCountSetting,
@@ -1886,85 +1959,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       restartRoots: () => set({ activeRootIndex: 0 }),
 
       toggleCurrentWordSplit: () => set((s) => ({ isCurrentWordSplit: !s.isCurrentWordSplit })),
-      setEditWordSplitModalOpen: (open: boolean) => set({ isEditWordSplitModalOpen: open }),
-
-      updateWordSplit: async (wordId: string, updates: { syllables: string[]; etymology?: WordEtymology; silentIndices?: number[] }) => {
-        const { currentLoadedWords, currentBook, currentBookId } = get()
-        const targetWord = currentLoadedWords.find((w) => w.id === wordId)
-        if (!targetWord) return
-
-        const updatedWords = currentLoadedWords.map((w) => {
-          if (w.id === wordId) {
-            return {
-              ...w,
-              syllables: updates.syllables,
-              etymology: updates.etymology !== undefined ? updates.etymology : w.etymology,
-              silentIndices: updates.silentIndices !== undefined ? updates.silentIndices : w.silentIndices,
-            }
-          }
-          return w
-        })
-
-        let updatedBook = currentBook
-        const isCustomBook = Boolean(currentBook?.isCustom)
-
-        if (isCustomBook && currentBook?.words) {
-          const updatedBookWords = currentBook.words.map((w) => {
-            if (w.id === wordId) {
-              return {
-                ...w,
-                syllables: updates.syllables,
-                etymology: updates.etymology !== undefined ? updates.etymology : w.etymology,
-                silentIndices: updates.silentIndices !== undefined ? updates.silentIndices : w.silentIndices,
-              }
-            }
-            return w
-          })
-          updatedBook = { ...currentBook, words: updatedBookWords }
-        }
-
-        set({
-          currentLoadedWords: updatedWords,
-          currentBook: updatedBook,
-        })
-
-        if (isCustomBook) {
-          // 自定义词库：持久化保存到本地 IndexedDB
-          await saveWordOverride(wordId, targetWord.name, updates)
-        } else {
-          // 自带官方词库：仅允许作者本人（token === 'myword_jack'）通过 API 更新并写回 public/dicts/*.json 文件！
-          if (!isCurrentAuthor()) {
-            console.warn('仅作者本人（token: myword_jack）可修改官方词库单词切分')
-            return
-          }
-          const syncToken = getSyncToken()
-          try {
-            await fetch('/api/dict/update-word', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-sync-token': syncToken,
-              },
-              body: JSON.stringify({
-                token: syncToken,
-                bookId: currentBookId,
-                wordName: targetWord.name,
-                syllables: updates.syllables,
-                silentIndices: updates.silentIndices,
-                etymology: updates.etymology,
-              }),
-            })
-            dictionaryLoader.clearCache()
-          } catch (err) {
-            console.warn('Failed to update dict JSON via API, fallback to local override:', err)
-            await saveWordOverride(wordId, targetWord.name, updates)
-          }
-        }
-      },
     }),
     {
       name: 'lingualoop-workspace-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createScopedProgressStorage(WORKSPACE_PROGRESS_KEYS)),
       onRehydrateStorage: () => {
         return (state, error) => {
           if (!error && state) {
@@ -2054,9 +2052,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
 /**
  * 等待 workspace store 完成本地持久化（localStorage）水合，
- * 避免冷启动或切页时读到初始默认值（如 Unit 0 am）而发生发音与显示不一致。
+ * 云模式已登录时还要等云端学习位置拉回来，
+ * 避免冷启动或切页时读到初始默认值（如 Unit 0 am）或本机旧位置而发生显示与进度错位。
  */
 export const ensureWorkspaceHydrated = async (): Promise<void> => {
+  await ensureLocalWorkspaceHydrated()
+  if (isCloudSignedIn()) await waitForCloudHydration()
+}
+
+/** 只等待 localStorage 水合（供 CloudSyncGate 在拉取云端进度前调用） */
+export const ensureLocalWorkspaceHydrated = async (): Promise<void> => {
   if (typeof window === 'undefined') return
   if (useWorkspaceStore.getState()._hasHydrated || useWorkspaceStore.persist?.hasHydrated?.()) {
     return

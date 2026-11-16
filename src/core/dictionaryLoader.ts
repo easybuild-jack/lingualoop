@@ -1,7 +1,6 @@
 import type { DictUnit, DictUnitCatalog, WordEtymology, WordExample, WordItem } from '@/types'
 import { splitIntoSyllables, isUsableSyllableSplit } from '@/lib/syllables'
 import { buildWordId } from '@/lib/wordId'
-import { getWordOverride, getWordOverridesBulk } from '@/db'
 
 /** 导入时由用户提供的字段，填了就跳过对应的自动推导 */
 export interface WordEnrichOverrides {
@@ -337,21 +336,9 @@ class DictionaryLoader {
     if (!ukPhone) ukPhone = `/ ${lowerName} /`
 
     // 4. 音节与构词法：人工拆解优先，没填才按字母启发式推导（两者都不涉及读音）
-    let syllables = customSyllables?.length ? customSyllables : splitIntoSyllables(cleanName)
-    let etymology = customEtymology ?? undefined
-    let silentIndices: number[] | undefined = customSilentIndices
-
-    // 5. 检查本地 DB 中的用户修改覆盖
-    if (typeof window !== 'undefined' && !customSyllables && !customEtymology) {
-      try {
-        const savedOverride = await getWordOverride(wordId)
-        if (savedOverride) {
-          if (savedOverride.syllables?.length) syllables = savedOverride.syllables
-          if (savedOverride.etymology !== undefined) etymology = savedOverride.etymology
-          if (savedOverride.silentIndices !== undefined) silentIndices = savedOverride.silentIndices
-        }
-      } catch {}
-    }
+    const syllables = customSyllables?.length ? customSyllables : splitIntoSyllables(cleanName)
+    const etymology = customEtymology ?? undefined
+    const silentIndices: number[] | undefined = customSilentIndices
 
     const posList = this.parsePosAndMeans(transList)
 
@@ -445,36 +432,6 @@ class DictionaryLoader {
     }
   }
 
-  /** 批量套用用户自定义覆盖（音节拆分/构词/例句/短语） */
-  private async applyUserOverrides(words: WordItem[]): Promise<WordItem[]> {
-    if (typeof window === 'undefined' || words.length === 0) return words
-    try {
-      const overrides = await getWordOverridesBulk(words.map((w) => w.id))
-      for (let i = 0; i < words.length; i++) {
-        const override = overrides[i]
-        if (!override) continue
-        if (override.syllables && override.syllables.length) {
-          words[i].syllables = override.syllables
-        }
-        if (override.etymology !== undefined) {
-          words[i].etymology = override.etymology
-        }
-        if (override.silentIndices !== undefined) {
-          words[i].silentIndices = override.silentIndices
-        }
-        if (override.examples !== undefined && override.examples.length > 0) {
-          words[i].examples = override.examples
-        }
-        if (override.phrases !== undefined && override.phrases.length > 0) {
-          words[i].phrases = override.phrases
-        }
-      }
-    } catch (err) {
-      // 容错处理
-    }
-    return words
-  }
-
   /**
    * 加载词库中某个单元的单词。
    *
@@ -499,8 +456,7 @@ class DictionaryLoader {
       rawSlice = allRawWords.slice(startIndex, startIndex + unitSize)
     }
 
-    const enrichedList = rawSlice.map((entry) => this.buildWordItemFromEntry(entry))
-    return this.applyUserOverrides(enrichedList)
+    return rawSlice.map((entry) => this.buildWordItemFromEntry(entry))
   }
 
   /**
@@ -546,11 +502,10 @@ class DictionaryLoader {
   }
 
   /**
-   * 将单个 RawDictEntry 转换为带有音节、发音、构词法与用户覆盖的标准 WordItem
+   * 将单个 RawDictEntry 转换为带有音节、发音、构词法的标准 WordItem
    */
   public async convertRawEntryToWordItem(entry: RawDictEntry): Promise<WordItem> {
-    const [wordItem] = await this.applyUserOverrides([this.buildWordItemFromEntry(entry)])
-    return wordItem
+    return this.buildWordItemFromEntry(entry)
   }
 
   /**

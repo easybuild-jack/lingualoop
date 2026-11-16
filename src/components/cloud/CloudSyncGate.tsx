@@ -1,135 +1,172 @@
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CloudOff, RefreshCw } from 'lucide-react'
-import { ensureWorkspaceHydrated } from '@/store/useWorkspaceStore'
-import { isCloudConfigured, isCloudMode, setOfflineFallback, subscribeCloudMode } from '@/core/cloud/config'
-import { probeCloudConnection, type CloudProbeStatus } from '@/core/cloud/client'
+import { usePathname, useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
+import { ensureLocalWorkspaceHydrated } from '@/store/useWorkspaceStore'
 import {
-  hydrateTranslateProgress,
-  hydrateWorkspaceProgress,
-  startTranslateSync,
-  startWorkspaceProgressSync,
-} from '@/core/cloud/sync'
+  cloudScopeSignature,
+  getCloudSession,
+  isCloudConfigured,
+  isCloudMode,
+  subscribeCloudMode,
+} from '@/core/cloud/config'
+import { isNetworkCloudError, probeCloudConnection } from '@/core/cloud/client'
+import { logoutAccount, verifyCurrentAccount } from '@/core/cloud/account'
+import { markCloudHydrated, resetCloudHydration } from '@/core/cloud/readiness'
+import {
+  loadTranslateProgress,
+  loadWorkspaceProgress,
+  startTranslateProgressWrites,
+  startWorkspaceProgressWrites,
+} from '@/core/cloud/progress'
+import { clearLegacyCloudProgressCache } from '@/core/cloud/scopedStorage'
+import { pushCloudNotice, subscribeCloudNotices, type CloudNotice } from '@/core/cloud/notices'
+import { switchToLocalMode, takePendingFallbackNotice } from '@/core/cloud/fallback'
+import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
-type GateStatus = 'idle' | 'checking' | 'ready' | 'error'
+const INFO_TIMEOUT_MS = 8000
+const MAX_NOTICES = 3
+
+function loginHref(pathname: string | null): string {
+  const next = pathname && pathname !== '/login' ? `?next=${encodeURIComponent(pathname)}` : ''
+  return `/login${next}`
+}
 
 /**
  * 云数据库连接守卫。
  *
- * 配置了数据库时负责：启动体检 → 从云端拉回进度 → 启动变更推送。
- * 连不上时给出「重试 / 临时改用本地模式」两个出口，
- * 选本地模式后业务数据回到浏览器，且不会与云端互相覆盖（下次恢复云端以云端为准）。
+ * 配置了数据库时负责：未登录跳转登录页 → 启动体检 → 从数据库载入进度 → 之后学习进度的变更直接写数据库。
+ * 这里没有任何本地与数据库之间的同步（手动同步在设置面板里）。
+ * 连不上数据库时自动切到本地模式（fallback.ts），重载后在顶部提示；其他失败只在顶部提示。都不重发、不遮挡页面。
+ * 未配置数据库时什么都不做，与纯本地版本完全一致。
  */
 export function CloudSyncGate() {
-  const [status, setStatus] = useState<GateStatus>('idle')
-  const [message, setMessage] = useState('')
-  const [kind, setKind] = useState<CloudProbeStatus>('unknown')
+  const router = useRouter()
+  const pathname = usePathname()
+  const [notices, setNotices] = useState<CloudNotice[]>([])
   const cleanupsRef = useRef<Array<() => void>>([])
+  const pathnameRef = useRef(pathname)
+  const scopeRef = useRef<string | null>(null)
 
-  const stopSync = useCallback(() => {
+  useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
+
+  const stopWrites = useCallback(() => {
     cleanupsRef.current.forEach((dispose) => dispose())
     cleanupsRef.current = []
   }, [])
 
   const start = useCallback(async () => {
-    stopSync()
+    stopWrites()
+    resetCloudHydration()
 
     if (!isCloudConfigured() || !isCloudMode()) {
-      setStatus('idle')
+      markCloudHydrated()
+      const pending = takePendingFallbackNotice()
+      if (pending) pushCloudNotice(pending, 'error')
       return
     }
 
-    setStatus('checking')
+    if (!getCloudSession()) {
+      markCloudHydrated()
+      if (!isChromelessRoute(pathnameRef.current)) router.replace(loginHref(pathnameRef.current))
+      return
+    }
+
     const probe = await probeCloudConnection()
     if (!probe.ok) {
-      setKind(probe.status)
-      setMessage(probe.message)
-      setStatus('error')
+      if (probe.status === 'network' && switchToLocalMode(`连接失败：${probe.message}`)) return
+      markCloudHydrated()
+      pushCloudNotice(`云数据库无法使用：${probe.message}`, 'error')
       return
     }
 
     try {
-      await ensureWorkspaceHydrated()
-      await hydrateWorkspaceProgress()
-      await hydrateTranslateProgress()
-      cleanupsRef.current.push(startWorkspaceProgressSync(), startTranslateSync())
-      setStatus('ready')
+      if (!(await verifyCurrentAccount())) {
+        logoutAccount()
+        window.location.replace(loginHref(pathnameRef.current))
+        return
+      }
+      await ensureLocalWorkspaceHydrated()
+      clearLegacyCloudProgressCache()
+      await loadWorkspaceProgress()
+      await loadTranslateProgress()
+      markCloudHydrated()
+      cleanupsRef.current.push(startWorkspaceProgressWrites(), startTranslateProgressWrites())
     } catch (error) {
-      setKind('unknown')
-      setMessage(error instanceof Error ? error.message : '云数据库初始化失败')
-      setStatus('error')
+      const reason = error instanceof Error ? error.message : '请稍后重试'
+      if (isNetworkCloudError(error) && switchToLocalMode(`载入学习进度失败：${reason}`)) return
+      // 没能载入就不启动进度写入，避免用默认值覆盖数据库
+      markCloudHydrated()
+      pushCloudNotice(`从数据库载入学习进度失败：${reason}。本次的学习位置不会保存，请稍后重新加载。`, 'error')
     }
-  }, [stopSync])
+  }, [router, stopWrites])
 
   useEffect(() => {
+    scopeRef.current = cloudScopeSignature()
     // 放到微任务里启动，避免在 effect 体内同步 setState 触发级联渲染
     queueMicrotask(() => void start())
-    const unsubscribe = subscribeCloudMode(() => void start())
+    const unsubscribe = subscribeCloudMode(() => {
+      // 模式、数据库或账号变了（包括其他标签页里的操作）：整页重载，避免内存数据与写入目标错位
+      // 登录页登录成功后会自己整页跳转，这里不抢先重载
+      if (cloudScopeSignature() === scopeRef.current) return
+      stopWrites()
+      if (pathnameRef.current !== '/login') window.location.reload()
+    })
+    const dismiss = (id: number) => setNotices((prev) => prev.filter((item) => item.id !== id))
+    const unsubscribeNotices = subscribeCloudNotices((notice) => {
+      // 同样的提示只留最新一条，避免连续失败时刷屏
+      setNotices((prev) => [...prev.filter((item) => item.text !== notice.text), notice].slice(-MAX_NOTICES))
+      // 错误提示（包括「已切换到本地模式」）留到用户手动关闭
+      if (notice.tone !== 'error') setTimeout(() => dismiss(notice.id), INFO_TIMEOUT_MS)
+    })
     const handleOffline = () => {
-      if (!isCloudMode()) return
-      setKind('network')
-      setMessage('网络已断开，云数据库暂时不可用。')
-      setStatus('error')
+      switchToLocalMode('网络已断开')
     }
     window.addEventListener('offline', handleOffline)
     return () => {
-      stopSync()
+      stopWrites()
       unsubscribe()
+      unsubscribeNotices()
       window.removeEventListener('offline', handleOffline)
     }
-  }, [start, stopSync])
+  }, [start, stopWrites])
 
-  const useLocalMode = () => {
-    setOfflineFallback(true)
-    stopSync()
-    window.location.reload()
-  }
+  // 未登录时访问任何业务页面都回到登录页
+  useEffect(() => {
+    if (!isCloudMode() || getCloudSession() || isChromelessRoute(pathname)) return
+    router.replace(loginHref(pathname))
+  }, [pathname, router])
 
-  if (status !== 'error') return null
-
-  const isNetworkIssue = kind === 'network'
+  if (notices.length === 0) return null
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-sidebar text-foreground shadow-2xl">
-        <div className="flex items-start gap-3 p-6 pb-4">
-          <div className="size-10 shrink-0 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <AlertTriangle className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold tracking-tight">云数据库连接失败</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{message}</p>
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[2100] w-full max-w-lg px-4 space-y-2">
+      {notices.map((notice) => (
+        <div
+          key={notice.id}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          className={`rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${
+            notice.tone === 'error'
+              ? 'border-red-500/30 bg-red-950/80 text-red-200'
+              : 'border-border bg-sidebar/95 text-foreground'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <span className="flex-1 leading-relaxed">{notice.text}</span>
+            <button
+              type="button"
+              onClick={() => setNotices((prev) => prev.filter((item) => item.id !== notice.id))}
+              className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="关闭提示"
+            >
+              <X className="size-4" />
+            </button>
           </div>
         </div>
-
-        <div className="px-6 pb-4">
-          <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            {isNetworkIssue
-              ? '可以选择临时使用本地模式：数据会保存到这台设备，不会同步到云端；恢复连接后重新切回云端，将以云端数据为准。'
-              : '请先检查设置里的项目地址与 anon key；如果是首次配置，还需要先在 Supabase 的 SQL Editor 里执行建表脚本。'}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={useLocalMode}
-            className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <CloudOff className="size-4" />
-            <span>临时用本地模式</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void start()}
-            className="h-9 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <RefreshCw className="size-4" />
-            <span>重试连接</span>
-          </button>
-        </div>
-      </div>
+      ))}
     </div>
   )
 }

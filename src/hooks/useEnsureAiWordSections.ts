@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { dictionaryLoader } from '@/core/dictionaryLoader'
-import { getWordFromAiCache, getWordOverride, mergeWordIntoAiCache, saveWordOverride } from '@/db'
+import { applyAiFillToCustomBook, getWordFromAiCache, mergeWordIntoAiCache } from '@/db'
 import {
   fetchAiDictionaryWordEtymology,
   fetchAiDictionaryWordExamples,
@@ -15,7 +15,7 @@ import {
 import { isAiWordCoreReady, mergeAiWordCore, queryAiWordCore } from '@/lib/aiWordCore'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
-import type { WordItem, WordOverrideRecord } from '@/types'
+import type { WordItem } from '@/types'
 
 export type AiWordSection = 'core' | 'syllables' | 'examples' | 'phrases' | 'etymology'
 
@@ -91,41 +91,6 @@ function syncWorkspaceWord(word: WordItem, section: AiWordSection) {
   })
 }
 
-type WordOverride = Awaited<ReturnType<typeof getWordOverride>>
-
-function overrideKeys(section: AiWordSection): (keyof WordOverrideRecord)[] {
-  if (section === 'syllables') return ['syllables', 'silentIndices']
-  if (section === 'examples') return ['examples']
-  if (section === 'phrases') return ['phrases']
-  if (section === 'etymology') return ['etymology']
-  return []
-}
-
-function overrideValue(
-  record: Partial<WordOverrideRecord> | undefined,
-  section: AiWordSection
-): unknown {
-  if (section === 'syllables') return [record?.syllables, record?.silentIndices]
-  if (section === 'examples') return record?.examples
-  if (section === 'phrases') return record?.phrases
-  if (section === 'etymology') return record?.etymology
-  return undefined
-}
-
-function sectionOverridePatch(
-  record: WordOverride,
-  section: AiWordSection
-): Partial<WordItem> {
-  if (!record) return {}
-  if (section === 'syllables') {
-    return { syllables: record.syllables, silentIndices: record.silentIndices }
-  }
-  if (section === 'examples') return { examples: record.examples }
-  if (section === 'phrases') return { phrases: record.phrases }
-  if (section === 'etymology') return { etymology: record.etymology }
-  return {}
-}
-
 async function generateSection(
   config: AiClientConfig,
   snapshot: WordItem,
@@ -134,7 +99,6 @@ async function generateSection(
   const cached = await getWordFromAiCache(snapshot.name)
   let word = cached ? { ...snapshot, ...cached } : snapshot
   if (isSectionReady(word, section)) return word
-  const overrideBefore = section === 'core' ? undefined : await getWordOverride(word.id)
 
   try {
     if (section === 'core') {
@@ -191,27 +155,7 @@ async function generateSection(
       patch = { etymology: raw.etymology }
     }
 
-    const keys = overrideKeys(section)
-    const savedOverride = await saveWordOverride(word.id, word.name, patch, {
-      keys,
-      snapshot: JSON.stringify(keys.map((key) => overrideBefore?.[key])),
-    })
-    if (
-      JSON.stringify(overrideValue(savedOverride, section)) !==
-      JSON.stringify(overrideValue(patch, section))
-    ) {
-      const manualPatch = sectionOverridePatch(savedOverride, section)
-      const manuallyUpdated = { ...word, ...manualPatch }
-      return await mergeWordIntoAiCache(
-        {
-          name: word.name,
-          ...manualPatch,
-          aiSections: { [section]: 'ready' },
-        },
-        manuallyUpdated
-      )
-    }
-
+    void applyAiFillToCustomBook(useWorkspaceStore.getState().currentBook?.id, word.id, patch)
     return await mergeWordIntoAiCache(
       {
         name: word.name,
