@@ -1,12 +1,12 @@
 /**
  * 云端仓库实现（Supabase / PostgREST）。
  *
- * 只覆盖「需要跨设备共享」的表：自定义词库、错词本、单元进度、单词覆盖、
+ * 只覆盖「需要跨设备共享」的表：自定义词库、错词本、单元进度、
  * 翻译自定义题库 + 完成记录、上传的阅读文章与影音条目、学习位置。
  * 内置官方词库、离线词库缓存（aiWordCache）与所有设置项都不会走到这里。
  *
  * 账号规则（与 supabase/schema.sql 对齐）：
- * - 进度表（word_records / unit_progress / book_progress / word_overrides / app_state / translate_state）
+ * - 进度表（word_records / unit_progress / book_progress / app_state / translate_state）
  *   读写都带当前登录账号的 account_id；
  * - 内容表（vocab_books / translate_books / reading_articles / radio_items）只读
  *   account_id 为空（共享）或等于当前账号（个人）的行；写入时显式带上归属。
@@ -21,7 +21,6 @@ import type {
   VocabularyBook,
   WordItem,
   WordMasteryRecord,
-  WordOverrideRecord,
 } from '@/types'
 import type { ReadingArticle } from '@/resources/readingData'
 import type { RadioItem } from '@/resources/radioData'
@@ -38,7 +37,6 @@ import type {
   TranslateProgressState,
   TranslateRepository,
   UnitProgressRepository,
-  WordOverridesRepository,
   WordRecordsRepository,
 } from '@/db/repository'
 
@@ -63,7 +61,6 @@ function visibleTo(id: string): string {
 function fail(error: unknown, fallback: string): never {
   throw new CloudRequestError(cloudErrorMessage(error, fallback), cloudErrorCode(error))
 }
-
 /** PostgREST 单次最多返回 Max Rows（默认 1000）行，超出部分会被静默截断，列表读取一律分页 */
 const PAGE_SIZE = 1000
 /** 批量写入每批行数，避免单个请求体过大 */
@@ -272,53 +269,6 @@ function unitProgressToRow(record: UnitProgressRecord, owner: string) {
     started_at: record.startedAt ?? null,
     last_studied_at: record.lastStudiedAt ?? null,
     completed_at: record.completedAt ?? null,
-  }
-}
-
-interface WordOverrideRow {
-  word_id: string
-  name: string
-  phonetic_us: string | null
-  phonetic_uk: string | null
-  pos_list: WordOverrideRecord['posList'] | null
-  syllables: string[] | null
-  etymology: WordOverrideRecord['etymology'] | null
-  silent_indices: number[] | null
-  examples: WordOverrideRecord['examples'] | null
-  phrases: WordOverrideRecord['phrases'] | null
-  updated_at: number
-}
-
-function wordOverrideFromRow(row: WordOverrideRow): WordOverrideRecord {
-  return {
-    wordId: row.word_id,
-    name: row.name,
-    phoneticUs: row.phonetic_us ?? undefined,
-    phoneticUk: row.phonetic_uk ?? undefined,
-    posList: row.pos_list ?? undefined,
-    syllables: row.syllables ?? undefined,
-    etymology: row.etymology ?? undefined,
-    silentIndices: row.silent_indices ?? undefined,
-    examples: row.examples ?? undefined,
-    phrases: row.phrases ?? undefined,
-    updatedAt: row.updated_at,
-  }
-}
-
-function wordOverrideToRow(record: WordOverrideRecord, owner: string) {
-  return {
-    account_id: owner,
-    word_id: record.wordId,
-    name: record.name,
-    phonetic_us: record.phoneticUs ?? null,
-    phonetic_uk: record.phoneticUk ?? null,
-    pos_list: record.posList ?? null,
-    syllables: record.syllables ?? null,
-    etymology: record.etymology ?? null,
-    silent_indices: record.silentIndices ?? null,
-    examples: record.examples ?? null,
-    phrases: record.phrases ?? null,
-    updated_at: record.updatedAt ?? Date.now(),
   }
 }
 
@@ -634,51 +584,6 @@ const unitProgress: UnitProgressRepository = {
   },
 }
 
-const wordOverrides: WordOverridesRepository = {
-  async get(wordId) {
-    const { data, error } = await client()
-      .from('word_overrides')
-      .select('*')
-      .eq('account_id', accountId())
-      .eq('word_id', wordId)
-      .maybeSingle()
-    if (error) fail(error, '读取单词自定义数据失败')
-    return data ? wordOverrideFromRow(data as WordOverrideRow) : undefined
-  },
-  async getAll() {
-    const me = accountId()
-    const rows = await selectAllPages<WordOverrideRow>(
-      (from, to) =>
-        client().from('word_overrides').select('*').eq('account_id', me).order('word_id').range(from, to),
-      '读取单词自定义数据失败'
-    )
-    return rows.map(wordOverrideFromRow)
-  },
-  async bulkGet(wordIds) {
-    if (!wordIds.length) return []
-    const me = accountId()
-    const map = new Map<string, WordOverrideRecord>()
-    for (const ids of chunk(Array.from(new Set(wordIds)), IN_FILTER_CHUNK)) {
-      const { data, error } = await client()
-        .from('word_overrides')
-        .select('*')
-        .eq('account_id', me)
-        .in('word_id', ids)
-      if (error) fail(error, '读取单词自定义数据失败')
-      for (const row of (data as WordOverrideRow[] | null) ?? []) {
-        map.set(row.word_id, wordOverrideFromRow(row))
-      }
-    }
-    return wordIds.map((id) => map.get(id))
-  },
-  async put(record) {
-    const { error } = await client()
-      .from('word_overrides')
-      .upsert(wordOverrideToRow(record, accountId()), { onConflict: 'account_id,word_id' })
-    if (error) fail(error, '保存单词自定义数据失败')
-  },
-}
-
 interface AppStateRow {
   current_book_id: string | null
   current_unit_index: number | null
@@ -742,13 +647,12 @@ const appState: AppStateRepository = {
       updatedAt: row ? row.updated_at ?? 0 : 0,
     }
   },
-  async put(state: ProgressState, changedBookModes = []) {
-    const me = accountId()
+  async put(state: ProgressState) {
     const { error } = await client()
       .from('app_state')
       .upsert(
         {
-          account_id: me,
+          account_id: accountId(),
           current_book_id: state.currentBookId ?? null,
           current_unit_index: Math.max(0, state.currentUnitIndex ?? 0),
           loop_counts: state.loopCounts ?? {},
@@ -758,15 +662,29 @@ const appState: AppStateRepository = {
         { onConflict: 'account_id' }
       )
     if (error) fail(error, '保存学习进度失败')
-    if (changedBookModes.length === 0) return
-    for (const batch of chunk(changedBookModes, WRITE_BATCH_SIZE)) {
-      const { error: progressError } = await client()
+  },
+  async putBookModes(entries) {
+    if (entries.length === 0) return
+    const me = accountId()
+    const positive = entries.filter((entry) => Math.floor(entry.unitIndex) > 0)
+    const zero = entries.filter((entry) => Math.floor(entry.unitIndex) <= 0)
+    for (const batch of chunk(positive, WRITE_BATCH_SIZE)) {
+      const { error } = await client()
         .from('book_progress')
         .upsert(
           batch.map((entry) => bookProgressToRow(entry, me)),
           { onConflict: 'account_id,book_id,mode' }
         )
-      if (progressError) fail(progressError, '保存学习进度失败')
+      if (error) fail(error, '保存学习进度失败')
+    }
+    for (const entry of zero) {
+      const { error } = await client()
+        .from('book_progress')
+        .delete()
+        .eq('account_id', me)
+        .eq('book_id', entry.bookId)
+        .eq('mode', entry.mode)
+      if (error) fail(error, '保存学习进度失败')
     }
   },
 }
@@ -896,7 +814,6 @@ export const cloudRepositories: Repositories = {
   books,
   wordRecords,
   unitProgress,
-  wordOverrides,
   appState,
   translate,
   reading,
@@ -1133,15 +1050,6 @@ export const cloudMigration = {
       items.map((item) => unitProgressToRow(item, me)),
       'account_id,unit_id,mode',
       'unit_id'
-    )
-  },
-  insertWordOverrides(items: WordOverrideRecord[]) {
-    const me = accountId()
-    return insertMissing(
-      'word_overrides',
-      items.map((item) => wordOverrideToRow(item, me)),
-      'account_id,word_id',
-      'word_id'
     )
   },
   insertBookProgress(items: BookModeEntry[]) {

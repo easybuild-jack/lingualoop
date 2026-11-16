@@ -16,7 +16,6 @@ import type {
   UnitProgressRecord,
   VocabularyBook,
   WordMasteryRecord,
-  WordOverrideRecord,
 } from '@/types'
 import type { ReadingArticle } from '@/resources/readingData'
 import type { RadioItem } from '@/resources/radioData'
@@ -53,13 +52,6 @@ export interface UnitProgressRepository {
   deleteByBook(bookId: string): Promise<void>
 }
 
-export interface WordOverridesRepository {
-  get(wordId: string): Promise<WordOverrideRecord | undefined>
-  getAll(): Promise<WordOverrideRecord[]>
-  bulkGet(wordIds: string[]): Promise<(WordOverrideRecord | undefined)[]>
-  put(record: WordOverrideRecord): Promise<void>
-}
-
 /**
  * 原来散落在 localStorage 的「学习进度」类字段。
  * 注意：皮肤、音量、快捷键、AI Key 等设置项不在其中，它们永远只留在本机。
@@ -74,7 +66,7 @@ export interface ProgressState {
   updatedAt: number
 }
 
-/** book_progress 的一行：只推送发生变化的 (book, mode)，避免旧设备整表覆盖其他设备的新位置 */
+/** book_progress 的一行：只写发生变化的 (book, mode)，避免整表覆盖其他设备的新位置 */
 export interface BookModeEntry {
   bookId: string
   mode: PracticeMode
@@ -90,7 +82,10 @@ export interface TranslateProgressState {
 
 export interface AppStateRepository {
   get(): Promise<ProgressState | null>
-  put(state: ProgressState, changedBookModes?: BookModeEntry[]): Promise<void>
+  /** 学习位置、循环次数、已学词根（不含书内位置） */
+  put(state: ProgressState): Promise<void>
+  /** 书内位置：unitIndex 为 0 等同于「没有记录」，删掉该行而不是写一行 0 */
+  putBookModes(entries: BookModeEntry[]): Promise<void>
 }
 
 export interface TranslateRepository {
@@ -118,7 +113,6 @@ export interface Repositories {
   books: BooksRepository
   wordRecords: WordRecordsRepository
   unitProgress: UnitProgressRepository
-  wordOverrides: WordOverridesRepository
   appState: AppStateRepository
   translate: TranslateRepository
   reading: ReadingRepository
@@ -172,18 +166,11 @@ export const localRepositories: Repositories = {
       await db.unitProgress.where('bookId').equals(bookId).delete()
     },
   },
-  wordOverrides: {
-    get: (wordId) => db.wordOverrides.get(wordId),
-    getAll: () => db.wordOverrides.toArray(),
-    bulkGet: async (wordIds) => db.wordOverrides.bulkGet(wordIds),
-    put: async (record) => {
-      await db.wordOverrides.put(record)
-    },
-  },
   appState: {
     // 本地模式的进度本来就存在 localStorage（zustand persist），这里只是占位实现
     get: async () => null,
     put: async () => {},
+    putBookModes: async () => {},
   },
   translate: {
     // 本地模式的翻译题库走 localStorage，云端实现才有真正的读写

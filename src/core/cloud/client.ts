@@ -134,10 +134,18 @@ export class CloudRequestError extends Error {
 
 /** Postgres / PostgREST 错误码（如 23505、23514、P0001），取不到时返回空串 */
 export function cloudErrorCode(error: unknown): string {
-  return (error as { code?: string } | null)?.code ?? ''
+  const code = (error as { code?: string } | null)?.code ?? ''
+  if (!code && !(error instanceof CloudRequestError) && describeError(error).status === 'network') {
+    return NETWORK_ERROR_CODE
+  }
+  return code
 }
+
+/** 连不上数据库时 CloudRequestError 使用的错误码（PostgREST 自身没有这类错误码） */
+export const NETWORK_ERROR_CODE = 'NETWORK'
 
 /** 是否为「网络不可达」类错误——这种要提示用户可切到本地模式 */
 export function isNetworkCloudError(error: unknown): boolean {
+  if (error instanceof CloudRequestError) return error.code === NETWORK_ERROR_CODE
   return describeError(error).status === 'network'
 }

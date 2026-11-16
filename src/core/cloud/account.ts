@@ -7,7 +7,7 @@
  */
 import { getCloudClient, cloudErrorCode, cloudErrorMessage } from './client'
 import { clearCloudSession, getCloudAccountId, saveCloudSession } from './config'
-import { clearScopedProgressCache } from './scopedStorage'
+import { clearLegacyCloudProgressCache } from './scopedStorage'
 
 export const USERNAME_MAX_LENGTH = 32
 export const PASSWORD_MIN_LENGTH = 6
@@ -107,7 +107,6 @@ export async function verifyCurrentAccount(): Promise<boolean> {
 }
 
 export function logoutAccount(): void {
-  const accountId = getCloudAccountId()
-  if (accountId) clearScopedProgressCache(accountId)
+  clearLegacyCloudProgressCache()
   clearCloudSession()
 }

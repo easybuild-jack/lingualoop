@@ -12,7 +12,7 @@ import {
   subscribeCloudMode,
 } from '@/core/cloud/config'
 import { logoutAccount } from '@/core/cloud/account'
-import { flushCloudSync } from '@/core/cloud/sync'
+import { waitForCloudWrites } from '@/core/cloud/progress'
 import { LookingWordmark, type EyeState } from './LookingWordmark'
 import { AccountAuthForm, type AccountAuthMode } from './AccountAuthForm'
 
@@ -63,7 +63,7 @@ export function LoginView() {
   // 先把上一个账号待推送的进度发完，再整页重载：内存里上一个账号的进度不能留到下一个账号登录后
   const switchAccount = async () => {
     setLeaving(true)
-    await flushCloudSync()
+    await waitForCloudWrites()
     logoutAccount()
     window.location.reload()
   }

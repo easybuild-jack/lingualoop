@@ -63,7 +63,7 @@ export function TranslateImportModal() {
     setErrorMsg('')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!parsedSentences.length) {
       setErrorMsg('未检测到有效的句子，请检查格式后重试')
@@ -87,7 +87,10 @@ export function TranslateImportModal() {
       updatedAt: Date.now(),
     }
 
-    addCustomBook(newBook)
+    if (!(await addCustomBook(newBook))) {
+      setErrorMsg('保存到数据库失败，请稍后重试')
+      return
+    }
     setImportModalOpen(false)
     setRawText('')
     setBookName('')

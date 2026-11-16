@@ -124,7 +124,7 @@ export default function TranslatePage() {
   const handleDeleteCustomGroup = useCallback(
     (bookId: string, name: string) => {
       if (window.confirm(`确定删除自定义分组「${name}」吗？`)) {
-        deleteCustomBook(bookId)
+        void deleteCustomBook(bookId)
       }
     },
     [deleteCustomBook]

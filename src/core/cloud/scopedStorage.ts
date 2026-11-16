@@ -1,21 +1,20 @@
 /**
- * zustand persist 的存储适配：设置类字段全设备共用，进度类字段按数据源分开存。
+ * zustand persist 的存储适配：设置类字段全设备共用，进度类字段只在本地模式下存本机。
  *
  * - 本地模式：与以前完全相同，整份状态写在原 key 下。
- * - 云模式：进度字段写到 `${name}::cloud::${accountId}`，原 key 里的进度字段保持不动。
- *   这样本地模式的进度不会被云端值覆盖（断开数据库后仍是本地那份），
- *   不同账号在同一台设备上也不会看到彼此缓存的学习位置。
- *   云模式未登录时进度字段既不读也不写。
+ * - 云模式：进度字段以数据库为准，本机既不读也不写（每次启动从数据库载入，改动直接写数据库）；
+ *   原 key 里本地模式的进度保持不动，断开数据库后仍是本地那份。
  */
 import type { StateStorage } from 'zustand/middleware'
-import { getCloudAccountId, isCloudMode } from './config'
+import { isCloudMode } from './config'
 
 interface PersistEnvelope {
   state?: Record<string, unknown>
   version?: number
 }
 
-const SCOPE_SEPARATOR = '::cloud::'
+/** 旧版本按账号缓存进度用的 key 片段（`${name}::cloud::${accountId}`），现在只用于清理 */
+const LEGACY_SCOPE_SEPARATOR = '::cloud::'
 
 function canUseStorage(): boolean {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined'
@@ -39,40 +38,25 @@ function pick(state: Record<string, unknown>, keys: readonly string[], include: 
   return result
 }
 
-/** 云模式下当前账号的进度 key；本地模式返回 'local'，云模式未登录返回 null */
-function scopedKey(name: string): string | 'local' | null {
-  if (!isCloudMode()) return 'local'
-  const accountId = getCloudAccountId()
-  return accountId ? `${name}${SCOPE_SEPARATOR}${accountId}` : null
-}
-
 export function createScopedProgressStorage(progressKeys: readonly string[]): StateStorage {
-  // 内存里的进度属于水合时的数据源；之后账号或模式变了（如另一个标签页切换了账号，本页还没来得及重载），
-  // 也只能写回原来的 key，不能把这份进度写进新账号的缓存
-  const boundScopes = new Map<string, string | null>()
-  const writeScope = (name: string) => (boundScopes.has(name) ? boundScopes.get(name)! : scopedKey(name))
+  // 页面载入时的数据源决定本页的读写方式；之后切换模式会整页重载
+  const boundModes = new Map<string, boolean>()
+  const cloudFor = (name: string) => (boundModes.has(name) ? boundModes.get(name)! : isCloudMode())
 
   return {
     getItem(name) {
       if (!canUseStorage()) return null
-      const scope = scopedKey(name)
-      boundScopes.set(name, scope)
+      const cloud = isCloudMode()
+      boundModes.set(name, cloud)
       const baseRaw = localStorage.getItem(name)
-      if (scope === 'local') return baseRaw
-
+      if (!cloud) return baseRaw
       const base = parseEnvelope(baseRaw)
-      const scoped = scope ? parseEnvelope(localStorage.getItem(scope)) : null
-      if (!base && !scoped) return null
-      const state = {
-        ...pick(base?.state ?? {}, progressKeys, false),
-        ...pick(scoped?.state ?? {}, progressKeys, true),
-      }
-      return JSON.stringify({ state, version: base?.version ?? scoped?.version ?? 0 })
+      if (!base) return null
+      return JSON.stringify({ state: pick(base.state ?? {}, progressKeys, false), version: base.version ?? 0 })
     },
     setItem(name, value) {
       if (!canUseStorage()) return
-      const scope = writeScope(name)
-      if (scope === 'local') {
+      if (!cloudFor(name)) {
         localStorage.setItem(name, value)
         return
       }
@@ -84,18 +68,10 @@ export function createScopedProgressStorage(progressKeys: readonly string[]): St
         ...pick(next.state, progressKeys, false),
       }
       localStorage.setItem(name, JSON.stringify({ state: mergedBase, version: next.version ?? 0 }))
-      if (scope) {
-        localStorage.setItem(
-          scope,
-          JSON.stringify({ state: pick(next.state, progressKeys, true), version: next.version ?? 0 })
-        )
-      }
     },
     removeItem(name) {
       if (!canUseStorage()) return
-      const scope = writeScope(name)
-      if (scope === 'local') localStorage.removeItem(name)
-      else if (scope) localStorage.removeItem(scope)
+      if (!cloudFor(name)) localStorage.removeItem(name)
     },
   }
 }
@@ -106,14 +82,13 @@ export function readLocalPersistedState(name: string): Record<string, unknown> {
   return parseEnvelope(localStorage.getItem(name))?.state ?? {}
 }
 
-/** 退出登录时清掉该账号在本机缓存的进度 */
-export function clearScopedProgressCache(accountId: string): void {
+/** 清掉旧版本按账号缓存在本机的进度（现在进度只在数据库里） */
+export function clearLegacyCloudProgressCache(): void {
   if (!canUseStorage()) return
-  const suffix = `${SCOPE_SEPARATOR}${accountId}`
   const keys: string[] = []
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i)
-    if (key?.endsWith(suffix)) keys.push(key)
+    if (key?.includes(LEGACY_SCOPE_SEPARATOR)) keys.push(key)
   }
   keys.forEach((key) => localStorage.removeItem(key))
 }

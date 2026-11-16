@@ -3,18 +3,17 @@ import type {
   WordMasteryRecord,
   UnitProgressRecord,
   WordItem,
-  WordOverrideRecord,
-  WordEtymology,
   PracticeMode,
-  WordExample,
   ContentAccountId,
 } from '@/types'
 import { DEFAULT_SAMPLE_CUSTOM_BOOK } from '@/resources/books'
 import { buildWordId } from '@/lib/wordId'
 import { db } from './local'
 import { getRepositories } from './repository'
-import { isCloudMode } from '@/core/cloud/config'
+import { getCloudAccountId, isCloudMode } from '@/core/cloud/config'
 import { cloudMigration, cloudOperations } from '@/core/cloud/supabaseRepository'
+import { reportCloudError } from '@/core/cloud/notices'
+import type { ContentVisibility } from '@/core/cloud/visibility'
 
 export { db }
 export { localRepositories } from './repository'
@@ -25,7 +24,13 @@ export type { Repositories } from './repository'
  *
  * 这里所有函数都通过 getRepositories() 取数据仓库——配置了云数据库就落到 Supabase，
  * 没配置就落到本地 IndexedDB，业务逻辑只写一份。
+ * 云模式下读写直接打到数据库，失败不重发，只在页面上提示（见 core/cloud/notices）。
  */
+
+function reportFailure(err: unknown, action: string) {
+  console.error(`${action}失败:`, err)
+  if (isCloudMode()) reportCloudError(err, action)
+}
 
 /**
  * 本地模式下沿用 Dexie 事务。云模式下这里没有串行保护：
@@ -51,7 +56,7 @@ export async function getVocabularyBookById(bookId: string): Promise<VocabularyB
   try {
     return await getRepositories().books.get(bookId)
   } catch (err) {
-    console.error('Failed to get book:', err)
+    reportFailure(err, '读取词库')
     return undefined
   }
 }
@@ -68,7 +73,7 @@ export async function getWordRecord(wordId: string): Promise<WordMasteryRecord |
   try {
     return await getRepositories().wordRecords.get(wordId)
   } catch (err) {
-    console.error('Failed to get word record:', err)
+    reportFailure(err, '读取单词记录')
     return undefined
   }
 }
@@ -91,20 +96,7 @@ export async function getAllWordRecords(): Promise<WordMasteryRecord[]> {
   try {
     return await getRepositories().wordRecords.getAll()
   } catch (err) {
-    console.error('Failed to get all word records:', err)
-    return []
-  }
-}
-
-/** 批量读取单词自定义覆盖 */
-export async function getWordOverridesBulk(
-  wordIds: string[]
-): Promise<(WordOverrideRecord | undefined)[]> {
-  if (!wordIds.length) return []
-  try {
-    return await getRepositories().wordOverrides.bulkGet(wordIds)
-  } catch (err) {
-    console.error('Failed to get word overrides:', err)
+    reportFailure(err, '读取单词记录')
     return []
   }
 }
@@ -181,7 +173,7 @@ export async function recordWordAttempt(
     await repositories.wordRecords.put(updated)
     return updated
   } catch (err) {
-    console.error('Failed to record word attempt:', err)
+    reportFailure(err, '记录练习结果')
   }
 }
 
@@ -202,7 +194,7 @@ export async function eliminateErrorWord(wordId: string) {
       })
     }
   } catch (err) {
-    console.error('Failed to eliminate error word:', err)
+    reportFailure(err, '更新错词本')
   }
 }
 
@@ -222,7 +214,7 @@ export async function removeErrorWord(wordId: string) {
       })
     }
   } catch (err) {
-    console.error('Failed to remove error word:', err)
+    reportFailure(err, '移出错词本')
   }
 }
 
@@ -254,7 +246,7 @@ export async function getActiveTroubleWords(): Promise<{ word: WordItem; record:
     }
     return result
   } catch (err) {
-    console.error('Failed to get active trouble words:', err)
+    reportFailure(err, '读取生错词本')
     return []
   }
 }
@@ -305,7 +297,7 @@ export async function toggleStarWord(wordId: string, bookId: string, wordItem?: 
     })
     return nextStarred
   } catch (err) {
-    console.error('Failed to toggle star word:', err)
+    reportFailure(err, '切换生词本')
     return false
   }
 }
@@ -361,7 +353,7 @@ export async function getCustomBooks(): Promise<VocabularyBook[]> {
 
     return custom
   } catch (err) {
-    console.error('Failed to load custom books:', err)
+    reportFailure(err, '读取自定义词库')
     return isCloudMode() ? [] : [DEFAULT_SAMPLE_CUSTOM_BOOK]
   }
 }
@@ -415,9 +407,61 @@ export async function mergeWordsIntoBook(bookId: string, words: WordItem[]) {
     await repositories.books.put(nextBook)
     return { book: nextBook, updated, added }
   } catch (err) {
-    console.error('Failed to merge words into book:', err)
+    reportFailure(err, '并入词库')
     return null
   }
+}
+
+export type ImportSkipReason = 'not-owned' | 'not-shared' | 'missing'
+
+export interface ImportIntoBookResult {
+  book: VocabularyBook | null
+  added: number
+  updated: number
+  /** 没有写入的单词数（目标词库不符合所选归属，或已被删除） */
+  skipped: number
+  skipReason?: ImportSkipReason
+}
+
+/**
+ * 重新导入：把单词并进已有词库。已有的词按新数据更新（保留原位置），没有的追加，文件里没有的旧词保留。
+ *
+ * 云模式下按所选归属处理（visibility 必传）：
+ * - 「共享」：目标必须是共享词库，任何账号都能更新或新增；
+ * - 「个人」：目标必须是当前账号的个人词库；
+ * 不符合的整批跳过并计数，由调用方提示用户，不会写入也不会报 23514。
+ * 数据库读写失败时抛出，由调用方提示。
+ */
+export async function importWordsIntoBook(
+  bookId: string,
+  words: WordItem[],
+  visibility?: ContentVisibility
+): Promise<ImportIntoBookResult> {
+  const skipAll = (book: VocabularyBook | null, skipReason: ImportSkipReason): ImportIntoBookResult => ({
+    book,
+    added: 0,
+    updated: 0,
+    skipped: words.length,
+    skipReason,
+  })
+  const ops = cloudOps()
+  if (!ops) {
+    const result = await mergeWordsIntoBook(bookId, words)
+    return result ? { ...result, skipped: 0 } : skipAll(null, 'missing')
+  }
+
+  const repositories = getRepositories()
+  const book = await repositories.books.get(bookId)
+  if (!book) return skipAll(null, 'missing')
+  const owner = book.accountId ?? null
+  if (visibility === 'shared' ? owner !== null : owner !== getCloudAccountId()) {
+    return skipAll(book, visibility === 'shared' ? 'not-shared' : 'not-owned')
+  }
+  const merged = await ops.mergeWordsIntoBook(bookId, words)
+  // 读到之后被别的账号删除或改成个人：数据库函数返回 NULL，同样跳过
+  if (!merged) return skipAll(book, 'not-owned')
+  const updatedBook = (await repositories.books.get(bookId)) ?? book
+  return { book: updatedBook, added: merged.added, updated: merged.updated, skipped: 0 }
 }
 
 /**
@@ -468,7 +512,7 @@ export async function deleteCustomVocabularyBook(bookId: string): Promise<boolea
 
     return true
   } catch (err) {
-    console.error('Failed to delete custom vocabulary book:', err)
+    reportFailure(err, '删除词库')
     return false
   }
 }
@@ -490,7 +534,7 @@ export async function getUnitProgressRecord(
   try {
     return await getRepositories().unitProgress.get(unitId, mode)
   } catch (err) {
-    console.error('Failed to get unit progress:', err)
+    reportFailure(err, '读取单元进度')
     return undefined
   }
 }
@@ -540,7 +584,7 @@ export async function reconcileUnitProgressRecord(params: {
       return record
     })
   } catch (err) {
-    console.error('Failed to reconcile unit progress:', err)
+    reportFailure(err, '更新单元进度')
     return undefined
   }
 }
@@ -555,7 +599,7 @@ export async function getBookUnitProgressRecords(
     const records = await getRepositories().unitProgress.getByBook(bookId)
     return records.filter((record) => record.mode === mode)
   } catch (err) {
-    console.error('Failed to get book unit progress:', err)
+    reportFailure(err, '读取单元进度')
     return []
   }
 }
@@ -595,7 +639,7 @@ export async function markUnitWordForRetry(params: {
       return record
     })
   } catch (err) {
-    console.error('Failed to mark unit word for retry:', err)
+    reportFailure(err, '保存单元进度')
     return null
   }
 }
@@ -687,7 +731,7 @@ export async function markUnitWordCompleted(params: {
       return record
     })
   } catch (err) {
-    console.error('Failed to mark unit word completed:', err)
+    reportFailure(err, '保存单元进度')
     return null
   }
 }
@@ -702,163 +746,7 @@ export async function clearUnitProgress(unitId: string, mode: PracticeMode): Pro
   try {
     await getRepositories().unitProgress.delete(unitId, mode)
   } catch (err) {
-    console.error('Failed to clear unit progress:', err)
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* 单词自定义覆盖                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * 保存单个单词的用户自定义切分与构词覆盖
- * 1. 写入 wordOverrides 表
- * 2. 同步更新 wordRecords 中已有的离线快照
- * 3. 同步更新自定义词库中该词条的持久化数据
- */
-export async function saveWordOverride(
-  wordId: string,
-  name: string,
-  overrides: {
-    phoneticUs?: string
-    phoneticUk?: string
-    posList?: WordItem['posList']
-    syllables?: string[]
-    etymology?: WordEtymology
-    silentIndices?: number[]
-    examples?: WordExample[]
-    phrases?: { en: string; cn: string }[]
-  },
-  guard?: {
-    keys: (keyof WordOverrideRecord)[]
-    snapshot: string
-  }
-): Promise<WordOverrideRecord> {
-  const cleanName = name.trim()
-  let record: WordOverrideRecord = {
-    wordId,
-    name: cleanName,
-    phoneticUs: overrides.phoneticUs,
-    phoneticUk: overrides.phoneticUk,
-    posList: overrides.posList,
-    syllables: overrides.syllables,
-    etymology: overrides.etymology,
-    silentIndices: overrides.silentIndices,
-    examples: overrides.examples,
-    phrases: overrides.phrases,
-    updatedAt: Date.now(),
-  }
-
-  try {
-    const applyOverride = async () => {
-      const repositories = getRepositories()
-      const existing = await repositories.wordOverrides.get(wordId)
-      if (
-        guard &&
-        JSON.stringify(guard.keys.map((key) => existing?.[key])) !== guard.snapshot
-      ) {
-        record = existing ?? {
-          wordId,
-          name: cleanName,
-          updatedAt: Date.now(),
-        }
-        return
-      }
-      record = {
-        ...existing,
-        wordId,
-        name: cleanName,
-        phoneticUs: overrides.phoneticUs !== undefined ? overrides.phoneticUs : existing?.phoneticUs,
-        phoneticUk: overrides.phoneticUk !== undefined ? overrides.phoneticUk : existing?.phoneticUk,
-        posList: overrides.posList !== undefined ? overrides.posList : existing?.posList,
-        syllables: overrides.syllables !== undefined ? overrides.syllables : existing?.syllables,
-        etymology: overrides.etymology !== undefined ? overrides.etymology : existing?.etymology,
-        silentIndices: overrides.silentIndices !== undefined ? overrides.silentIndices : existing?.silentIndices,
-        examples: overrides.examples !== undefined ? overrides.examples : existing?.examples,
-        phrases: overrides.phrases !== undefined ? overrides.phrases : existing?.phrases,
-        updatedAt: Date.now(),
-      }
-      await repositories.wordOverrides.put(record)
-
-      // 1. 同步更新 wordRecords 快照
-      const existingWordRecord = await repositories.wordRecords.get(wordId)
-      if (existingWordRecord?.wordItem) {
-        await repositories.wordRecords.update(wordId, {
-          wordItem: {
-            ...existingWordRecord.wordItem,
-            phoneticUs: record.phoneticUs || existingWordRecord.wordItem.phoneticUs,
-            phoneticUk: record.phoneticUk || existingWordRecord.wordItem.phoneticUk,
-            posList: record.posList?.length ? record.posList : existingWordRecord.wordItem.posList,
-            syllables: record.syllables || existingWordRecord.wordItem.syllables,
-            etymology: record.etymology !== undefined ? record.etymology : existingWordRecord.wordItem.etymology,
-            silentIndices: record.silentIndices !== undefined ? record.silentIndices : existingWordRecord.wordItem.silentIndices,
-            examples: record.examples !== undefined ? record.examples : existingWordRecord.wordItem.examples,
-            phrases: record.phrases !== undefined ? record.phrases : existingWordRecord.wordItem.phrases,
-          },
-        })
-      }
-
-      // 2. 同步更新自定义词库中的条目
-      const customBooks = await repositories.books.getCustom()
-      for (const book of customBooks) {
-        if (book.words?.some((w) => w.id === wordId || w.name.toLowerCase() === cleanName.toLowerCase())) {
-          const updatedWords = book.words.map((w) => {
-            if (w.id === wordId || w.name.toLowerCase() === cleanName.toLowerCase()) {
-              return {
-                ...w,
-                phoneticUs: overrides.phoneticUs || w.phoneticUs,
-                phoneticUk: overrides.phoneticUk || w.phoneticUk,
-                posList: overrides.posList?.length ? overrides.posList : w.posList,
-                syllables: overrides.syllables || w.syllables,
-                etymology: overrides.etymology !== undefined ? overrides.etymology : w.etymology,
-                silentIndices: overrides.silentIndices !== undefined ? overrides.silentIndices : w.silentIndices,
-                examples: overrides.examples !== undefined ? overrides.examples : w.examples,
-                phrases: overrides.phrases !== undefined ? overrides.phrases : w.phrases,
-              }
-            }
-            return w
-          })
-          await repositories.books.update(book.id, {
-            words: updatedWords,
-            updatedAt: Date.now(),
-          })
-        }
-      }
-    }
-
-    if (isCloudMode()) {
-      await applyOverride()
-    } else {
-      await db.transaction('rw', db.wordOverrides, db.wordRecords, db.books, applyOverride)
-    }
-  } catch (err) {
-    console.error('Failed to save word override:', err)
-  }
-
-  return record
-}
-
-/**
- * 查询单个单词的自定义覆盖
- */
-export async function getWordOverride(wordId: string): Promise<WordOverrideRecord | undefined> {
-  try {
-    return await getRepositories().wordOverrides.get(wordId)
-  } catch (err) {
-    console.error('Failed to get word override:', err)
-    return undefined
-  }
-}
-
-/**
- * 查询全部单词覆盖
- */
-export async function getAllWordOverrides(): Promise<WordOverrideRecord[]> {
-  try {
-    return await getRepositories().wordOverrides.getAll()
-  } catch (err) {
-    console.error('Failed to get all word overrides:', err)
-    return []
+    reportFailure(err, '清空单元进度')
   }
 }
 
@@ -959,21 +847,12 @@ export async function mergeWordIntoAiCache(
         await db.aiWordCache.put(merged)
         const record = await getWordRecord(canonicalId)
         if (record?.wordItem) {
-          const override = await getWordOverride(canonicalId)
           const recordWord: WordItem = {
             ...record.wordItem,
             ...patch,
             id: canonicalId,
             name: merged.name,
             aiSections: merged.aiSections,
-          }
-          if (override?.phoneticUs) recordWord.phoneticUs = override.phoneticUs
-          if (override?.phoneticUk) recordWord.phoneticUk = override.phoneticUk
-          if (override?.posList?.length) recordWord.posList = override.posList
-          if (override?.syllables?.length) recordWord.syllables = override.syllables
-          if (override?.etymology !== undefined) recordWord.etymology = override.etymology
-          if (override?.silentIndices !== undefined) {
-            recordWord.silentIndices = override.silentIndices
           }
           await updateWordRecord(canonicalId, {
             wordName: merged.name,
@@ -989,7 +868,6 @@ export async function mergeWordIntoAiCache(
       'rw',
       db.aiWordCache,
       db.wordRecords,
-      db.wordOverrides,
       applyMerge
     )
   } catch (err) {

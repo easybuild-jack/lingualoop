@@ -5,8 +5,11 @@ import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { createScopedProgressStorage } from '@/core/cloud/scopedStorage'
+import { isCloudMode } from '@/core/cloud/config'
+import { reportCloudError } from '@/core/cloud/notices'
+import { getRepositories } from '@/db/repository'
 
-/** 云模式下按账号分开缓存的字段（自定义句库来自云端，完成记录与位置属于账号） */
+/** 云模式下不存本机的字段（自定义句库与完成记录、位置都以数据库为准） */
 const TRANSLATE_PROGRESS_KEYS = ['currentBookId', 'completedSentenceIds', 'books'] as const
 
 interface TranslateState {
@@ -40,8 +43,9 @@ interface TranslateState {
   playSentenceAudio: (textOrRate?: string | number, customRate?: number) => void
   playWordAudio: (word?: string, customRate?: number) => void
   stopSentenceAudio: () => void
-  addCustomBook: (book: TranslationBook) => void
-  deleteCustomBook: (bookId: string) => void
+  /** 云模式下先写数据库，失败时提示并返回 false，页面状态不变 */
+  addCustomBook: (book: TranslationBook) => Promise<boolean>
+  deleteCustomBook: (bookId: string) => Promise<boolean>
   setImportModalOpen: (open: boolean) => void
 }
 
@@ -237,7 +241,15 @@ export const useTranslateStore = create<TranslateState>()(
         set({ isSpeaking: false })
       },
 
-      addCustomBook: (book: TranslationBook) => {
+      addCustomBook: async (book: TranslationBook) => {
+        if (isCloudMode()) {
+          try {
+            await getRepositories().translate.putBook(book)
+          } catch (error) {
+            reportCloudError(error, '保存自定义句库')
+            return false
+          }
+        }
         set((state) => {
           const filtered = state.books.filter((b) => b.id !== book.id)
           return {
@@ -249,9 +261,18 @@ export const useTranslateStore = create<TranslateState>()(
             isSpeaking: false,
           }
         })
+        return true
       },
 
-      deleteCustomBook: (bookId: string) => {
+      deleteCustomBook: async (bookId: string) => {
+        if (isCloudMode()) {
+          try {
+            await getRepositories().translate.deleteBook(bookId)
+          } catch (error) {
+            reportCloudError(error, '删除自定义句库')
+            return false
+          }
+        }
         set((state) => {
           const filtered = state.books.filter((b) => b.id !== bookId)
           const nextBooks = filtered.length > 0 ? filtered : DEFAULT_TRANSLATION_BOOKS
@@ -264,6 +285,7 @@ export const useTranslateStore = create<TranslateState>()(
             isSpeaking: false,
           }
         })
+        return true
       },
 
       setImportModalOpen: (open: boolean) => {

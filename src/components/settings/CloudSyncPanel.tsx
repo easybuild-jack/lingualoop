@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Check, Cloud, CloudOff, Database, KeyRound, Loader2, LogOut, RefreshCw, Upload, UserRound } from 'lucide-react'
+import { Check, Cloud, CloudOff, Database, KeyRound, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react'
 import {
   clearCloudConfig,
   getCloudConfig,
@@ -15,46 +15,35 @@ import {
 } from '@/core/cloud/config'
 import { probeCloudConnection } from '@/core/cloud/client'
 import { changeAccountPassword, logoutAccount, PASSWORD_MIN_LENGTH } from '@/core/cloud/account'
-import { uploadLocalDataToCloud, type ContentVisibility, type MigrationResult } from '@/core/cloud/migrate'
-import { flushCloudSync, hydrateTranslateProgress, hydrateWorkspaceProgress } from '@/core/cloud/sync'
-import { VisibilityPicker } from '@/components/cloud/VisibilityPicker'
+import { getLocalUploadRecord } from '@/core/cloud/migrate'
+import { waitForCloudWrites } from '@/core/cloud/progress'
 
 interface Feedback {
   tone: 'ok' | 'error' | 'info'
   text: string
 }
 
-function formatStats(result: MigrationResult): string {
-  const parts = [
-    result.books ? `词库 ${result.books}` : '',
-    result.words ? `生词记录 ${result.words}` : '',
-    result.progress ? `单元进度 ${result.progress}` : '',
-    result.bookProgress ? `书内位置 ${result.bookProgress}` : '',
-    result.appState ? '学习位置' : '',
-    result.overrides ? `单词修改 ${result.overrides}` : '',
-    result.translateBooks ? `自定义句库 ${result.translateBooks}` : '',
-    result.readingArticles ? `阅读文章 ${result.readingArticles}` : '',
-  ].filter(Boolean)
-  if (parts.length === 0) {
-    return '云端已是最新，无需上传（已存在的条目不会被覆盖）。'
-  }
-  return `已上传：${parts.join('、')}。${result.skipped ? `跳过 ${result.skipped} 条云端已存在的记录。` : ''}`
+function describeUploadRecord(): string {
+  const record = getLocalUploadRecord()
+  if (!record) return '本机还没有向这个数据库上传过本地数据。登录后如果检测到本地有数据，会询问一次是否上传。'
+  const when = new Date(record.handledAt).toLocaleString()
+  return record.uploaded
+    ? `本机的本地数据已于 ${when} 上传过一次，之后不再上传。`
+    : `已于 ${when} 选择不上传本机的本地数据，之后不再询问。`
 }
 
 /**
  * 云数据库（Supabase）配置面板。
  *
- * 配置了就需要登录账号、跨设备同步；没配置就一切留在本机。设置项（AI Key、皮肤、音量）永远不入库。
+ * 配置了就需要登录账号、所有数据直接读写数据库；没配置就一切留在本机。设置项（AI Key、皮肤、音量）永远不入库。
  */
 export function CloudSyncPanel() {
   const existing = getCloudConfig()
   const session = getCloudSession()
   const [url, setUrl] = useState(existing?.url ?? '')
   const [anonKey, setAnonKey] = useState(existing?.anonKey ?? '')
-  const [busy, setBusy] = useState<'idle' | 'testing' | 'saving' | 'uploading' | 'password' | 'logout'>('idle')
+  const [busy, setBusy] = useState<'idle' | 'testing' | 'saving' | 'password' | 'logout'>('idle')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [migration, setMigration] = useState<MigrationResult | null>(null)
-  const [uploadVisibility, setUploadVisibility] = useState<ContentVisibility>('personal')
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null)
@@ -97,27 +86,6 @@ export function CloudSyncPanel() {
     window.location.reload()
   }
 
-  const handleUpload = async () => {
-    setBusy('uploading')
-    setFeedback(null)
-    setMigration(null)
-    try {
-      const result = await uploadLocalDataToCloud(uploadVisibility)
-      setMigration(result)
-      setFeedback({ tone: 'ok', text: formatStats(result) })
-      // 新补上的学习位置与翻译记录立即生效，不必刷新页面
-      await hydrateWorkspaceProgress()
-      await hydrateTranslateProgress()
-    } catch (error) {
-      setFeedback({
-        tone: 'error',
-        text: error instanceof Error ? error.message : '上传失败，请检查网络与数据库权限。',
-      })
-    } finally {
-      setBusy('idle')
-    }
-  }
-
   const handleDisconnect = () => {
     clearCloudConfig()
     window.location.reload()
@@ -130,7 +98,7 @@ export function CloudSyncPanel() {
 
   const handleLogout = async () => {
     setBusy('logout')
-    await flushCloudSync()
+    await waitForCloudWrites()
     logoutAccount()
     window.location.replace('/login')
   }
@@ -161,7 +129,7 @@ export function CloudSyncPanel() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">跨设备数据同步 (Cloud Database)</h3>
+          <h3 className="text-sm font-semibold text-foreground">云数据库 (Cloud Database)</h3>
           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
             配置 Supabase 后需要登录账号：错词本、学习进度按账号保存，自定义词库、句库、阅读文章与影音可选「个人」或「共享」，换设备登录同一账号即可继续学。
             未配置时全部数据只留在本机，无需登录，与本机模式完全一致。
@@ -333,28 +301,10 @@ export function CloudSyncPanel() {
               <span>本地数据迁移</span>
             </h4>
             <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-              把这个浏览器在本地模式下的数据上传到当前账号：错词本、单元进度（含官方词库）、学习位置与翻译记录归当前账号；
-              自定义词库、句库与阅读文章按下方选择存为个人或共享。只补齐云端没有的记录，不会覆盖云端已有数据。
+              本地模式下的数据只在第一次连接这个数据库时询问一次是否上传；之后所有操作都直接读写数据库，不再在本机与数据库之间同步。
             </p>
           </div>
-          <VisibilityPicker value={uploadVisibility} onChange={setUploadVisibility} />
-          <button
-            type="button"
-            onClick={() => void handleUpload()}
-            disabled={busy !== 'idle' || !cloudActive || !session}
-            className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
-          >
-            {busy === 'uploading' ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            <span>上传本地数据到当前账号</span>
-          </button>
-          {!cloudActive && (
-            <p className="text-xs text-amber-400/90 leading-relaxed">
-              当前处于本地模式，先在下方恢复云端连接后再上传。
-            </p>
-          )}
-          {cloudActive && !session && (
-            <p className="text-xs text-amber-400/90 leading-relaxed">请先登录账号再上传。</p>
-          )}
+          <p className="text-xs text-muted-foreground leading-relaxed">{describeUploadRecord()}</p>
           {fallback && (
             <button
               type="button"
@@ -364,9 +314,6 @@ export function CloudSyncPanel() {
               <RefreshCw className="size-4" />
               <span>恢复云端连接（以云端数据为准）</span>
             </button>
-          )}
-          {migration && (
-            <p className="text-xs text-muted-foreground leading-relaxed">{formatStats(migration)}</p>
           )}
         </div>
       )}
