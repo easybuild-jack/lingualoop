@@ -70,7 +70,7 @@ const STEPS = [
   },
 ]
 
-const STEP_MS = 3200
+const STEP_MS = 2000
 
 /** 学英语的完整闭环：七个环节环形排布，自动轮播，悬停暂停 */
 export function LoopDiagram() {
@@ -143,9 +143,9 @@ export function LoopDiagram() {
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] p-6">
+        <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] p-6 min-h-[220px] sm:h-[220px] flex flex-col">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+            <div className="size-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
               <StepIcon className="size-5" />
             </div>
             <div>
@@ -155,8 +155,8 @@ export function LoopDiagram() {
               </h3>
             </div>
           </div>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground min-h-[44px]">{step.desc}</p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{step.desc}</p>
+          <div className="mt-auto pt-4 flex flex-wrap items-center gap-2">
             {step.modules.map((m) => (
               <span key={m} className="px-2.5 py-1 rounded-md bg-muted text-xs text-foreground">
                 {m}
@@ -173,7 +173,7 @@ export function LoopDiagram() {
           {STEPS.map((s, i) => (
             <button key={s.key} type="button" onClick={() => setActive(i)} className="group cursor-pointer">
               <div className="h-1 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full bg-primary transition-all duration-500 ${i <= active ? 'w-full' : 'w-0'}`} />
+                <div className={`h-full bg-primary transition-all duration-300 ${i <= active ? 'w-full' : 'w-0'}`} />
               </div>
               <div
                 className={`mt-2 text-sm text-center transition-colors ${
