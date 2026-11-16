@@ -6,7 +6,7 @@
 >
 > 执行顺序：**作者先审 `supabase/schema.sql` → 确认后再按第 5 节改业务代码**。脚本确认前不要动业务代码。
 >
-> 第二轮决定（见 5.8 和 `docs/supabase-code-recheck.md` 第六节）取代了第 5 节里与「同步」「单词修改」相关的条目：不再有本地与数据库之间的同步，本地数据只上传一次；页面上不再修改单词。
+> 第二轮、第三轮决定（见 5.8、5.9 和 `docs/supabase-code-recheck.md` 第六、七节）取代了第 5 节里与「同步」「单词修改」相关的条目：本地与数据库之间只保留设置里的两个手动同步（同步资料、同步进度），没有任何自动同步；页面上不再修改单词，AI 补全写回自定义词库。
 
 ---
 
@@ -255,7 +255,7 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 任务 | 涉及文件 |
 |---|---|
 | 改为 `claim_collected_words` → 处理 → `complete_collected_words` / `fail_collected_word`；AI 解析失败时调用 `fail`，不再留在队头 | `src/core/cloud/collector.ts` |
-| 本地数据首次上传到云端：进度写到当前登录账号；内容在上传时询问共享 / 个人。第二轮：每台设备对每个数据库只询问一次（本地有数据才问），上传或不上传都会记下 | `src/core/cloud/migrate.ts`、`src/components/cloud/CloudSyncGate.tsx` |
+| 本地数据到数据库：第三轮起改为设置里的两个手动操作「同步资料」（选共享 / 个人）和「同步进度」（写到当前账号），只做加法、可重复执行，合并规则见复查报告 7.2 | `src/core/cloud/manualSync.ts`、`src/components/settings/CloudSyncPanel.tsx` |
 | 补上官方词库单元进度的迁移 | `src/core/cloud/migrate.ts`（H2） |
 
 ### 5.7 外部同步工具约定
@@ -277,6 +277,17 @@ alter table vocab_books add constraint vocab_books_account_name_key unique nulls
 | 7 | 词库列表和词库页显示「官方 / 共享 / 个人」 | `src/app/books/page.tsx` |
 
 词库删除保持现状（直接删数据库那一行），与第 5 条不冲突。以上都不需要改 `supabase/schema.sql`。
+
+### 5.9 第三轮决定
+
+| # | 决定 | 涉及文件 |
+|---|---|---|
+| 1 | 去掉登录后的一次性上传框；设置里新增「同步」：同步资料（自定义词库、句库、文章，选个人 / 共享，别人的个人内容跳过并计数）、同步进度（错词本、单元进度、书内位置、已学词根、翻译记录，只增不减）。都只做加法、可重复执行、完成后提示新增 / 更新 / 跳过数量 | `manualSync.ts`、`CloudSyncPanel.tsx`、`CloudSyncGate.tsx` |
+| 2 | 除这两个按钮外没有任何自动同步；日常操作直接读写数据库。收件箱轮询、「临时用本地模式」保留（都不在本地与数据库之间搬数据） | — |
+| 3 | AI 补全写回当前自定义词库：本地模式写本机，数据库模式写共享词库或自己的个人词库，官方词库不改 | `src/db/index.ts`（`applyAiFillToCustomBook`）、`aiWordCore.ts`、`useEnsureAiWordSections.ts` |
+| 4 | 错误只在页面顶部提示，不整页遮罩、不自动重试；连不上时提示里带「重新加载 / 临时用本地模式」 | `CloudSyncGate.tsx`、`notices.ts`、`progress.ts` |
+
+以上都不需要改 `supabase/schema.sql`。
 
 ---
 
