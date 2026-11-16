@@ -1,12 +1,10 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Scissors, Combine, Star, Pencil } from 'lucide-react'
+import { Scissors, Combine, Star } from 'lucide-react'
 import type { WordItem } from '@/types'
 import { WordCardShell } from '@/components/typing/WordCardShell'
 import { TypingLines } from '@/components/typing/TypingLines'
-import { EditWordSplitModal } from '@/components/modals/EditWordSplitModal'
-import { useCanEditWordSplit } from '@/hooks/usePermissions'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { formatShortcutDisplay } from '@/lib/shortcuts'
 import { useEnsureAiWordSections, type AiWordSection } from '@/hooks/useEnsureAiWordSections'
@@ -37,13 +35,10 @@ export function LearnCard({
 }: LearnCardProps) {
   const isSplit = useWorkspaceStore((s) => s.isCurrentWordSplit)
   const toggleSplit = useWorkspaceStore((s) => s.toggleCurrentWordSplit)
-  const isEditModalOpen = useWorkspaceStore((s) => s.isEditWordSplitModalOpen)
-  const setEditModalOpen = useWorkspaceStore((s) => s.setEditWordSplitModalOpen)
   const shortcuts = useWorkspaceStore((s) => s.shortcuts)
   const isErrorPracticeActive = useWorkspaceStore((s) => s.isErrorPracticeActive)
   const starredWordIds = useWorkspaceStore((s) => s.starredWordIds)
   const starCurrentWord = useWorkspaceStore((s) => s.starCurrentWord)
-  const canEditWordSplit = useCanEditWordSplit()
   const [contextTab, setContextTab] = useState<WordContextTab>('examples')
   const requestedSections: AiWordSection[] = [
     'core',
@@ -75,19 +70,6 @@ export function LearnCard({
         {isSplit ? <Combine className="size-3.5" /> : <Scissors className="size-3.5" />}
         <span>{isSplit ? '合并' : '音节'}</span>
       </button>
-
-      {canEditWordSplit && (
-        <button
-          type="button"
-          onClick={() => setEditModalOpen(true)}
-          className={`${WORD_HEADER_BUTTON_CLASS} text-muted-foreground hover:text-foreground hover:bg-muted`}
-          title="修改单词切分与构词"
-          aria-label="修改单词切分与构词"
-        >
-          <Pencil className="size-3.5" />
-          <span>修改</span>
-        </button>
-      )}
 
       {!isErrorPracticeActive && (
         <button
@@ -135,12 +117,6 @@ export function LearnCard({
         contextTab={contextTab}
         onContextTabChange={setContextTab}
         etymologyErrorText="构词分析失败，下次进入时将重新补全"
-      />
-
-      <EditWordSplitModal
-        isOpen={isEditModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        word={word}
       />
     </WordCardShell>
   )

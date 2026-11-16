@@ -27,7 +27,6 @@ export function PracticeFooter({ showPeekHint = false, isReady = true }: Practic
     isErrorPracticeActive,
     conqueredErrorWordIds,
     toggleCurrentWordSplit,
-    setEditWordSplitModalOpen,
     mode,
     starredWordIds,
     starCurrentWord,
