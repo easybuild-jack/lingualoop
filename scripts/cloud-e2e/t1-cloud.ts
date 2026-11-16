@@ -53,9 +53,9 @@ async function main() {
     unitWordIds: ['w_apple', 'w_pear'], deferForRetry: false,
   })
   await cloud.appState.put(
-    { currentBookId: 'cet4', currentUnitIndex: 3, bookModeProgress: {}, loopCounts: { learn: 2 }, learnedRootIds: [], updatedAt: Date.now() },
-    [{ bookId: 'cet4', mode: 'learn', unitIndex: 3, updatedAt: Date.now() }]
+    { currentBookId: 'cet4', currentUnitIndex: 3, bookModeProgress: {}, loopCounts: { learn: 2 }, learnedRootIds: [], updatedAt: Date.now() }
   )
+  await cloud.appState.putBookModes([{ bookId: 'cet4', mode: 'learn', unitIndex: 3, updatedAt: Date.now() }])
   asBob()
   check('bob does not see alice word record', (await cloud.wordRecords.get('w_apple')) === undefined)
   check('bob has no unit progress', (await cloud.unitProgress.get('cet4_unit_0', 'learn')) === undefined)
@@ -71,11 +71,18 @@ async function main() {
   check('alice app_state + book_progress', aliceState?.currentUnitIndex === 3 && aliceState.bookModeProgress.cet4?.learn === 3, aliceState)
 
   console.log('# book_progress newer wins')
-  await cloud.appState.put(
-    { currentBookId: 'cet4', currentUnitIndex: 3, bookModeProgress: {}, loopCounts: {}, learnedRootIds: [], updatedAt: Date.now() },
-    [{ bookId: 'cet4', mode: 'learn', unitIndex: 1, updatedAt: 1 }]
-  )
+  await cloud.appState.putBookModes([{ bookId: 'cet4', mode: 'learn', unitIndex: 1, updatedAt: 1 }])
   check('older book_progress write ignored', (await cloud.appState.get())?.bookModeProgress.cet4?.learn === 3)
+
+  console.log('# book_progress never stores zero rows')
+  await cloud.appState.putBookModes([
+    { bookId: 'cet6', mode: 'learn', unitIndex: 0, updatedAt: Date.now() },
+    { bookId: 'cet6', mode: 'dictation', unitIndex: 2, updatedAt: Date.now() },
+  ])
+  check('zero entry is not inserted', sql(`select count(*) from book_progress where account_id='${alice.accountId}' and book_id='cet6' and mode='learn'`) === '0')
+  await cloud.appState.putBookModes([{ bookId: 'cet6', mode: 'dictation', unitIndex: 0, updatedAt: Date.now() }])
+  check('back to 0 deletes the row', sql(`select count(*) from book_progress where account_id='${alice.accountId}' and book_id='cet6'`) === '0')
+  check('no zero rows at all', sql('select count(*) from book_progress where unit_index = 0') === '0')
 
   console.log('# content visibility')
   const now = Date.now()
@@ -167,7 +174,7 @@ async function main() {
   storage.setItem(`lingualoop-workspace-storage::cloud::${alice.accountId}`, '{}')
   account.logoutAccount()
   check('logout clears session', config.getCloudSession() === null)
-  check('logout clears scoped cache', storage.getItem(`lingualoop-workspace-storage::cloud::${alice.accountId}`) === null)
+  check('logout clears legacy per-account progress cache', storage.getItem(`lingualoop-workspace-storage::cloud::${alice.accountId}`) === null)
 
   summary()
 }
