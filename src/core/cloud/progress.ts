@@ -4,8 +4,8 @@
  * 单词记录、单元进度、词库等由 db/index.ts 直接读写数据库；学习位置、循环次数、已学词根、
  * 书内单元位置和翻译进度是 zustand store 的字段，这里负责：
  *   1. 启动时从数据库载入（数据库为准；没有记录就用默认值，不写空行）；
- *   2. 之后每次变更立即写数据库。写入按顺序逐个执行，不防抖、不排队补推、失败不重发：
- *      失败时提示「数据库暂不可用」，用户重试后从数据库重新载入。
+ *   2. 之后每次变更立即写数据库。写入按顺序逐个执行，不防抖、不排队、失败不重发：
+ *      失败时只在页面上提示；之后的变更照常写入（写的是当时与数据库不同的全部字段）。
  *
  * 设置类字段（皮肤/音量/快捷键/AI Key）不在此列，永远只在本地。
  */
@@ -39,7 +39,7 @@ function enqueueWrite(key: string, owner: string | null, action: string, task: (
     try {
       await task()
     } catch (error) {
-      reportCloudError(error, action, { unavailable: true })
+      reportCloudError(error, action)
     }
   })
   writeChains.set(key, next)

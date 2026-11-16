@@ -1005,7 +1005,7 @@ export const cloudOperations = {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 迁移：批量「只补齐、不覆盖」                                                */
+/* 手动同步：批量「只补齐、不覆盖」                                                */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -1024,7 +1024,7 @@ async function insertMissing(
       .from(table)
       .upsert(batch, { onConflict, ignoreDuplicates: true })
       .select(returning)
-    if (error) fail(error, '上传本地数据失败')
+    if (error) fail(error, '同步本地数据失败')
     inserted += ((data as unknown[] | null) ?? []).length
   }
   return inserted
@@ -1066,5 +1066,20 @@ export const cloudMigration = {
   },
   insertReadingArticles(items: ReadingArticle[]) {
     return insertMissing('reading_articles', items.map(readingToRow), 'id', 'id')
+  },
+  /** 手动同步进度：把已合并好的行写回（覆盖同主键的行），按批写入 */
+  async upsertWordRecords(items: WordMasteryRecord[]): Promise<void> {
+    const me = accountId()
+    for (const batch of chunk(items.map((item) => wordRecordToRow(item, me)), WRITE_BATCH_SIZE)) {
+      const { error } = await client().from('word_records').upsert(batch, { onConflict: 'account_id,word_id' })
+      if (error) fail(error, '同步进度失败')
+    }
+  },
+  async upsertUnitProgress(items: UnitProgressRecord[]): Promise<void> {
+    const me = accountId()
+    for (const batch of chunk(items.map((item) => unitProgressToRow(item, me)), WRITE_BATCH_SIZE)) {
+      const { error } = await client().from('unit_progress').upsert(batch, { onConflict: 'account_id,unit_id,mode' })
+      if (error) fail(error, '同步进度失败')
+    }
   },
 }

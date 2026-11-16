@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Check, Cloud, CloudOff, Database, KeyRound, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react'
+import { Check, Cloud, CloudOff, Database, FolderSync, KeyRound, ListChecks, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react'
 import {
   clearCloudConfig,
   getCloudConfig,
@@ -15,21 +15,20 @@ import {
 } from '@/core/cloud/config'
 import { probeCloudConnection } from '@/core/cloud/client'
 import { changeAccountPassword, logoutAccount, PASSWORD_MIN_LENGTH } from '@/core/cloud/account'
-import { getLocalUploadRecord } from '@/core/cloud/migrate'
-import { waitForCloudWrites } from '@/core/cloud/progress'
+import {
+  formatContentSyncResult,
+  formatProgressSyncResult,
+  syncLocalContentToCloud,
+  syncLocalProgressToCloud,
+} from '@/core/cloud/manualSync'
+import { loadTranslateProgress, loadWorkspaceProgress, waitForCloudWrites } from '@/core/cloud/progress'
+import type { ContentVisibility } from '@/core/cloud/visibility'
+import { pushCloudNotice } from '@/core/cloud/notices'
+import { VisibilityPicker } from '@/components/cloud/VisibilityPicker'
 
 interface Feedback {
   tone: 'ok' | 'error' | 'info'
   text: string
-}
-
-function describeUploadRecord(): string {
-  const record = getLocalUploadRecord()
-  if (!record) return '本机还没有向这个数据库上传过本地数据。登录后如果检测到本地有数据，会询问一次是否上传。'
-  const when = new Date(record.handledAt).toLocaleString()
-  return record.uploaded
-    ? `本机的本地数据已于 ${when} 上传过一次，之后不再上传。`
-    : `已于 ${when} 选择不上传本机的本地数据，之后不再询问。`
 }
 
 /**
@@ -42,7 +41,11 @@ export function CloudSyncPanel() {
   const session = getCloudSession()
   const [url, setUrl] = useState(existing?.url ?? '')
   const [anonKey, setAnonKey] = useState(existing?.anonKey ?? '')
-  const [busy, setBusy] = useState<'idle' | 'testing' | 'saving' | 'password' | 'logout'>('idle')
+  const [busy, setBusy] = useState<
+    'idle' | 'testing' | 'saving' | 'password' | 'logout' | 'sync-content' | 'sync-progress'
+  >('idle')
+  const [syncVisibility, setSyncVisibility] = useState<ContentVisibility>('personal')
+  const [syncFeedback, setSyncFeedback] = useState<Feedback | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -84,6 +87,41 @@ export function CloudSyncPanel() {
     saveCloudConfig(url, anonKey)
     // 切换数据源需要把各页面/store 的初始状态全部重建，重载一次最省事也最可靠
     window.location.reload()
+  }
+
+  const handleSyncContent = async () => {
+    setBusy('sync-content')
+    setSyncFeedback(null)
+    try {
+      const result = await syncLocalContentToCloud(syncVisibility)
+      // 页面上的句库列表来自 store，同步后从数据库重新载入；词库页、阅读页打开时会自己重新读取
+      await loadTranslateProgress()
+      const text = formatContentSyncResult(result)
+      setSyncFeedback({ tone: 'ok', text })
+      pushCloudNotice(text)
+    } catch (error) {
+      setSyncFeedback({ tone: 'error', text: `同步资料失败：${error instanceof Error ? error.message : '请稍后重试'}` })
+    } finally {
+      setBusy('idle')
+    }
+  }
+
+  const handleSyncProgress = async () => {
+    setBusy('sync-progress')
+    setSyncFeedback(null)
+    try {
+      await waitForCloudWrites()
+      const result = await syncLocalProgressToCloud()
+      await loadWorkspaceProgress()
+      await loadTranslateProgress()
+      const text = formatProgressSyncResult(result)
+      setSyncFeedback({ tone: 'ok', text })
+      pushCloudNotice(text)
+    } catch (error) {
+      setSyncFeedback({ tone: 'error', text: `同步进度失败：${error instanceof Error ? error.message : '请稍后重试'}` })
+    } finally {
+      setBusy('idle')
+    }
   }
 
   const handleDisconnect = () => {
@@ -298,13 +336,54 @@ export function CloudSyncPanel() {
           <div>
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Database className="size-4 text-primary" />
-              <span>本地数据迁移</span>
+              <span>同步</span>
             </h4>
             <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-              本地模式下的数据只在第一次连接这个数据库时询问一次是否上传；之后所有操作都直接读写数据库，不再在本机与数据库之间同步。
+              把这个浏览器在本地模式下的数据手动同步到数据库，可以重复执行。只做加法：数据库没有的新增，已有的按导入规则更新、追加，
+              不删除数据库里的任何内容，也不会用更旧、更少的本地进度冲掉数据库里的进度。除这两个按钮外，本地与数据库之间没有任何自动同步。
             </p>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{describeUploadRecord()}</p>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground">同步资料：自定义词库、句库、阅读文章</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              新增的资料按下面的选择存为个人或共享；数据库里已有的保持原来的归属，别的账号的个人内容会跳过。
+            </p>
+            <VisibilityPicker value={syncVisibility} onChange={setSyncVisibility} />
+            <button
+              type="button"
+              onClick={() => void handleSyncContent()}
+              disabled={busy !== 'idle' || !cloudActive || !session}
+              className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              {busy === 'sync-content' ? <Loader2 className="size-4 animate-spin" /> : <FolderSync className="size-4" />}
+              <span>同步资料</span>
+            </button>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground">同步进度：错词本、单元进度、书内位置、已学词根、翻译记录</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">写到当前登录账号。</p>
+            <button
+              type="button"
+              onClick={() => void handleSyncProgress()}
+              disabled={busy !== 'idle' || !cloudActive || !session}
+              className="h-9 px-4 rounded-lg border border-border bg-background/60 hover:bg-muted text-sm inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              {busy === 'sync-progress' ? <Loader2 className="size-4 animate-spin" /> : <ListChecks className="size-4" />}
+              <span>同步进度</span>
+            </button>
+          </div>
+          {!cloudActive && (
+            <p className="text-xs text-amber-400/90 leading-relaxed">当前处于本地模式，先在下方恢复云端连接后再同步。</p>
+          )}
+          {cloudActive && !session && <p className="text-xs text-amber-400/90 leading-relaxed">请先登录账号再同步。</p>}
+          {syncFeedback && (
+            <p
+              role="status"
+              className={`text-xs leading-relaxed ${syncFeedback.tone === 'error' ? 'text-red-400' : 'text-emerald-400'}`}
+            >
+              {syncFeedback.text}
+            </p>
+          )}
           {fallback && (
             <button
               type="button"
