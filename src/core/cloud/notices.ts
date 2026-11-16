@@ -33,14 +33,11 @@ export function subscribeCloudNotices(listener: Listener): () => void {
   }
 }
 
-/**
- * 数据库读写失败：action 是给用户看的操作名，如「保存学习进度」。
- * options.read 为真表示只是读取失败，此时只有连不上数据库才切到本地模式。
- */
-export function reportCloudError(error: unknown, action: string, options: { read?: boolean } = {}): void {
+/** 数据库读写失败：action 是给用户看的操作名，如「保存学习进度」 */
+export function reportCloudError(error: unknown, action: string): void {
   const reason = error instanceof Error ? error.message : cloudErrorMessage(error)
   const text = `${action}失败：${reason}`
-  if ((!options.read || isNetworkCloudError(error)) && switchToLocalMode(text)) return
+  if (isNetworkCloudError(error) && switchToLocalMode(text)) return
   emit({ tone: 'error', text })
 }
 

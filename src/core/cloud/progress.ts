@@ -5,7 +5,8 @@
  * 书内单元位置和翻译进度是 zustand store 的字段，这里负责：
  *   1. 启动时从数据库载入（数据库为准；没有记录就用默认值，不写空行）；
  *   2. 之后每次变更立即写数据库。写入按顺序逐个执行，不防抖、不排队、失败不重发：
- *      一次失败后本页停止写入并自动切到本地模式（fallback.ts），不会在之后的变化里补写。
+ *      连不上数据库时本页停止写入并自动切到本地模式（fallback.ts）；数据库按业务规则拒绝时只提示。
+ *      两种情况都不会在之后的变化里补写失败的那一次。
  *
  * 设置类字段（皮肤/音量/快捷键/AI Key）不在此列，永远只在本地。
  */
@@ -17,6 +18,7 @@ import type { BookModeEntry } from '@/db/repository'
 import type { PracticeMode } from '@/types'
 import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
 import { getCloudAccountId, isCloudMode } from './config'
+import { isNetworkCloudError } from './client'
 import { reportCloudError } from './notices'
 
 const PRACTICE_MODES: PracticeMode[] = ['learn', 'dictation', 'phonetic']
@@ -27,21 +29,29 @@ const LOOP_COUNT_VALUES = [1, 2, 3, 5] as const
 /* -------------------------------------------------------------------------- */
 
 const writeChains = new Map<string, Promise<void>>()
-/** 有一次写入失败后本页不再写数据库（随即切到本地模式），之后的变化也不会补写 */
+/** 连不上数据库后本页不再写数据库（随即切到本地模式），之后的变化也不会补写 */
 let writesStopped = false
 
 /**
  * 同一类数据的写入按发生顺序逐个执行，避免旧值后到覆盖新值（app_state 没有「新者胜」触发器）。
  * owner 是开始写入监听时的账号：账号变了（如另一个标签页切换了账号）就不再写，避免写进新账号。
+ * 数据库按业务规则拒绝的写入只提示，skip 把这次的值记为已处理，之后的变化不会把它再发一次。
  */
-function enqueueWrite(key: string, owner: string | null, action: string, task: () => Promise<void>) {
+function enqueueWrite(
+  key: string,
+  owner: string | null,
+  action: string,
+  task: () => Promise<void>,
+  skip: () => void
+) {
   const previous = writeChains.get(key) ?? Promise.resolve()
   const next = previous.then(async () => {
     if (writesStopped || !isCloudMode() || !owner || getCloudAccountId() !== owner) return
     try {
       await task()
     } catch (error) {
-      writesStopped = true
+      if (isNetworkCloudError(error)) writesStopped = true
+      else skip()
       reportCloudError(error, action)
     }
   })
@@ -160,13 +170,19 @@ async function writeWorkspaceProgress(): Promise<void> {
   storedAppState = signature
 }
 
+function markWorkspaceHandled() {
+  const current = flattenBookModes(useWorkspaceStore.getState().bookModeProgress)
+  storedBookModes = new Map([...current].filter(([, unitIndex]) => unitIndex > 0))
+  storedAppState = JSON.stringify(appStateSnapshot())
+}
+
 /** 开始把学习位置的变更直接写入数据库，返回停止函数 */
 export function startWorkspaceProgressWrites(): () => void {
   const owner = getCloudAccountId()
   writesStopped = false
   return useWorkspaceStore.subscribe(() => {
     if (changedBookModes().length === 0 && JSON.stringify(appStateSnapshot()) === storedAppState) return
-    enqueueWrite('app_state', owner, '保存学习进度', writeWorkspaceProgress)
+    enqueueWrite('app_state', owner, '保存学习进度', writeWorkspaceProgress, markWorkspaceHandled)
   })
 }
 
@@ -213,12 +229,20 @@ export function startTranslateProgressWrites(): () => void {
   writesStopped = false
   return useTranslateStore.subscribe(() => {
     if (JSON.stringify(translateStateSnapshot()) === storedTranslateState) return
-    enqueueWrite('translate_state', owner, '保存翻译进度', async () => {
-      const snapshot = translateStateSnapshot()
-      const signature = JSON.stringify(snapshot)
-      if (signature === storedTranslateState) return
-      await getRepositories().translate.putState({ ...snapshot, updatedAt: Date.now() })
-      storedTranslateState = signature
-    })
+    enqueueWrite(
+      'translate_state',
+      owner,
+      '保存翻译进度',
+      async () => {
+        const snapshot = translateStateSnapshot()
+        const signature = JSON.stringify(snapshot)
+        if (signature === storedTranslateState) return
+        await getRepositories().translate.putState({ ...snapshot, updatedAt: Date.now() })
+        storedTranslateState = signature
+      },
+      () => {
+        storedTranslateState = JSON.stringify(translateStateSnapshot())
+      }
+    )
   })
 }

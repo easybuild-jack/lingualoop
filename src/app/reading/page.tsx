@@ -73,7 +73,7 @@ export default function ReadingPage() {
       })
       .catch((error) => {
         console.warn('[reading] failed to load cloud articles:', error)
-        reportCloudError(error, '读取文章', { read: true })
+        reportCloudError(error, '读取文章')
         if (!cancelled) {
           setLoadError('云数据库读取失败，暂时只能看到内置示例文章，上传与删除已暂停。')
         }

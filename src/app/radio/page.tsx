@@ -65,7 +65,7 @@ export default function RadioPage() {
       })
       .catch((error) => {
         console.warn('[radio] failed to load cloud items:', error)
-        reportCloudError(error, '读取视频', { read: true })
+        reportCloudError(error, '读取视频')
         if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频与本次会话上传的视频。')
       })
     return () => {

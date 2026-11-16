@@ -29,7 +29,7 @@ export type { Repositories } from './repository'
 
 function reportFailure(err: unknown, action: string) {
   console.error(`${action}失败:`, err)
-  if (isCloudMode()) reportCloudError(err, action, { read: action.startsWith('读取') })
+  if (isCloudMode()) reportCloudError(err, action)
 }
 
 /**

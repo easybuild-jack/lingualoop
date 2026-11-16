@@ -11,7 +11,7 @@ import {
   isCloudMode,
   subscribeCloudMode,
 } from '@/core/cloud/config'
-import { probeCloudConnection } from '@/core/cloud/client'
+import { isNetworkCloudError, probeCloudConnection } from '@/core/cloud/client'
 import { logoutAccount, verifyCurrentAccount } from '@/core/cloud/account'
 import { markCloudHydrated, resetCloudHydration } from '@/core/cloud/readiness'
 import {
@@ -38,7 +38,7 @@ function loginHref(pathname: string | null): string {
  *
  * 配置了数据库时负责：未登录跳转登录页 → 启动体检 → 从数据库载入进度 → 之后学习进度的变更直接写数据库。
  * 这里没有任何本地与数据库之间的同步（手动同步在设置面板里）。
- * 连不上数据库、载入失败、写入失败时自动切到本地模式（fallback.ts），不重发、不遮挡页面，重载后在顶部提示。
+ * 连不上数据库时自动切到本地模式（fallback.ts），重载后在顶部提示；其他失败只在顶部提示。都不重发、不遮挡页面。
  * 未配置数据库时什么都不做，与纯本地版本完全一致。
  */
 export function CloudSyncGate() {
@@ -77,7 +77,9 @@ export function CloudSyncGate() {
 
     const probe = await probeCloudConnection()
     if (!probe.ok) {
-      switchToLocalMode(`连接失败：${probe.message}`)
+      if (probe.status === 'network' && switchToLocalMode(`连接失败：${probe.message}`)) return
+      markCloudHydrated()
+      pushCloudNotice(`云数据库无法使用：${probe.message}`, 'error')
       return
     }
 
@@ -95,7 +97,10 @@ export function CloudSyncGate() {
       cleanupsRef.current.push(startWorkspaceProgressWrites(), startTranslateProgressWrites())
     } catch (error) {
       const reason = error instanceof Error ? error.message : '请稍后重试'
-      if (!switchToLocalMode(`载入学习进度失败：${reason}`)) markCloudHydrated()
+      if (isNetworkCloudError(error) && switchToLocalMode(`载入学习进度失败：${reason}`)) return
+      // 没能载入就不启动进度写入，避免用默认值覆盖数据库
+      markCloudHydrated()
+      pushCloudNotice(`从数据库载入学习进度失败：${reason}。本次的学习位置不会保存，请稍后重新加载。`, 'error')
     }
   }, [router, stopWrites])
 
