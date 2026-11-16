@@ -93,7 +93,7 @@ export function LoginView() {
               <ArrowRight className="size-3.5" />
             </Link>
           )}
-          <SkinPicker />
+          <SkinPicker showUserMenu={false} />
         </div>
       </header>
 
