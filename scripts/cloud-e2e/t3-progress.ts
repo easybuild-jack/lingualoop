@@ -76,22 +76,41 @@ async function main() {
   check('position written to app_state', sql(`select current_unit_index from app_state where account_id='${eve.accountId}'`) === '6')
   check('progress not cached in localStorage', JSON.parse(storage.getItem(WS)!).state.currentUnitIndex === 9 && storage.keys().every((key) => !key.includes('::cloud::')), storage.keys())
 
-  console.log('# a failed write switches to local mode, no retry, nothing overwritten')
-  const localBefore = storage.getItem(WS)
+  const { CloudRequestError, NETWORK_ERROR_CODE } = await import('../../src/core/cloud/client')
   const realPut = cloud.appState.putBookModes
+
+  console.log('# a write rejected by a database rule: notice only, no switch, never re-sent')
+  let rejected = 0
+  cloud.appState.putBookModes = async () => {
+    rejected += 1
+    throw new CloudRequestError('单元进度已属于别的书', '23514')
+  }
+  store.setState({ bookModeProgress: { ...store.getState().bookModeProgress, book_rule: { learn: 3, dictation: 0, phonetic: 0 } } })
+  await progress.waitForCloudWrites()
+  cloud.appState.putBookModes = realPut
+  check('rejected write: stays in cloud mode', config.isCloudMode() && fallback.takePendingFallbackNotice() === null)
+  check('rejected write: error notice shown', received.some((n) => n.tone === 'error' && n.text.includes('保存学习进度失败')), received)
+  store.setState({ learnedRootIds: [...store.getState().learnedRootIds, 'root_after_reject'] })
+  await progress.waitForCloudWrites()
+  check('later changes are still written', sql(`select learned_root_ids ? 'root_after_reject' from app_state where account_id='${eve.accountId}'`) === 't')
+  check('the rejected value is not re-sent', rejected === 1 && sql(`select count(*) from book_progress where book_id='book_rule'`) === '0', rejected)
+
+  console.log('# database unreachable: switches to local mode, no retry, nothing overwritten')
+  const localBefore = storage.getItem(WS)
   let attempts = 0
   cloud.appState.putBookModes = async () => {
     attempts += 1
-    throw new Error('boom')
+    throw new CloudRequestError('连不上数据库', NETWORK_ERROR_CODE)
   }
   store.setState({ bookModeProgress: { ...store.getState().bookModeProgress, book_kaoyan: { learn: 4, dictation: 0, phonetic: 0 } } })
   await progress.waitForCloudWrites()
   cloud.appState.putBookModes = realPut
   await sleep(300)
   await progress.waitForCloudWrites()
-  check('write failure switches to local mode', !config.isCloudMode() && config.isOfflineFallback() && config.isCloudConfigured())
+  check('connection failure switches to local mode', !config.isCloudMode() && config.isOfflineFallback() && config.isCloudConfigured())
   const pending = fallback.takePendingFallbackNotice()
   check('notice kept for after the reload', pending?.startsWith(fallback.FALLBACK_NOTICE) === true && pending.includes('保存学习进度失败'), pending)
+  check('notice explains local data and how to merge back', fallback.FALLBACK_NOTICE.includes('这台设备上保存的数据') && fallback.FALLBACK_NOTICE.includes('数据库里的数据不会丢失') && fallback.FALLBACK_NOTICE.includes('「恢复云端连接」') && fallback.FALLBACK_NOTICE.includes('「同步资料」和「同步进度」'))
   check('notice shown once', fallback.takePendingFallbackNotice() === null)
   check('write attempted once, no background retry', attempts === 1 && sql(`select count(*) from book_progress where book_id='book_kaoyan'`) === '0', attempts)
   store.setState({ currentUnitIndex: 8, bookModeProgress: { ...store.getState().bookModeProgress, book_gre: { learn: 2, dictation: 0, phonetic: 0 } } })
@@ -110,9 +129,10 @@ async function main() {
   check('not signed in: no switch', fallback.switchToLocalMode('x') === false && config.isCloudMode())
   config.saveCloudSession({ accountId: savedSession.accountId, username: savedSession.username, displayName: null })
 
-  console.log('# read failures that are not connection errors only show a notice')
-  notices.reportCloudError(new Error('bad'), '读取词库', { read: true })
-  check('plain read failure: notice only, stays in cloud mode', config.isCloudMode() && received.some((n) => n.tone === 'error' && n.text === '读取词库失败：bad'), received)
+  console.log('# other failures only show a notice')
+  notices.reportCloudError(new CloudRequestError('bad', '23514'), '保存词库')
+  notices.reportCloudError(new Error('bad'), '读取词库')
+  check('non-connection failures: notice only, stays in cloud mode', config.isCloudMode() && received.some((n) => n.text === '保存词库失败：bad') && received.some((n) => n.text === '读取词库失败：bad'), received)
 
   console.log('# account switched in another tab before this tab reloads')
   const stop2 = progress.startWorkspaceProgressWrites()
