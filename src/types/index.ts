@@ -224,6 +224,14 @@ export interface SentenceKeywordItem {
   meaningZh: string;             // 中文含义提示 (如 "鸟儿", "飞翔", "天空")
   pos?: string;                  // 词性 (如 "n.", "v.", "adj.")
   explanation?: string;          // 词义或变形说明
+  kind?: 'word' | 'phrase';      // 单词 / 带空格的短语 (如 "get up")
+}
+
+/** 句子读音（预留，暂不展示） */
+export interface SentencePronunciation {
+  ipa?: string;                  // 整句音标
+  audioUrl?: string;             // 真人/合成音频地址
+  voice?: string;                // 音色标识
 }
 
 export interface TranslationSentenceItem {
@@ -239,12 +247,14 @@ export interface TranslationSentenceItem {
     summary: string;             // 句型核心要领点拨
     tokens: SentenceTokenGrammar[]; // 逐词语法成分标注
   };
+  pronunciation?: SentencePronunciation | null; // 句子读音 (预留)
   isCustom?: boolean;            // 是否为用户导入
   createdAt?: number;
 }
 
 export interface TranslationBook {
   id: string;
+  isOfficial?: boolean;          // 是否为官方内置示例 (练习不记录任何进度)
   accountId?: ContentAccountId;
   name: string;                  // 句库名称 (如 "经典五大基础句型", "日常高频情景交流")
   description?: string;
