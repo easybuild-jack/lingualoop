@@ -55,6 +55,8 @@ export default function TranslatePage() {
   // 所有可用场景列表 (固定与听力场景分类一致 + 自动提取已有场景)
   const availableScenarios = useMemo(() => {
     const defaultOrder = [
+      '官方示例',
+      '常用短语',
       '日常生活',
       '职场商务',
       '旅游出行',

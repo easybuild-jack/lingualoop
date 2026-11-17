@@ -53,7 +53,7 @@ export const useTranslateStore = create<TranslateState>()(
   persist(
     (set, get) => ({
       books: DEFAULT_TRANSLATION_BOOKS,
-      currentBookId: DEFAULT_TRANSLATION_BOOKS[0].id,
+      currentBookId: DEFAULT_TRANSLATION_BOOKS[0]?.id || '',
       currentSentenceIndex: 0,
       isPeeking: false,
       isSentenceCompleted: false,
@@ -81,7 +81,8 @@ export const useTranslateStore = create<TranslateState>()(
         audioEngine.cancelPendingPlayback()
         const { books, currentBookId } = get()
         const currentBook = books.find((b) => b.id === currentBookId) || books[0]
-        const clampedIndex = Math.max(0, Math.min(index, currentBook.sentences.length - 1))
+        const len = currentBook?.sentences.length ?? 0
+        const clampedIndex = len > 0 ? Math.max(0, Math.min(index, len - 1)) : 0
         set({
           currentSentenceIndex: clampedIndex,
           isSentenceCompleted: false,
@@ -95,7 +96,7 @@ export const useTranslateStore = create<TranslateState>()(
         audioEngine.cancelPendingPlayback()
         const { books, currentBookId, currentSentenceIndex } = get()
         const currentBook = books.find((b) => b.id === currentBookId) || books[0]
-        if (currentSentenceIndex < currentBook.sentences.length - 1) {
+        if (currentBook && currentSentenceIndex < currentBook.sentences.length - 1) {
           set({
             currentSentenceIndex: currentSentenceIndex + 1,
             isSentenceCompleted: false,
@@ -278,7 +279,7 @@ export const useTranslateStore = create<TranslateState>()(
           const nextBooks = filtered.length > 0 ? filtered : DEFAULT_TRANSLATION_BOOKS
           return {
             books: nextBooks,
-            currentBookId: nextBooks[0].id,
+            currentBookId: nextBooks[0]?.id || '',
             currentSentenceIndex: 0,
             isSentenceCompleted: false,
             isPeeking: false,
@@ -308,7 +309,7 @@ export const useTranslateStore = create<TranslateState>()(
         const customBooks = (state.books || []).filter((b) => b.isCustom)
         state.books = [...DEFAULT_TRANSLATION_BOOKS, ...customBooks]
         if (!state.books.some((b) => b.id === state.currentBookId)) {
-          state.currentBookId = DEFAULT_TRANSLATION_BOOKS[0].id
+          state.currentBookId = state.books[0]?.id || ''
         }
       },
     }

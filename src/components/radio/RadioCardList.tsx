@@ -10,6 +10,8 @@ interface RadioCardListProps {
   isPlaying: boolean
   /** 是否显示场景分类等副标题信息（仅「场景对话」Tab 开启，日常短语与英语电台只显示名称） */
   showMetadata?: boolean
+  emptyTitle?: string
+  emptyHint?: string
   onSelectItem: (item: RadioItem) => void
   onTogglePlay: () => void
   onDeleteItem: (id: string) => void
@@ -26,6 +28,8 @@ export function RadioCardList({
   currentId,
   isPlaying,
   showMetadata = false,
+  emptyTitle = '暂无视频内容',
+  emptyHint = '点击右上角「上传视频」添加自定义视频',
   onSelectItem,
   onTogglePlay,
   onDeleteItem,
@@ -33,8 +37,8 @@ export function RadioCardList({
   if (items.length === 0) {
     return (
       <div className="py-16 text-center rounded-lg border border-dashed border-border">
-        <p className="text-sm text-foreground">暂无视频内容</p>
-        <p className="mt-1.5 text-xs text-muted-foreground">点击右上角「上传视频」添加自定义视频</p>
+        <p className="text-sm text-foreground">{emptyTitle}</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{emptyHint}</p>
       </div>
     )
   }

@@ -21,12 +21,15 @@ import { reportCloudError } from '@/core/cloud/notices'
 import { getRepositories } from '@/db/repository'
 
 type ActiveTab = RadioCategory | 'player'
+type SourceSubTab = 'official' | 'custom'
 
 const CATEGORY_TABS: RadioCategory[] = ['phrases', 'dialogue', 'radio']
 
 export default function RadioPage() {
-  // 当前激活的 Tab：'phrases' (日常短语) | 'dialogue' (场景对话) | 'radio' (英语电台) | 'player' (共用播放页)
+  // 当前激活的 Tab：'phrases' (常用短语) | 'dialogue' (场景对话) | 'radio' (英语电台) | 'player' (共用播放页)
   const [activeTab, setActiveTab] = useState<ActiveTab>('phrases')
+  // 「常用短语」与「英语电台」下的二级 Tab：官方示例 / 自定义
+  const [subTab, setSubTab] = useState<SourceSubTab>('official')
   // 记录最近一次浏览的列表分类 Tab，用于从共用播放页点击「返回列表」及上传默认分类
   const [lastCategoryTab, setLastCategoryTab] = useState<RadioCategory>('phrases')
 
@@ -110,6 +113,11 @@ export default function RadioPage() {
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       if (item.category !== activeCategory) return false
+      if (activeCategory === 'phrases' || activeCategory === 'radio') {
+        const isOfficialItem = Boolean(item.isOfficial)
+        if (subTab === 'official' && !isOfficialItem) return false
+        if (subTab === 'custom' && isOfficialItem) return false
+      }
       if (activeCategory === 'dialogue' && selectedScenario !== 'all' && item.scenario !== selectedScenario) {
         return false
       }
@@ -121,7 +129,7 @@ export default function RadioPage() {
       }
       return true
     })
-  }, [items, activeCategory, selectedScenario, searchQuery])
+  }, [items, activeCategory, subTab, selectedScenario, searchQuery])
 
   // 切换分类 Tab
   const handleSelectCategoryTab = (cat: RadioCategory) => {
@@ -366,6 +374,7 @@ export default function RadioPage() {
     }
     setItems((prev) => [newItem, ...prev])
     setLastCategoryTab(newItem.category)
+    if (newItem.category === 'phrases' || newItem.category === 'radio') setSubTab('custom')
     setCurrentId(newItem.id)
     setIsPlaying(true)
     setActiveTab('player')
@@ -473,8 +482,33 @@ export default function RadioPage() {
           )}
         </div>
 
-        {/* 列表 Tab 内容区：日常短语 / 场景对话 / 英语电台 */}
+        {/* 列表 Tab 内容区：常用短语 / 场景对话 / 英语电台 */}
         <div className={activeTab !== 'player' ? 'space-y-6 animate-fadeIn' : 'hidden'}>
+          {/* 「常用短语」与「英语电台」下方二级页签：官方示例 / 自定义 */}
+          {(activeTab === 'phrases' || activeTab === 'radio') && (
+            <div className="shrink-0 flex items-center gap-1 select-none -ml-2.5">
+              {(
+                [
+                  { id: 'official', label: '官方示例' },
+                  { id: 'custom', label: '自定义' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSubTab(tab.id)}
+                  className={`shrink-0 h-7 px-2.5 rounded-md text-[14px] transition-colors cursor-pointer ${
+                    subTab === tab.id
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* 仅「场景对话」显示场景分类筛选 */}
           {activeTab === 'dialogue' && (
             <RadioFilters
@@ -490,6 +524,20 @@ export default function RadioPage() {
             currentId={currentId}
             isPlaying={isPlaying}
             showMetadata={activeTab === 'dialogue'}
+            emptyTitle={
+              (activeTab === 'phrases' || activeTab === 'radio') && subTab === 'official'
+                ? '官方示例敬请期待'
+                : activeTab === 'dialogue' && selectedScenario === '官方示例'
+                  ? '官方示例敬请期待'
+                  : '暂无自定义视频'
+            }
+            emptyHint={
+              (activeTab === 'phrases' || activeTab === 'radio') && subTab === 'official'
+                ? '官方示例视频正在准备中，后续将陆续上线'
+                : activeTab === 'dialogue' && selectedScenario === '官方示例'
+                  ? '官方示例视频正在准备中，后续将陆续上线'
+                  : '点击右上角「上传视频」添加自定义视频'
+            }
             onSelectItem={(item) => {
               setLastCategoryTab(item.category)
               setCurrentId(item.id)
