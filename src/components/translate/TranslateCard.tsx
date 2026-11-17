@@ -20,6 +20,11 @@ import { isShortcutMatch } from '@/lib/shortcuts'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { useTranslateStore } from '@/store/useTranslateStore'
 
+/** 核心词比对：忽略大小写与首尾空白，短语内连续空白视为一个空格 */
+function normalizeKeyword(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 interface TranslateCardProps {
   sentence: TranslationSentenceItem
   sentenceIndex: number
@@ -115,7 +120,8 @@ export function TranslateCard({
 
   // 当前进行中的核心词
   const currentKeyword = keywords[currentKeywordIndex]
-  const cleanTargetWord = currentKeyword ? currentKeyword.word.trim().toLowerCase() : ''
+  const cleanTargetWord = currentKeyword ? normalizeKeyword(currentKeyword.word) : ''
+  const isPhraseKeyword = currentKeyword?.kind === 'phrase' || cleanTargetWord.includes(' ')
 
   // 当离开练习页 tab 时，立即终止正在播放或计划播放的语音
   useEffect(() => {
@@ -304,11 +310,26 @@ export function TranslateCard({
           return
         }
 
-        // 回车或空格：快速核对
-        if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+        // 短语中的空格：已输入部分与目标短语的前缀一致时，空格作为分隔符录入而不是核对
+        const isSpaceKey = e.key === ' ' || e.code === 'Space'
+        if (
+          isSpaceKey &&
+          keywordInput.trim().length > 0 &&
+          !keywordInput.endsWith(' ') &&
+          cleanTargetWord.startsWith(`${normalizeKeyword(keywordInput)} `)
+        ) {
           e.preventDefault()
           triggerKeySound()
-          if (keywordInput.trim().toLowerCase() === cleanTargetWord) {
+          setKeywordInput(`${keywordInput} `)
+          setKeywordError(false)
+          return
+        }
+
+        // 回车或空格：快速核对
+        if (e.key === 'Enter' || isSpaceKey) {
+          e.preventDefault()
+          triggerKeySound()
+          if (normalizeKeyword(keywordInput) === cleanTargetWord) {
             handleKeywordComplete()
           } else if (keywordInput.trim().length > 0) {
             setKeywordError(true)
@@ -328,7 +349,7 @@ export function TranslateCard({
           setKeywordError(false)
 
           // 核心特性：正确后直接下一个单词（无需额外按键）
-          if (nextVal.trim().toLowerCase() === cleanTargetWord) {
+          if (normalizeKeyword(nextVal) === cleanTargetWord) {
             handleKeywordComplete()
           }
         }
@@ -560,7 +581,9 @@ export function TranslateCard({
               {currentKeyword.meaningZh}
             </div>
             <p className="text-xs text-muted-foreground">
-              请拼写对应的核心英语单词（拼对后自动推进）
+              {isPhraseKeyword
+                ? '请拼写对应的英语短语，单词之间用空格分隔（拼对后自动推进）'
+                : '请拼写对应的核心英语单词（拼对后自动推进）'}
             </p>
           </div>
 
@@ -580,7 +603,7 @@ export function TranslateCard({
               {/* 用户输入 */}
               {keywordInput && (
                 <span
-                  className={`leading-none ${keywordError
+                  className={`leading-none whitespace-pre ${keywordError
                       ? 'text-destructive'
                       : isKeywordSuccess
                         ? 'text-emerald-500'
