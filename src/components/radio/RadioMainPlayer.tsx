@@ -5,7 +5,6 @@ import Link from 'next/link'
 import {
   type RadioItem,
   type PlayMode,
-  SCENARIO_ICONS,
 } from '@/resources/radioData'
 import {
   Play,
@@ -20,10 +19,6 @@ import {
   VolumeX,
   Maximize2,
   Disc3,
-  Radio,
-  Activity,
-  Wifi,
-  Sparkles,
   Languages,
 } from 'lucide-react'
 
@@ -126,7 +121,7 @@ export function RadioMainPlayer({
   }
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-4 w-full max-w-[1138px] mx-auto">
       {/* 标题 */}
       <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="min-w-0">
@@ -148,8 +143,11 @@ export function RadioMainPlayer({
         )}
       </div>
 
-      {/* 超大影音主视听视窗 (Enlarged Player Screen) */}
-      <div className={`relative w-full aspect-video min-h-[360px] md:min-h-[460px] lg:min-h-[540px] max-h-[640px] rounded-lg ${isVideo ? 'bg-black' : 'bg-card'} border border-border overflow-hidden flex items-center justify-center group`}>
+      {/* 超大影音主视听视窗 (Enlarged Player Screen)
+          整体限宽 1138px（= 640px × 16/9）而不是给画面限高：
+          aspect-video 一旦被 max-h 压扁，16:9 的视频左右就会露出黑边。
+          纯音频的示波器面板不吃比例，小屏下保留最小高度。 */}
+      <div className={`relative w-full aspect-video rounded-lg ${isVideo ? 'bg-black' : 'bg-card min-h-[360px] md:min-h-[460px] lg:min-h-[540px]'} border border-border overflow-hidden flex items-center justify-center group`}>
         {isVideo ? (
           /* 大屏视频播放器视图 */
           <div className="relative size-full flex items-center justify-center bg-black">
