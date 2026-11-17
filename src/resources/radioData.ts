@@ -7,6 +7,7 @@ export const RADIO_CATEGORY_LABELS: Record<RadioCategory, string> = {
 }
 
 export type RadioScenario =
+  | '官方示例'
   | '日常生活'
   | '职场商务'
   | '旅游出行'
@@ -15,6 +16,7 @@ export type RadioScenario =
   | string
 
 export const DEFAULT_RADIO_SCENARIOS: RadioScenario[] = [
+  '官方示例',
   '日常生活',
   '职场商务',
   '旅游出行',
@@ -28,6 +30,8 @@ export type PlayMode = 'list-loop' | 'single-loop' | 'sequential' | 'shuffle'
 
 export interface RadioItem {
   id: string
+  /** 是否为官方内置示例视频 */
+  isOfficial?: boolean
   /** 云模式归属：null = 共享，非空 = 个人；undefined = 仅本次会话（未入库） */
   accountId?: string | null
   category: RadioCategory
@@ -42,10 +46,13 @@ export interface RadioItem {
   translation?: string
   createdAt: number
   playCount: number
+  /** 关联的翻译句库 id，播放页据此显示「去练翻译」入口 */
+  translationBookId?: string
 }
 
 export const SCENARIO_ICONS: Record<string, string> = {
   全部: '✨',
+  官方示例: '🎬',
   日常生活: '☕',
   职场商务: '💼',
   旅游出行: '✈️',
@@ -53,41 +60,21 @@ export const SCENARIO_ICONS: Record<string, string> = {
   购物消费: '🛍️',
 }
 
+/** 官方示例视频：只存在于代码中，不入库，播放次数等也不记录 */
 export const DEFAULT_SAMPLE_RADIO_ITEMS: RadioItem[] = [
   {
-    id: 'sample-phrases-1',
-    category: 'phrases',
-    title: 'Everyday Essential Phrases · 高频常用短语 (示例视频)',
-    type: 'video',
-    src: '/samples/test-video.mp4',
-    duration: 15,
-    scenario: '日常生活',
-    description: '常用短语视频示例，可点击右上角「上传视频」添加自定义短语视频。',
-    createdAt: Date.now() - 1000 * 60 * 10,
-    playCount: 12,
-  },
-  {
-    id: 'sample-dialogue-1',
+    id: 'official_daily_morning_ep1',
+    isOfficial: true,
     category: 'dialogue',
-    title: 'Nature Blossom & Daily Conversation · 日常场景实景对话 (示例视频)',
+    title: 'Five More Minutes! · 再睡五分钟',
     type: 'video',
-    src: '/samples/test-video.mp4',
-    duration: 15,
-    scenario: '日常生活',
-    description: '场景对话视频示例，支持按场景分类筛选与自定义上传。',
-    createdAt: Date.now() - 1000 * 60 * 20,
-    playCount: 28,
-  },
-  {
-    id: 'sample-radio-1',
-    category: 'radio',
-    title: 'Morning English Broadcast · 晨间英语电台视听 (示例视频)',
-    type: 'video',
-    src: '/samples/test-video.mp4',
-    duration: 15,
-    scenario: '日常生活',
-    description: '英语电台视频示例，可点击右上角「上传视频」添加自定义电台视频。',
-    createdAt: Date.now() - 1000 * 60 * 30,
-    playCount: 36,
+    src: 'https://lingualoop.oss-cn-shenzhen.aliyuncs.com/video/lingualoop_morning_ep01.mp4',
+    duration: 296,
+    scenario: '官方示例',
+    description:
+      '日常生活 › 早晨起床 › 第1集：Alex 早上赖床不肯起，Emma 和小猫 Mochi 想尽办法把他叫醒。听完视频，来练练剧中的单词和句子吧。',
+    createdAt: 1794887876998,
+    playCount: 0,
+    translationBookId: 'radio_daily_morning_ep1',
   },
 ]

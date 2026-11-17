@@ -151,6 +151,7 @@ export function TranslateImportModal() {
                 onChange={(e) => setSelectedScenario(e.target.value)}
                 className="w-full h-9 px-3 rounded-md bg-sidebar border border-border focus:border-primary focus:outline-none text-sm text-foreground cursor-pointer"
               >
+                <option value="常用短语">常用短语</option>
                 <option value="日常生活">日常生活</option>
                 <option value="职场商务">职场商务</option>
                 <option value="旅游出行">旅游出行</option>

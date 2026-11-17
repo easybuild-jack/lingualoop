@@ -37,6 +37,7 @@ export type SpeakingWindowMode = 'expanded' | 'mini'
 export type SpeakingSubtitleMode = 'en' | 'bi' | 'off'
 export type SpeakingView = 'setup' | 'chat' | 'summary'
 export type SpeakingPhase = 'idle' | 'listening' | 'recognizing' | 'thinking' | 'speaking'
+export type SpeakingTalkMode = 'auto' | 'hold'
 
 export interface SpeakingMessage {
   id: string
@@ -57,8 +58,8 @@ export interface SpeakingAnchor {
 }
 
 export const PHASE_LABEL: Record<SpeakingPhase, string> = {
-  idle: '按住麦克风说话',
-  listening: '正在聆听，松开发送',
+  idle: '点击开始对话',
+  listening: '正在聆听，说完自动发送',
   recognizing: '识别中…',
   thinking: '思考中…',
   speaking: '正在朗读',
@@ -87,6 +88,16 @@ interface SpeakingState {
   tts: SpeakingTtsConfig
   /** 语音识别（ASR）配置：把用户说的话转成文本，同样只存本机 */
   asr: SpeakingAsrConfig
+  /** 对话收音方式：auto = 点击开始自然连续对话；hold = 按住说话 */
+  talkMode: SpeakingTalkMode
+  /** 连续对话是否处于开启中（AI 播完会自动开麦） */
+  conversationActive: boolean
+  /** 实时麦克风音量 0~1 */
+  micLevel: number
+  /** 说完停顿后自动发送的倒计时进度 0~1 */
+  silenceProgress: number
+  /** 本轮收音是否已检测到开口说话 */
+  hasSpoken: boolean
 
   messages: SpeakingMessage[]
   /** 字幕关闭时，用户点开查看过的消息 */
@@ -127,11 +138,15 @@ interface SpeakingState {
   setAsrProvider: (provider: SpeakingAsrConfig['provider']) => void
   updateDoubaoAsr: (partial: Partial<DoubaoAsrConfig>) => void
   resetAsr: () => void
+  setTalkMode: (mode: SpeakingTalkMode) => void
   toggleReveal: (id: string) => void
 
   startSession: () => void
   pressMic: () => void
   releaseMic: () => void
+  toggleAutoMic: () => void
+  submitCurrentListening: () => void
+  stopAutoConversation: () => void
   sendText: (text: string) => void
   replay: (msgId: string, slow?: boolean) => void
   endSession: () => void
@@ -144,6 +159,7 @@ let activeCapture: SpeechCapture | null = null
 let activeRecording: VoiceRecording | null = null
 let activeAbort: AbortController | null = null
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
+let autoListenTimer: ReturnType<typeof setTimeout> | null = null
 /** 补翻译跟随会话而不是单轮：朗读、重播、下一轮开口都会推进 turnSeq，但译文仍然属于那条消息 */
 let translateAbort: AbortController | null = null
 let turnSeq = 0
@@ -170,6 +186,10 @@ export const useSpeakingStore = create<SpeakingState>()(
       /** 打断正在进行的朗读与请求，用于用户重新开口或离开对话 */
       const interrupt = () => {
         turnSeq += 1
+        if (autoListenTimer) {
+          clearTimeout(autoListenTimer)
+          autoListenTimer = null
+        }
         if (activeAbort) {
           activeAbort.abort()
           activeAbort = null
@@ -183,6 +203,7 @@ export const useSpeakingStore = create<SpeakingState>()(
           activeRecording = null
         }
         stopSpeaking()
+        set({ micLevel: 0, silenceProgress: 0, hasSpoken: false })
       }
 
       const resetTranslations = () => {
@@ -192,6 +213,225 @@ export const useSpeakingStore = create<SpeakingState>()(
 
       const patchMessage = (id: string, patch: Partial<SpeakingMessage>) =>
         set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }))
+
+      /** 停止当前收音并识别发送；autoMode 下若未录到有效语音则按情况休眠或继续等待 */
+      const submitListening = (options: { minPressCheck?: boolean } = {}) => {
+        if (get().phase !== 'listening') return
+        const recording = activeRecording
+        const capture = activeCapture
+        activeRecording = null
+        activeCapture = null
+
+        if (options.minPressCheck && Date.now() - pressStartedAt < MIN_PRESS_MS) {
+          recording?.abort()
+          capture?.abort()
+          set({ phase: 'idle', interim: '', micLevel: 0, silenceProgress: 0, hasSpoken: false })
+          setNotice('说话时间太短，请按住麦克风说完再松开', 2600)
+          return
+        }
+
+        const resumeIfAuto = () => {
+          const st = get()
+          if (st.conversationActive && st.talkMode === 'auto' && st.view === 'chat' && st.isOpen) {
+            autoListenTimer = setTimeout(() => {
+              autoListenTimer = null
+              const curr = get()
+              if (curr.conversationActive && curr.talkMode === 'auto' && curr.phase === 'idle' && curr.view === 'chat' && curr.isOpen) {
+                startListeningInternal(true)
+              }
+            }, 240)
+          }
+        }
+
+        if (recording) {
+          set({ phase: 'recognizing', interim: '', micLevel: 0, silenceProgress: 0, hasSpoken: false })
+          void (async () => {
+            try {
+              const { blob, durationMs, peak } = await recording.stop()
+              if (get().phase !== 'recognizing') return
+              if (blob.size === 0 || durationMs < 300) {
+                set({ phase: 'idle' })
+                setNotice('没有录到声音，请靠近麦克风再说一次', 4000)
+                resumeIfAuto()
+                return
+              }
+              if (peak < 0.01) {
+                set({ phase: 'idle' })
+                setNotice('麦克风里几乎没有声音，请检查输入设备或靠近一点', 4000)
+                resumeIfAuto()
+                return
+              }
+
+              const snapshot = get()
+              const { text } = await transcribeSpeech(snapshot.asr, snapshot.tts, { audio: blob })
+              if (get().phase !== 'recognizing') return
+
+              if (!text) {
+                set({ phase: 'idle' })
+                setNotice('没有识别到内容，请再说一次', 4000)
+                resumeIfAuto()
+                return
+              }
+
+              void runTurn(text)
+            } catch (err) {
+              if (get().phase !== 'recognizing') return
+              set({ phase: 'idle', interim: '', conversationActive: false })
+              setNotice(err instanceof Error ? err.message : '语音识别失败，请改用文字输入', 8000)
+            }
+          })()
+          return
+        }
+
+        if (!capture) {
+          set({ phase: 'idle', interim: '', micLevel: 0, silenceProgress: 0, hasSpoken: false })
+          setNotice('麦克风没有启动，请重试或改用文字输入', 5000)
+          return
+        }
+
+        set({ phase: 'recognizing', micLevel: 0, silenceProgress: 0, hasSpoken: false })
+        capture.stop()
+
+        void capture.result.then(({ transcript, error }) => {
+          if (get().phase !== 'recognizing') return
+          const text = transcript.trim()
+          if (!text) {
+            set({ phase: 'idle', interim: '' })
+            setNotice(error ?? '没有识别到内容，请再说一次', 4000)
+            resumeIfAuto()
+            return
+          }
+          void runTurn(text)
+        })
+      }
+
+      /** 启动收音（支持按住模式与自然连续对话 VAD 自动判停） */
+      const startListeningInternal = (isAuto: boolean) => {
+        const { phase, asr, tts } = get()
+        if (phase === 'recognizing' || phase === 'thinking') return
+
+        interrupt()
+        pressStartedAt = Date.now()
+        set({
+          phase: 'listening',
+          speakingMsgId: null,
+          speakingSentence: 0,
+          interim: '',
+          notice: null,
+          micLevel: 0,
+          silenceProgress: 0,
+          hasSpoken: false,
+        })
+        unlockAudioPlayback()
+
+        if (asr.provider === 'doubao') {
+          const readiness = isAsrReady(asr, tts)
+          if (!readiness.ready) {
+            set({ phase: 'idle', conversationActive: false })
+            setNotice(`${readiness.reason ?? '语音识别未配置'}。可在「设置 → 语音配置」里配置，或先用文字输入。`, 7000)
+            return
+          }
+          if (!isRecordingSupported()) {
+            set({ phase: 'idle', conversationActive: false })
+            setNotice('当前浏览器不支持录音，请改用文字输入', 6000)
+            return
+          }
+
+          activeRecording = startVoiceRecording(
+            isAuto
+              ? {
+                  silenceMs: 1800,
+                  idleMs: 15000,
+                  onLevel: (level) => {
+                    if (get().phase === 'listening') set({ micLevel: level })
+                  },
+                  onSpeechStart: () => {
+                    if (get().phase === 'listening') set({ hasSpoken: true })
+                  },
+                  onSilenceProgress: (progress) => {
+                    if (get().phase === 'listening') set({ silenceProgress: progress })
+                  },
+                  onSilenceTimeout: () => {
+                    if (get().phase === 'listening') submitListening()
+                  },
+                  onIdleTimeout: () => {
+                    if (get().phase === 'listening') {
+                      interrupt()
+                      set({ phase: 'idle', conversationActive: false })
+                      setNotice('暂未听到说话，已暂停收音，点击麦克风即可继续对话', 4500)
+                    }
+                  },
+                }
+              : {
+                  onLevel: (level) => {
+                    if (get().phase === 'listening') set({ micLevel: level })
+                  },
+                }
+          )
+          return
+        }
+
+        if (!isSpeechRecognitionSupported()) {
+          set({ phase: 'idle', conversationActive: false })
+          setNotice('当前浏览器不支持语音识别，请点键盘图标用文字输入。', 6000)
+          return
+        }
+
+        let browserIdleTimer: ReturnType<typeof setTimeout> | null = null
+        let browserSilenceTimer: ReturnType<typeof setTimeout> | null = null
+        const clearBrowserTimers = () => {
+          if (browserIdleTimer) {
+            clearTimeout(browserIdleTimer)
+            browserIdleTimer = null
+          }
+          if (browserSilenceTimer) {
+            clearTimeout(browserSilenceTimer)
+            browserSilenceTimer = null
+          }
+        }
+
+        const capture = startSpeechCapture({
+          lang: get().voice.startsWith('uk') ? 'en-GB' : 'en-US',
+          onInterim: (text) => {
+            if (get().phase !== 'listening') return
+            set({ interim: text, hasSpoken: Boolean(text.trim()), micLevel: text.trim() ? 0.45 : 0.1 })
+            if (isAuto && text.trim()) {
+              clearBrowserTimers()
+              browserSilenceTimer = setTimeout(() => {
+                if (get().phase === 'listening') submitListening()
+              }, 1800)
+            }
+          },
+        })
+        activeCapture = capture
+
+        if (isAuto) {
+          browserIdleTimer = setTimeout(() => {
+            clearBrowserTimers()
+            if (get().phase === 'listening' && !get().hasSpoken) {
+              interrupt()
+              set({ phase: 'idle', conversationActive: false })
+              setNotice('暂未听到说话，已暂停收音，点击麦克风即可继续对话', 4500)
+            }
+          }, 15000)
+
+          void capture.result.then((res) => {
+            clearBrowserTimers()
+            // 浏览器自身识别自动断句结束（非外部调用 stop/abort）
+            if (activeCapture === capture && get().phase === 'listening') {
+              activeCapture = null
+              const text = res.transcript.trim()
+              if (text) {
+                set({ micLevel: 0, silenceProgress: 0, hasSpoken: false, interim: '' })
+                void runTurn(text)
+              } else {
+                set({ phase: 'idle', conversationActive: false, interim: '' })
+                if (res.error) setNotice(res.error, 4500)
+              }
+            }
+          })
+        }
+      }
 
       /** 模型漏给中文时单独补一次翻译；失败只影响双语字幕第二行 */
       const fillTranslation = async (msg: SpeakingMessage, aiConfig: AiClientConfig) => {
@@ -243,6 +483,18 @@ export const useSpeakingStore = create<SpeakingState>()(
         } finally {
           if (myTurn === turnSeq) {
             set({ phase: 'idle', speakingMsgId: null, speakingSentence: 0 })
+            // 连续对话开启时，AI 说完后短延迟自动开始收音（避免录到扬声器尾音）
+            const st = get()
+            if (st.conversationActive && st.talkMode === 'auto' && st.view === 'chat' && st.isOpen) {
+              if (autoListenTimer) clearTimeout(autoListenTimer)
+              autoListenTimer = setTimeout(() => {
+                autoListenTimer = null
+                const curr = get()
+                if (curr.conversationActive && curr.talkMode === 'auto' && curr.phase === 'idle' && curr.view === 'chat' && curr.isOpen) {
+                  startListeningInternal(true)
+                }
+              }, 160)
+            }
           }
         }
       }
@@ -346,6 +598,11 @@ export const useSpeakingStore = create<SpeakingState>()(
         correction: 'live',
         tts: SPEAKING_TTS_DEFAULT,
         asr: SPEAKING_ASR_DEFAULT,
+        talkMode: 'auto',
+        conversationActive: false,
+        micLevel: 0,
+        silenceProgress: 0,
+        hasSpoken: false,
 
         messages: [],
         revealedIds: [],
@@ -368,7 +625,7 @@ export const useSpeakingStore = create<SpeakingState>()(
         close: () => {
           interrupt()
           setNotice(null)
-          set({ isOpen: false, phase: 'idle', speakingMsgId: null, speakingSentence: 0, interim: '' })
+          set({ isOpen: false, conversationActive: false, phase: 'idle', speakingMsgId: null, speakingSentence: 0, interim: '' })
         },
         toggle: () => (get().isOpen ? get().close() : get().open()),
         setMode: (mode) => set({ mode }),
@@ -427,6 +684,10 @@ export const useSpeakingStore = create<SpeakingState>()(
             },
           })),
         resetAsr: () => set({ asr: SPEAKING_ASR_DEFAULT }),
+        setTalkMode: (talkMode) => {
+          interrupt()
+          set({ talkMode, conversationActive: false, phase: 'idle', interim: '' })
+        },
         toggleReveal: (id) =>
           set((st) => ({
             revealedIds: st.revealedIds.includes(id)
@@ -456,124 +717,51 @@ export const useSpeakingStore = create<SpeakingState>()(
             phase: 'thinking',
             interim: '',
             notice: null,
+            conversationActive: false,
           })
           void playMessage(greet)
         },
 
-        pressMic: () => {
-          const { phase, asr, tts } = get()
+        pressMic: () => startListeningInternal(false),
+
+        releaseMic: () => submitListening({ minPressCheck: true }),
+
+        toggleAutoMic: () => {
+          const { phase, conversationActive, hasSpoken } = get()
           if (phase === 'recognizing' || phase === 'thinking') return
 
-          // 开口即打断上一轮朗读与请求
-          interrupt()
-          pressStartedAt = Date.now()
-          set({ phase: 'listening', speakingMsgId: null, speakingSentence: 0, interim: '', notice: null })
-          unlockAudioPlayback()
-
-          // 豆包识别：先录成 WAV，松手后再上传，松手前无法出字
-          if (asr.provider === 'doubao') {
-            const readiness = isAsrReady(asr, tts)
-            if (!readiness.ready) {
-              set({ phase: 'idle' })
-              setNotice(`${readiness.reason ?? '语音识别未配置'}。可在「设置 → 语音识别」里配置，或先用文字输入。`, 7000)
-              return
+          // 正在收音时：已开口则立即发送当前句；未开口则暂停连续对话
+          if (phase === 'listening') {
+            if (hasSpoken) {
+              submitListening()
+            } else {
+              interrupt()
+              set({ phase: 'idle', conversationActive: false, interim: '' })
             }
-            if (!isRecordingSupported()) {
-              set({ phase: 'idle' })
-              setNotice('当前浏览器不支持录音，请改用文字输入', 6000)
-              return
-            }
-            activeRecording = startVoiceRecording()
             return
           }
 
-          // 兜底：浏览器内置识别（边说边出字，但依赖浏览器厂商服务）
-          if (!isSpeechRecognitionSupported()) {
-            set({ phase: 'idle' })
-            setNotice('当前浏览器不支持语音识别，请点键盘图标用文字输入。', 6000)
+          // AI 正在朗读时点一下：立即打断 AI 并直接开始听我说
+          if (phase === 'speaking') {
+            set({ conversationActive: true })
+            startListeningInternal(true)
             return
           }
 
-          activeCapture = startSpeechCapture({
-            lang: get().voice.startsWith('uk') ? 'en-GB' : 'en-US',
-            onInterim: (text) => {
-              if (get().phase === 'listening') set({ interim: text })
-            },
-          })
+          // 空闲态点击：开启连续对话并立即开始收音
+          if (!conversationActive) {
+            set({ conversationActive: true })
+          }
+          startListeningInternal(true)
         },
 
-        releaseMic: () => {
-          if (get().phase !== 'listening') return
-          const recording = activeRecording
-          const capture = activeCapture
-          activeRecording = null
-          activeCapture = null
+        submitCurrentListening: () => {
+          if (get().phase === 'listening') submitListening()
+        },
 
-          if (Date.now() - pressStartedAt < MIN_PRESS_MS) {
-            recording?.abort()
-            capture?.abort()
-            set({ phase: 'idle', interim: '' })
-            setNotice('说话时间太短，请按住麦克风说完再松开', 2600)
-            return
-          }
-
-          if (recording) {
-            set({ phase: 'recognizing', interim: '' })
-            void (async () => {
-              try {
-                const { blob, durationMs, peak } = await recording.stop()
-                if (get().phase !== 'recognizing') return
-                if (blob.size === 0 || durationMs < 300) {
-                  set({ phase: 'idle' })
-                  setNotice('没有录到声音，请靠近麦克风再说一次', 5000)
-                  return
-                }
-                // 音量极低基本等于没说话，先本地拦一次，省一次请求
-                if (peak < 0.01) {
-                  set({ phase: 'idle' })
-                  setNotice('麦克风里几乎没有声音，请检查输入设备或靠近一点', 5000)
-                  return
-                }
-
-                const snapshot = get()
-                const { text } = await transcribeSpeech(snapshot.asr, snapshot.tts, { audio: blob })
-                if (get().phase !== 'recognizing') return
-
-                if (!text) {
-                  set({ phase: 'idle' })
-                  setNotice('没有识别到内容，请再说一次', 5000)
-                  return
-                }
-
-                void runTurn(text)
-              } catch (err) {
-                if (get().phase !== 'recognizing') return
-                set({ phase: 'idle', interim: '' })
-                setNotice(err instanceof Error ? err.message : '语音识别失败，请改用文字输入', 8000)
-              }
-            })()
-            return
-          }
-
-          if (!capture) {
-            set({ phase: 'idle', interim: '' })
-            setNotice('麦克风没有启动，请重试或改用文字输入', 5000)
-            return
-          }
-
-          set({ phase: 'recognizing' })
-          capture.stop()
-
-          void capture.result.then(({ transcript, error }) => {
-            if (get().phase !== 'recognizing') return
-            const text = transcript.trim()
-            if (!text) {
-              set({ phase: 'idle', interim: '' })
-              setNotice(error ?? '没有识别到内容，请再说一次', 5000)
-              return
-            }
-            void runTurn(text)
-          })
+        stopAutoConversation: () => {
+          interrupt()
+          set({ phase: 'idle', conversationActive: false, interim: '' })
         },
 
         sendText: (text) => {
@@ -592,13 +780,13 @@ export const useSpeakingStore = create<SpeakingState>()(
 
         endSession: () => {
           interrupt()
-          set({ view: 'summary', phase: 'idle', speakingMsgId: null, speakingSentence: 0, endedAt: Date.now(), mode: 'expanded' })
+          set({ view: 'summary', conversationActive: false, phase: 'idle', speakingMsgId: null, speakingSentence: 0, endedAt: Date.now(), mode: 'expanded' })
         },
 
         backToSetup: () => {
           interrupt()
           resetTranslations()
-          set({ view: 'setup', messages: [], phase: 'idle', startedAt: null, endedAt: null, interim: '' })
+          set({ view: 'setup', conversationActive: false, messages: [], phase: 'idle', startedAt: null, endedAt: null, interim: '' })
         },
 
         saveVocab: (words) => set((st) => ({ savedVocab: Array.from(new Set([...st.savedVocab, ...words])) })),
@@ -618,6 +806,7 @@ export const useSpeakingStore = create<SpeakingState>()(
         correction: st.correction,
         tts: st.tts,
         asr: st.asr,
+        talkMode: st.talkMode,
       }),
       // 老版本存档里没有 tts / asr / 新增字段时，用默认值补齐，避免 undefined 进入请求体
       merge: (persisted, current) => {

@@ -57,7 +57,7 @@ export function TranslateGroupList({
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
                   {scenario} · <span className="font-mono">{total}</span> 句
-                  {isCurrent && <span className="ml-2 text-primary">上次练习</span>}
+                  {isCurrent && !book.isOfficial && <span className="ml-2 text-primary">上次练习</span>}
                 </span>
                 {book.isCustom && (
                   <button
@@ -91,7 +91,9 @@ export function TranslateGroupList({
               )}
 
               <div className="mt-auto flex items-center justify-between text-xs">
-                {isAllCompleted ? (
+                {book.isOfficial ? (
+                  <span className="text-muted-foreground">体验示例 · 不记录练习进度</span>
+                ) : isAllCompleted ? (
                   <span className="flex items-center gap-1 text-primary">
                     <CheckCircle2 className="size-3.5" />
                     已全部完成

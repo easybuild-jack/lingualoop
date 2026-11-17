@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { TranslateHeader } from '@/components/translate/TranslateHeader'
 import { TranslateFilters } from '@/components/translate/TranslateFilters'
 import { TranslateGroupList } from '@/components/translate/TranslateGroupList'
@@ -9,7 +10,31 @@ import { SentenceGrammarModal } from '@/components/translate/SentenceGrammarModa
 import { TranslateImportModal } from '@/components/translate/TranslateImportModal'
 import { useTranslateStore } from '@/store/useTranslateStore'
 import { audioEngine } from '@/core/audioEngine'
+import { waitForCloudHydration } from '@/core/cloud/readiness'
 import { BookOpen, ArrowLeft, ArrowRight, Plus } from 'lucide-react'
+
+/**
+ * 处理 `/translate?book=<句库 id>`（如听力播放页的「去练翻译」）：直接进入该句库的翻译练习。
+ * 等云端进度载入完成后再选中，避免随后载入的「上次练习」位置把它覆盖。
+ */
+function LinkedBookOpener({ onOpen }: { onOpen: (bookId: string) => void }) {
+  const linkedBookId = useSearchParams().get('book')
+
+  useEffect(() => {
+    if (!linkedBookId) return
+    let cancelled = false
+    void waitForCloudHydration().then(() => {
+      if (cancelled) return
+      if (useTranslateStore.getState().books.some((b) => b.id === linkedBookId)) onOpen(linkedBookId)
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [linkedBookId, onOpen])
+
+  return null
+}
 
 export default function TranslatePage() {
   // 当前激活的 Tab：'list' (句库列表页，默认) | 'practice' (翻译练习页)
@@ -55,6 +80,8 @@ export default function TranslatePage() {
   // 所有可用场景列表 (固定与听力场景分类一致 + 自动提取已有场景)
   const availableScenarios = useMemo(() => {
     const defaultOrder = [
+      '官方示例',
+      '常用短语',
       '日常生活',
       '职场商务',
       '旅游出行',
@@ -160,6 +187,9 @@ export default function TranslatePage() {
 
   return (
     <div className="translate-page flex-1 min-h-full w-full flex flex-col bg-background text-foreground animate-fadeIn pb-12 selection:bg-primary/20">
+      <Suspense fallback={null}>
+        <LinkedBookOpener onOpen={handleSelectGroup} />
+      </Suspense>
       {/* 主工作舞台容器：与听力电台一致的规范宽度与间距 */}
       <div className="flex-1 max-w-[1440px] w-full mx-auto px-5 sm:px-8 lg:px-10 pt-6 space-y-5 flex flex-col">
         {/* 顶部标题、搜索与导入主入口 */}

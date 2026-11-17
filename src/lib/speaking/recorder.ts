@@ -26,6 +26,23 @@ export interface VoiceRecording {
   elapsedMs: () => number
 }
 
+export interface VoiceRecordingOptions {
+  /** 实时归一化音量 0~1 */
+  onLevel?: (level: number) => void
+  /** 检测到有效人声开始说话 */
+  onSpeechStart?: () => void
+  /** 开口后连续静音进度 0~1，重新说话时归 0 */
+  onSilenceProgress?: (progress: number) => void
+  /** 开口后连续静音超过 silenceMs，通知自动发送 */
+  onSilenceTimeout?: () => void
+  /** 始终未开口超过 idleMs，通知自动休眠 */
+  onIdleTimeout?: () => void
+  /** 开口后停顿多少毫秒判定本句结束，默认 1800ms */
+  silenceMs?: number
+  /** 始终未开口多少毫秒判定闲置，默认 15000ms */
+  idleMs?: number
+}
+
 /** 豆包识别推荐 16k，单声道足够 */
 const TARGET_RATE = 16000
 
@@ -124,7 +141,17 @@ function createAudioContext(): AudioContext {
  * 开始录音。同步返回控制器，内部异步申请麦克风权限，
  * 因此即使权限弹窗还没结束，调用方也可以正常拿到对象。
  */
-export function startVoiceRecording(): VoiceRecording {
+export function startVoiceRecording(options: VoiceRecordingOptions = {}): VoiceRecording {
+  const {
+    onLevel,
+    onSpeechStart,
+    onSilenceProgress,
+    onSilenceTimeout,
+    onIdleTimeout,
+    silenceMs = 1800,
+    idleMs = 15000,
+  } = options
+
   const startedAt = Date.now()
   const chunks: Float32Array[] = []
 
@@ -139,6 +166,14 @@ export function startVoiceRecording(): VoiceRecording {
   let aborted = false
   let finalized = false
   let initError: Error | null = null
+
+  // VAD 状态：忽略启动前 250ms 瞬态噪声，连续 2 帧高于阈值才算真正开口
+  let activeAt = 0
+  let speechFrames = 0
+  let hasSpoken = false
+  let lastVoiceAt = 0
+  let timeoutFired = false
+  let lastSilenceProgress = 0
 
   const release = () => {
     try {
@@ -186,6 +221,7 @@ export function startVoiceRecording(): VoiceRecording {
     ctx = createAudioContext()
     sourceRate = ctx.sampleRate || TARGET_RATE
     source = ctx.createMediaStreamSource(stream)
+    activeAt = Date.now()
 
     // ScriptProcessor 已标记废弃，但兼容性最好；本场景只需短句采集，够用。
     processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -194,9 +230,59 @@ export function startVoiceRecording(): VoiceRecording {
       const channel = event.inputBuffer.getChannelData(0)
       // 复制一份，inputBuffer 会被复用
       chunks.push(new Float32Array(channel))
+      let sumSq = 0
       for (let i = 0; i < channel.length; i += 1) {
-        const v = Math.abs(channel[i])
+        const sample = channel[i]
+        const v = Math.abs(sample)
         if (v > peak) peak = v
+        sumSq += sample * sample
+      }
+
+      const rms = Math.sqrt(sumSq / Math.max(1, channel.length))
+      const level = Math.min(1, rms * 6.5)
+      onLevel?.(level)
+
+      if (timeoutFired) return
+      const now = Date.now()
+      // 忽略启动瞬态（点击声 / 麦克风硬件开启噼啪声）
+      if (now - activeAt < 250) return
+
+      const isVoiceFrame = rms > 0.015
+      if (!hasSpoken) {
+        if (isVoiceFrame) {
+          speechFrames += 1
+          if (speechFrames >= 2) {
+            hasSpoken = true
+            lastVoiceAt = now
+            onSpeechStart?.()
+          }
+        } else {
+          speechFrames = 0
+          if (onIdleTimeout && now - activeAt >= idleMs) {
+            timeoutFired = true
+            onIdleTimeout()
+          }
+        }
+        return
+      }
+
+      if (isVoiceFrame) {
+        lastVoiceAt = now
+        if (lastSilenceProgress !== 0) {
+          lastSilenceProgress = 0
+          onSilenceProgress?.(0)
+        }
+      } else {
+        const silenceElapsed = now - lastVoiceAt
+        const progress = Math.min(1, silenceElapsed / Math.max(400, silenceMs))
+        if (Math.abs(progress - lastSilenceProgress) >= 0.04 || progress === 1) {
+          lastSilenceProgress = progress
+          onSilenceProgress?.(progress)
+        }
+        if (onSilenceTimeout && silenceElapsed >= silenceMs) {
+          timeoutFired = true
+          onSilenceTimeout()
+        }
       }
     }
 
