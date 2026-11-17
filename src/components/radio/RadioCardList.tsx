@@ -18,6 +18,8 @@ interface RadioCardListProps {
 }
 
 function formatDuration(seconds: number): string {
+  // 文件夹里的视频是懒加载的，没读过元数据前显示占位符而不是 00:00
+  if (!seconds || seconds <= 0) return '--:--'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
@@ -29,7 +31,7 @@ export function RadioCardList({
   isPlaying,
   showMetadata = false,
   emptyTitle = '暂无视频内容',
-  emptyHint = '点击右上角「上传视频」添加自定义视频',
+  emptyHint = '点击右上角「添加视频」添加自定义视频',
   onSelectItem,
   onTogglePlay,
   onDeleteItem,
@@ -100,6 +102,10 @@ export function RadioCardList({
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1" title={item.description}>
                     {item.description}
                   </p>
+                ) : item.folderName ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1" title={item.folderName}>
+                    {item.folderName}
+                  </p>
                 ) : (
                   showMetadata && (
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -113,7 +119,7 @@ export function RadioCardList({
                 {formatDuration(item.duration)}
               </span>
 
-              {item.isOfficial ? (
+              {item.isOfficial || item.folderId ? (
                 <span className="size-7 shrink-0" />
               ) : (
                 <button
