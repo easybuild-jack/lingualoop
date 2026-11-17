@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Link from 'next/link'
 import {
   type RadioItem,
   type PlayMode,
@@ -23,6 +24,7 @@ import {
   Activity,
   Wifi,
   Sparkles,
+  Languages,
 } from 'lucide-react'
 
 import { RadioStudioVisualizer } from './RadioStudioVisualizer'
@@ -126,10 +128,24 @@ export function RadioMainPlayer({
   return (
     <div className="relative space-y-4">
       {/* 标题 */}
-      <div className="min-w-0 relative z-10">
-        <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground leading-snug">
-          {item.title}
-        </h2>
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground leading-snug">
+            {item.title}
+          </h2>
+          {item.isOfficial && item.description && (
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+          )}
+        </div>
+        {item.translationBookId && (
+          <Link
+            href={`/translate?book=${encodeURIComponent(item.translationBookId)}`}
+            className="shrink-0 self-start inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-[14px] font-medium transition-colors"
+          >
+            <Languages className="size-4" />
+            去练翻译
+          </Link>
+        )}
       </div>
 
       {/* 超大影音主视听视窗 (Enlarged Player Screen) */}

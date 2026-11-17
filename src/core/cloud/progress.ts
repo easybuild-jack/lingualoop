@@ -12,7 +12,7 @@
  */
 import { useWorkspaceStore, DEFAULT_LOOP_COUNTS } from '@/store/useWorkspaceStore'
 import type { BookModeUnitRecord } from '@/store/useWorkspaceStore'
-import { useTranslateStore } from '@/store/useTranslateStore'
+import { progressBookIdOf, useTranslateStore } from '@/store/useTranslateStore'
 import { getRepositories } from '@/db/repository'
 import type { BookModeEntry } from '@/db/repository'
 import type { PracticeMode } from '@/types'
@@ -193,7 +193,7 @@ export function startWorkspaceProgressWrites(): () => void {
 function translateStateSnapshot() {
   const state = useTranslateStore.getState()
   return {
-    currentBookId: state.currentBookId,
+    currentBookId: progressBookIdOf(state.currentBookId) || undefined,
     completedSentenceIds: state.completedSentenceIds ?? {},
   }
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { TranslationBook, TranslationSentenceItem } from '@/types'
-import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
+import { DEFAULT_TRANSLATION_BOOKS, isOfficialTranslationBook } from '@/resources/translateData'
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { createScopedProgressStorage } from '@/core/cloud/scopedStorage'
@@ -11,6 +11,17 @@ import { getRepositories } from '@/db/repository'
 
 /** 云模式下不存本机的字段（自定义句库与完成记录、位置都以数据库为准） */
 const TRANSLATE_PROGRESS_KEYS = ['currentBookId', 'completedSentenceIds', 'books'] as const
+
+let lastProgressBookId = ''
+
+/**
+ * 可以记为学习位置的句库 id：官方示例只供体验，选中时沿用上一个非示例句库（没有则为空串），
+ * 本机持久化与数据库写入都用它，因此练习示例不会产生位置记录。
+ */
+export function progressBookIdOf(currentBookId: string): string {
+  if (!isOfficialTranslationBook(currentBookId)) lastProgressBookId = currentBookId
+  return lastProgressBookId
+}
 
 interface TranslateState {
   books: TranslationBook[]
@@ -171,11 +182,11 @@ export const useTranslateStore = create<TranslateState>()(
       setSentenceCompleted: (completed: boolean) => {
         const { books, currentBookId, currentSentenceIndex, completedSentenceIds } = get()
         const currentBook = books.find((b) => b.id === currentBookId) || books[0]
-        const currentSentence = currentBook.sentences[currentSentenceIndex]
+        const currentSentence = currentBook?.sentences[currentSentenceIndex]
 
         set({
           isSentenceCompleted: completed,
-          completedSentenceIds: currentSentence
+          completedSentenceIds: currentSentence && !currentBook.isOfficial
             ? { ...completedSentenceIds, [currentSentence.id]: true }
             : completedSentenceIds,
         })
@@ -297,7 +308,7 @@ export const useTranslateStore = create<TranslateState>()(
       name: 'lingualoop-translate-storage',
       storage: createJSONStorage(() => createScopedProgressStorage(TRANSLATE_PROGRESS_KEYS)),
       partialize: (state) => ({
-        currentBookId: state.currentBookId,
+        currentBookId: progressBookIdOf(state.currentBookId) || undefined,
         audioRate: state.audioRate,
         isAutoPlayAudio: state.isAutoPlayAudio,
         completedSentenceIds: state.completedSentenceIds,
@@ -311,6 +322,7 @@ export const useTranslateStore = create<TranslateState>()(
         if (!state.books.some((b) => b.id === state.currentBookId)) {
           state.currentBookId = state.books[0]?.id || ''
         }
+        progressBookIdOf(state.currentBookId)
       },
     }
   )

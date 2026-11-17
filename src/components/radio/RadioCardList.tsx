@@ -96,10 +96,16 @@ export function RadioCardList({
                 >
                   {item.title}
                 </h4>
-                {showMetadata && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {item.scenario} · 已看 <span className="font-mono">{item.playCount}</span> 次
+                {item.isOfficial && item.description ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1" title={item.description}>
+                    {item.description}
                   </p>
+                ) : (
+                  showMetadata && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {item.scenario} · 已看 <span className="font-mono">{item.playCount}</span> 次
+                    </p>
+                  )
                 )}
               </div>
 
@@ -107,17 +113,21 @@ export function RadioCardList({
                 {formatDuration(item.duration)}
               </span>
 
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDeleteItem(item.id)
-                }}
-                className="size-7 rounded-md flex items-center justify-center text-muted-foreground/50 opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer shrink-0"
-                title="移除该视频"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
+              {item.isOfficial ? (
+                <span className="size-7 shrink-0" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteItem(item.id)
+                  }}
+                  className="size-7 rounded-md flex items-center justify-center text-muted-foreground/50 opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer shrink-0"
+                  title="移除该视频"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
             </li>
           )
         })}

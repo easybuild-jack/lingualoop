@@ -186,6 +186,7 @@ export default function RadioPage() {
         .play()
         .then(() => {
           setIsPlaying(true)
+          if (currentItem.isOfficial) return
           setItems((prev) =>
             prev.map((it) => (it.id === currentItem.id ? { ...it, playCount: it.playCount + 1 } : it))
           )
@@ -384,6 +385,7 @@ export default function RadioPage() {
   // 删除视频
   const handleDeleteItem = (id: string) => {
     const removed = items.find((i) => i.id === id)
+    if (removed?.isOfficial) return
     setItems((prev) => prev.filter((i) => i.id !== id))
     if (isCloudMode() && removed && removed.accountId !== undefined) {
       getRepositories()
@@ -544,7 +546,10 @@ export default function RadioPage() {
               setIsPlaying(true)
               setActiveTab('player')
             }}
-            onTogglePlay={handleTogglePlay}
+            onTogglePlay={() => {
+              if (!isPlaying) setActiveTab('player')
+              handleTogglePlay()
+            }}
             onDeleteItem={handleDeleteItem}
           />
         </div>
