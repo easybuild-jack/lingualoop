@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Plus, Search } from 'lucide-react'
+import { FolderPlus, Plus, Search } from 'lucide-react'
 import { SkinPicker } from '@/components/layout/SkinPicker'
 
 interface RadioHeaderProps {
@@ -9,6 +9,12 @@ interface RadioHeaderProps {
   onSearchChange: (q: string) => void
   totalCount: number
   onOpenUpload: () => void
+  /** 右侧主按钮文案；「本地视频」Tab 下会换成选择本地文件 */
+  actionLabel?: string
+  /** 可选：主按钮左侧的次要操作（「本地视频」Tab 用来选择文件夹） */
+  secondaryActionLabel?: string
+  onSecondaryAction?: () => void
+  secondaryActionDisabled?: boolean
 }
 
 export function RadioHeader({
@@ -16,6 +22,10 @@ export function RadioHeader({
   onSearchChange,
   totalCount,
   onOpenUpload,
+  actionLabel = '添加视频',
+  secondaryActionLabel,
+  onSecondaryAction,
+  secondaryActionDisabled = false,
 }: RadioHeaderProps) {
   return (
     <div className="shrink-0 flex flex-col sm:flex-row sm:items-end justify-between gap-4 select-none">
@@ -38,13 +48,25 @@ export function RadioHeader({
           />
         </div>
 
+        {secondaryActionLabel && onSecondaryAction && (
+          <button
+            type="button"
+            onClick={onSecondaryAction}
+            disabled={secondaryActionDisabled}
+            className="h-8 px-3 rounded-md border border-border text-[14px] font-medium text-foreground inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 hover:bg-muted disabled:opacity-50 disabled:cursor-default"
+          >
+            <FolderPlus className="size-3.5" />
+            {secondaryActionLabel}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onOpenUpload}
           className="h-8 px-3 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-[14px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
         >
           <Plus className="size-3.5" />
-          添加视频
+          {actionLabel}
         </button>
 
         <SkinPicker />

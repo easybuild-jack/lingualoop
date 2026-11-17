@@ -32,6 +32,15 @@ export interface RadioItem {
   id: string
   /** 是否为官方内置示例视频 */
   isOfficial?: boolean
+  /**
+   * 本机视频：文件不入库也不上传，src 是运行时生成的 blob URL，
+   * 句柄存在 IndexedDB（见 lib/radio/localVideos.ts）
+   */
+  isLocal?: boolean
+  /** 本机视频来自文件夹扫描时的归属 id（不单独持久化，靠文件夹句柄重新扫描得到） */
+  folderId?: string
+  /** 本机视频所属文件夹名，列表里作副标题显示 */
+  folderName?: string
   /** 云模式归属：null = 共享，非空 = 个人；undefined = 仅本次会话（未入库） */
   accountId?: string | null
   category: RadioCategory
