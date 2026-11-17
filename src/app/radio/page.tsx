@@ -546,7 +546,10 @@ export default function RadioPage() {
               setIsPlaying(true)
               setActiveTab('player')
             }}
-            onTogglePlay={handleTogglePlay}
+            onTogglePlay={() => {
+              if (!isPlaying) setActiveTab('player')
+              handleTogglePlay()
+            }}
             onDeleteItem={handleDeleteItem}
           />
         </div>
