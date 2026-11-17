@@ -65,9 +65,12 @@ export function AppSidebar() {
           className="flex items-center gap-2.5 group"
         >
           <img src="/logo111.png" alt="" className="size-7 shrink-0 object-contain" />
-          <h1 className="font-serif text-[23px] font-medium tracking-tight text-foreground leading-none">
-            LinguaLoop
-          </h1>
+          <div className="min-w-0 flex flex-col gap-1">
+            <h1 className="font-serif text-[23px] font-medium tracking-tight text-foreground leading-none">
+              LinguaLoop
+            </h1>
+            <span className="text-[11px] leading-none text-muted-foreground tracking-[0.3em]">林瓜鲁普</span>
+          </div>
         </Link>
       </div>
 

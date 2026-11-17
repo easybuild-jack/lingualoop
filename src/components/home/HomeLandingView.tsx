@@ -181,10 +181,11 @@ export function HomeLandingView() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/75 backdrop-blur-xl">
         <div className="max-w-[1240px] mx-auto px-5 sm:px-8 h-15 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <img src="/logo111.png" alt="LinguaLoop" className="size-7 object-contain" />
+            <img src="/logo111.png" alt="林瓜鲁普 LinguaLoop" className="size-7 object-contain" />
             <span className="font-serif text-[23px] font-medium tracking-tight text-foreground leading-none">
               LinguaLoop
             </span>
+            <span className="hidden sm:inline text-xs text-muted-foreground tracking-wider">林瓜鲁普</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
@@ -272,7 +273,7 @@ export function HomeLandingView() {
                 transition={{ duration: 0.6, delay: 0.16 }}
                 className="mt-6 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl"
               >
-                LinguaLoop 把发音、词汇、语法、听力、阅读、写作和 AI 口语串成
+                林瓜鲁普（LinguaLoop）把发音、词汇、语法、听力、阅读、写作和 AI 口语串成
                 <span className="text-foreground">一条完整的学习闭环</span>
                 ——听得懂、说得出、读得顺、写得对。
               </motion.p>
