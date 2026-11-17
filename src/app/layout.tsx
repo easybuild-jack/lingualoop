@@ -15,11 +15,47 @@ import { CloudSyncGate } from '@/components/cloud/CloudSyncGate'
 import { AiAssistantDrawer } from '@/components/ai/AiAssistantDrawer'
 import { AiFloatingTrigger } from '@/components/ai/AiFloatingTrigger'
 import { SpeakingWindow } from '@/components/speaking/SpeakingWindow'
+import {
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  OG_IMAGE,
+  SITE_BRAND,
+  SITE_KEYWORDS,
+  SITE_NAME,
+  SITE_URL,
+} from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'LinguaLoop — 您的私人专属英语学习搭子',
-  description: '开源、本地优先的英语学习闭环：音标、词汇、语法、听力、阅读、写作与 AI 口语，听说读写一站式完成。',
-  applicationName: 'LinguaLoop',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: HOME_TITLE,
+    template: `%s | ${SITE_BRAND}`,
+  },
+  description: HOME_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    locale: 'zh_CN',
+    siteName: SITE_BRAND,
+    url: '/',
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    images: [OG_IMAGE],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    images: [OG_IMAGE.url],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
+  },
+  formatDetection: { telephone: false },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
