@@ -86,6 +86,9 @@ export function SpeakingMessageItem({ msg }: { msg: SpeakingMessage }) {
                 ))}
               </p>
               {subtitle === 'bi' && msg.zh && <p className="mt-1 text-[13px] text-muted-foreground">{msg.zh}</p>}
+              {subtitle === 'bi' && !msg.zh && msg.zhPending && (
+                <p className="mt-1 text-[13px] text-muted-foreground/60">翻译中…</p>
+              )}
             </>
           )}
         </div>

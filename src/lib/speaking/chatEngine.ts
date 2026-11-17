@@ -24,6 +24,8 @@ const FEEDBACK_MARKER = /#{2,}\s*FEEDBACK\s*#{0,}/i
 export interface SpeakingHistoryItem {
   role: 'ai' | 'user'
   text: string
+  /** AI 消息的中文译文，回放历史时一并带上 */
+  zh?: string
 }
 
 export interface SpeakingTurnInput {
@@ -103,14 +105,33 @@ export function buildSpeakingMessages(input: SpeakingTurnInput): AiChatMessage[]
 
   const recent = input.history.slice(-MAX_HISTORY_TURNS)
   for (const item of recent) {
-    const content = item.text.trim()
-    if (!content) continue
-    messages.push({ role: item.role === 'ai' ? 'assistant' : 'user', content })
+    const text = item.text.trim()
+    if (!text) continue
+    if (item.role === 'user') {
+      messages.push({ role: 'user', content: text })
+      continue
+    }
+    // 模型会模仿历史里 assistant 的格式：只回放英文的话，它很快就不再输出 FEEDBACK 块，
+    // 中文译文随之消失。所以历史里的 AI 回复按完整的两段式格式还原。
+    messages.push({ role: 'assistant', content: formatAssistantTurn(text, item.zh) })
   }
 
   messages.push({ role: 'user', content: input.userText.trim() })
   return messages
 }
+
+function formatAssistantTurn(text: string, zh?: string): string {
+  const meta = { zh: zh?.trim() ?? '', correction: null, vocab: [] }
+  if (!meta.zh) return text
+  return `${text}\n###FEEDBACK###\n${JSON.stringify(meta)}`
+}
+
+/** 部分推理模型会把思考过程以 <think>…</think> 写进 content */
+function stripThinking(raw: string): string {
+  return raw.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim()
+}
+
+const CJK_RE = /[\u3400-\u9fff]/
 
 /* ------------------------------------------------------------------ */
 /* 解析                                                                */
@@ -193,7 +214,7 @@ function pickChinese(meta: Record<string, unknown> | null): string {
   if (!meta) return ''
   for (const key of ['zh', 'translation', 'cn', 'chinese'] as const) {
     const value = meta[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'string' && CJK_RE.test(value)) return value.trim()
   }
   return ''
 }
@@ -285,6 +306,7 @@ export function parseSpeakingReply(
   raw: string,
   options: { correction: CorrectionMode; userText: string }
 ): ParsedSpeakingReply {
+  raw = stripThinking(raw)
   let spoken = raw
   let meta: Record<string, unknown> | null = null
 
@@ -343,10 +365,10 @@ export async function translateReplyToChinese(
     ],
     signal
   )
-  return raw
-    .trim()
+  const zh = stripThinking(raw)
     .replace(/^["“'']+|["”'']+$/g, '')
     .trim()
+  return CJK_RE.test(zh) ? zh : ''
 }
 
 /**

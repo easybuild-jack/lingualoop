@@ -31,6 +31,7 @@ import { requestSpeakingTurn, translateReplyToChinese, type SpeakingHistoryItem 
 import { speakSentences, stopSpeaking, unlockAudioPlayback } from '@/lib/speaking/speechPlayer'
 import { isSpeechRecognitionSupported, startSpeechCapture, type SpeechCapture } from '@/lib/speaking/speechRecognition'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
+import type { AiClientConfig } from '@/lib/aiClient'
 
 export type SpeakingWindowMode = 'expanded' | 'mini'
 export type SpeakingSubtitleMode = 'en' | 'bi' | 'off'
@@ -43,6 +44,8 @@ export interface SpeakingMessage {
   /** AI 消息按句存，便于逐句朗读高亮；用户消息只有一句 */
   sentences: string[]
   zh: string
+  /** 模型没给中文、正在单独补翻译 */
+  zhPending?: boolean
   correction?: SpeakingCorrection
   vocab?: SpeakingVocab[]
 }
@@ -141,6 +144,8 @@ let activeCapture: SpeechCapture | null = null
 let activeRecording: VoiceRecording | null = null
 let activeAbort: AbortController | null = null
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
+/** 补翻译跟随会话而不是单轮：朗读、重播、下一轮开口都会推进 turnSeq，但译文仍然属于那条消息 */
+let translateAbort: AbortController | null = null
 let turnSeq = 0
 
 const uid = (p: string) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -178,6 +183,29 @@ export const useSpeakingStore = create<SpeakingState>()(
           activeRecording = null
         }
         stopSpeaking()
+      }
+
+      const resetTranslations = () => {
+        translateAbort?.abort()
+        translateAbort = null
+      }
+
+      const patchMessage = (id: string, patch: Partial<SpeakingMessage>) =>
+        set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }))
+
+      /** 模型漏给中文时单独补一次翻译；失败只影响双语字幕第二行 */
+      const fillTranslation = async (msg: SpeakingMessage, aiConfig: AiClientConfig) => {
+        if (!translateAbort) translateAbort = new AbortController()
+        const signal = translateAbort.signal
+        patchMessage(msg.id, { zhPending: true })
+        let zh = ''
+        try {
+          zh = await translateReplyToChinese(aiConfig, msg.sentences, signal)
+        } catch {
+          // 忽略：最多只显示英文
+        }
+        if (signal.aborted) return
+        patchMessage(msg.id, { zh, zhPending: false })
       }
 
       /** 真实朗读一条 AI 消息：逐句合成、逐句播放，句间不等待 */
@@ -233,6 +261,7 @@ export const useSpeakingStore = create<SpeakingState>()(
         const history: SpeakingHistoryItem[] = snapshot.messages.map((m) => ({
           role: m.role,
           text: m.sentences.join(' '),
+          zh: m.zh,
         }))
 
         const userMsg: SpeakingMessage = {
@@ -288,21 +317,8 @@ export const useSpeakingStore = create<SpeakingState>()(
             endedAt: null,
           }))
 
-          // 双语字幕兜底：模型漏写 zh 时补一次翻译。放在朗读之外异步跑，
-          // 不拖慢这一轮的开口时间；翻译回来再补进消息里。
-          if (!aiMsg.zh) {
-            void (async () => {
-              try {
-                const zh = await translateReplyToChinese(aiConfig, aiMsg.sentences, abort.signal)
-                if (!zh || abort.signal.aborted || myTurn !== turnSeq) return
-                set((s) => ({
-                  messages: s.messages.map((m) => (m.id === aiMsg.id ? { ...m, zh } : m)),
-                }))
-              } catch {
-                // 补翻译失败只影响双语字幕，不打断对话
-              }
-            })()
-          }
+          // 与朗读并行，不拖慢开口
+          if (!aiMsg.zh) void fillTranslation(aiMsg, aiConfig)
 
           await playMessage(aiMsg)
         } catch (err) {
@@ -420,6 +436,7 @@ export const useSpeakingStore = create<SpeakingState>()(
 
         startSession: () => {
           interrupt()
+          resetTranslations()
           unlockAudioPlayback()
           const sc = getScenario(get().scenarioId)
           const greet: SpeakingMessage = {
@@ -580,6 +597,7 @@ export const useSpeakingStore = create<SpeakingState>()(
 
         backToSetup: () => {
           interrupt()
+          resetTranslations()
           set({ view: 'setup', messages: [], phase: 'idle', startedAt: null, endedAt: null, interim: '' })
         },
 
