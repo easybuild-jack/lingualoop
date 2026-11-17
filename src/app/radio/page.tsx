@@ -30,7 +30,7 @@ export default function RadioPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('phrases')
   // 「常用短语」与「英语电台」下的二级 Tab：官方示例 / 自定义
   const [subTab, setSubTab] = useState<SourceSubTab>('official')
-  // 记录最近一次浏览的列表分类 Tab，用于从共用播放页点击「返回列表」及上传默认分类
+  // 记录最近一次浏览的列表分类 Tab，用于从共用播放页点击「返回列表」及添加视频时的默认分类
   const [lastCategoryTab, setLastCategoryTab] = useState<RadioCategory>('phrases')
 
   // 视频列表（三个模块初始各有 1 个示例视频）
@@ -69,7 +69,7 @@ export default function RadioPage() {
       .catch((error) => {
         console.warn('[radio] failed to load cloud items:', error)
         reportCloudError(error, '读取视频')
-        if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频与本次会话上传的视频。')
+        if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频。')
       })
     return () => {
       cancelled = true
@@ -412,7 +412,7 @@ export default function RadioPage() {
     <div className="radio-page flex-1 min-h-full w-full flex flex-col bg-background text-foreground animate-fadeIn pb-12">
       {/* 主工作舞台容器 */}
       <div className="flex-1 max-w-[1440px] w-full mx-auto px-5 sm:px-8 lg:px-10 pt-6 space-y-5">
-        {/* 顶部标题、搜索与上传入口 */}
+        {/* 顶部标题、搜索与添加入口 */}
         <RadioHeader
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -538,7 +538,7 @@ export default function RadioPage() {
                 ? '官方示例视频正在准备中，后续将陆续上线'
                 : activeTab === 'dialogue' && selectedScenario === '官方示例'
                   ? '官方示例视频正在准备中，后续将陆续上线'
-                  : '点击右上角「上传视频」添加自定义视频'
+                  : '点击右上角「添加视频」添加自定义视频'
             }
             onSelectItem={(item) => {
               setLastCategoryTab(item.category)
@@ -577,7 +577,7 @@ export default function RadioPage() {
         </div>
       </div>
 
-      {/* 上传自定义视频弹窗 */}
+      {/* 添加自定义视频弹窗 */}
       <RadioUploadModal
         isOpen={isUploadOpen}
         defaultCategory={activeCategory}

@@ -29,7 +29,7 @@ export function RadioCardList({
   isPlaying,
   showMetadata = false,
   emptyTitle = '暂无视频内容',
-  emptyHint = '点击右上角「上传视频」添加自定义视频',
+  emptyHint = '点击右上角「添加视频」添加自定义视频',
   onSelectItem,
   onTogglePlay,
   onDeleteItem,

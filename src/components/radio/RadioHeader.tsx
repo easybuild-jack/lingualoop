@@ -44,7 +44,7 @@ export function RadioHeader({
           className="h-8 px-3 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-[14px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
         >
           <Plus className="size-3.5" />
-          上传视频
+          添加视频
         </button>
 
         <SkinPicker />
