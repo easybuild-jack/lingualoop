@@ -22,6 +22,8 @@ import {
   Briefcase,
   Plane,
   Coffee,
+  RefreshCw,
+  Users,
 } from 'lucide-react'
 import { SkinPicker } from '@/components/layout/SkinPicker'
 import { audioEngine } from '@/core/audioEngine'
@@ -57,7 +59,7 @@ const STATS = [
   { value: '5', label: '项技能 听说读写译' },
   { value: '12', label: '个学习模块' },
   { value: '5 万+', label: '离线词条' },
-  { value: '100%', label: '开源 · 本地优先' },
+  { value: '100%', label: '代码完全开源' },
 ]
 
 const SKILLS = [
@@ -181,11 +183,10 @@ export function HomeLandingView() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/75 backdrop-blur-xl">
         <div className="max-w-[1240px] mx-auto px-5 sm:px-8 h-15 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <img src="/logo111.png" alt="林瓜鲁普 LinguaLoop" className="size-7 object-contain" />
+            <img src="/logo111.png" alt="LinguaLoop" className="size-7 object-contain" />
             <span className="font-serif text-[23px] font-medium tracking-tight text-foreground leading-none">
               LinguaLoop
             </span>
-            <span className="hidden sm:inline text-xs text-muted-foreground tracking-wider">林瓜鲁普</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
@@ -213,7 +214,7 @@ export function HomeLandingView() {
               <span>开始学习</span>
               <ArrowRight className="size-3.5" />
             </Link>
-            <SkinPicker />
+            <SkinPicker showUserMenu={false} />
           </div>
         </div>
       </header>
@@ -241,7 +242,7 @@ export function HomeLandingView() {
                 className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/[0.08] text-xs text-primary"
               >
                 <Sparkles className="size-3.5" />
-                <span>开源 · 本地优先 · 听说读写一站式闭环</span>
+                <span>开源项目 · 私人订制英语学习闭环</span>
               </motion.div>
 
               <motion.h1
@@ -273,7 +274,7 @@ export function HomeLandingView() {
                 transition={{ duration: 0.6, delay: 0.16 }}
                 className="mt-6 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl"
               >
-                林瓜鲁普（LinguaLoop）把发音、词汇、语法、听力、阅读、写作和 AI 口语串成
+                LinguaLoop 把发音、词汇、语法、听力、阅读、写作和 AI 口语串成
                 <span className="text-foreground">一条完整的学习闭环</span>
                 ——听得懂、说得出、读得顺、写得对。
               </motion.p>
@@ -303,11 +304,11 @@ export function HomeLandingView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="mt-12 grid grid-cols-4 gap-4 max-w-lg"
+                className="mt-12 grid grid-cols-2 sm:grid-cols-[1.15fr_0.85fr_0.85fr_1.35fr] gap-4 max-w-xl"
               >
                 {STATS.map((s) => (
                   <div key={s.label} className="border-l border-border pl-3">
-                    <dt className="text-2xl sm:text-3xl font-semibold font-serif text-foreground">{s.value}</dt>
+                    <dt className="text-2xl sm:text-3xl font-semibold font-serif text-foreground whitespace-nowrap">{s.value}</dt>
                     <dd className="mt-1 text-[12px] sm:text-xs text-muted-foreground">{s.label}</dd>
                   </div>
                 ))}
@@ -533,8 +534,8 @@ export function HomeLandingView() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <span className="text-xs font-mono text-primary">PHONETICS</span>
-                    <h3 className="text-lg font-semibold text-foreground mt-1">48 个音素，点一下就能听</h3>
-                    <p className="text-sm text-muted-foreground mt-1">从单音素开始练准发音，配合自然拼读，开口更有底气。</p>
+                    <h3 className="text-lg font-semibold text-foreground mt-1">48 个国际音标 + 42 个字母组合，点一下就能听</h3>
+                    <p className="text-sm text-muted-foreground mt-1">覆盖 48 个单音素与 42 个常见字母组合发音，配合自然拼读，开口更有底气。</p>
                   </div>
                   <Link
                     href="/phonetics/learn"
@@ -661,15 +662,16 @@ export function HomeLandingView() {
                 </div>
               </Reveal>
 
-              {/* 三个小卡：本地优先 / 离线 / AI */}
+              {/* 四个核心能力卡片：离线 / 跨设备 / 团队共享 / 个性化 */}
               {[
-                { icon: ShieldCheck, title: '数据只在你手里', desc: '学习记录存在本机 IndexedDB，无需账号也能完整使用。' },
-                { icon: WifiOff, title: '断网照样学', desc: '词典与词库离线加载，支持 PWA 安装到桌面，地铁上也能刷。' },
-                { icon: Bot, title: 'AI 助教随叫随到', desc: '卡在语法、词源或例句？右侧唤出 AI，接入你自己的模型 Key。' },
+                { icon: WifiOff, title: '离线可用', desc: '内置词典与词库本地加载，支持 PWA 安装到桌面，断网也能完整学习。' },
+                { icon: RefreshCw, title: '跨设备同步', desc: '按需接入自有云数据库，词库、生错词本与学习进度在多端实时同步。' },
+                { icon: Users, title: '团队共享', desc: '可将词库、句库、文章与听力资料设为团队共享，大家一起学、一起维护。' },
+                { icon: Sparkles, title: '高度个性化', desc: '自由导入专属学习内容、定制外观皮肤与 AI 助教，打造私人学习系统。' },
               ].map((f, i) => {
                 const Icon = f.icon
                 return (
-                  <Reveal key={f.title} delay={i * 0.06} className="md:col-span-4 rounded-2xl border border-border bg-card p-6">
+                  <Reveal key={f.title} delay={i * 0.06} className="md:col-span-6 lg:col-span-3 rounded-2xl border border-border bg-card p-6">
                     <div className="size-10 rounded-xl bg-primary/12 text-primary flex items-center justify-center">
                       <Icon className="size-5" />
                     </div>

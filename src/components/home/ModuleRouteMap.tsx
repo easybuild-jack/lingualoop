@@ -17,7 +17,7 @@ const STATIONS = [
     en: 'Foundation',
     icon: AudioLines,
     stops: [
-      { label: '音标学习', desc: '48 音素图解发音', href: '/phonetics/learn' },
+      { label: '音标学习', desc: '48 音标 + 42 拼读组合', href: '/phonetics/learn' },
       { label: '音标练习', desc: 'IPA 键盘实战', href: '/phonetics' },
       { label: '单词学习', desc: '音节构词跟打', href: '/learn' },
       { label: '词根词缀', desc: '同源词族串联', href: '/roots' },
