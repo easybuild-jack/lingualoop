@@ -9,7 +9,7 @@ const STEPS = [
     key: '音',
     title: '发音地基',
     phase: '打基础',
-    desc: '48 个国际音标逐个真人发音，配合自然拼读与 IPA 键盘练习，先做到“看到就会读”。',
+    desc: '48 个国际音标 + 42 个字母组合发音逐个真人示范，配合自然拼读与 IPA 键盘练习，先做到“看到就会读”。',
     modules: ['音标学习', '音标练习'],
     href: '/phonetics/learn',
     icon: AudioLines,

@@ -1,14 +1,14 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { RotateCcw, AudioLines, Sprout, PenLine, ShieldCheck } from 'lucide-react'
+import { RotateCcw, AudioLines, Sprout, PenLine, Sparkles } from 'lucide-react'
 
 const PRINCIPLES = [
   { icon: RotateCcw, title: '闭环，环环相扣', desc: '音、词、法、听、读、写、说连成一个圈，每一环都为下一环铺路。' },
   { icon: AudioLines, title: '从发音出发', desc: '以音标和音节为起点，让每个单词先读得准，再记得牢。' },
   { icon: Sprout, title: '理解胜于记忆', desc: '用词根词缀和语法结构解释“为什么”，学一个通一串。' },
   { icon: PenLine, title: '学以致用', desc: '默写、连词成句、AI 对话，让学到的内容在输出中真正落地。' },
-  { icon: ShieldCheck, title: '开源与本地优先', desc: '代码完全开源，学习数据存于本机，离线也能随时学习。' },
+  { icon: Sparkles, title: '个性化与多端协同', desc: '支持私人订制全部学习内容，离线可用；也可接入云端实现跨设备同步与团队共享。' },
 ]
 
 const C = 100

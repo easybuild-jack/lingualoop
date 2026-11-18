@@ -6,6 +6,7 @@ import { ChevronDown, Loader2, LogOut } from 'lucide-react'
 import { getCloudSession, subscribeCloudMode } from '@/core/cloud/config'
 import { logoutAccount } from '@/core/cloud/account'
 import { waitForCloudWrites } from '@/core/cloud/progress'
+import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 /** 返回原始字符串作为 useSyncExternalStore 快照，避免 getCloudSession() 每次返回新对象引致无限重渲染 */
 function getSessionSnapshot(): string {
@@ -37,7 +38,7 @@ export function UserAccountMenu() {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [open])
 
-  if (!snapshot) return null
+  if (!snapshot || isChromelessRoute(pathname)) return null
 
   const [, username = '', displayName = ''] = snapshot.split('\0')
   const label = (displayName || username || '用户').trim()
