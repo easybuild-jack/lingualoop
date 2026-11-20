@@ -86,4 +86,19 @@ export const DEFAULT_SAMPLE_RADIO_ITEMS: RadioItem[] = [
     playCount: 0,
     translationBookId: 'radio_daily_morning_ep1',
   },
+  {
+    id: 'official_phrases_basic_ep01',
+    isOfficial: true,
+    category: 'phrases',
+    title: '基础短语第1集',
+    type: 'video',
+    src: 'https://lingualoop.oss-cn-shenzhen.aliyuncs.com/video/lingualoop_common_phrases_basic_ep01.mp4',
+    duration: 220,
+    scenario: '官方示例',
+    description:
+      '常用短语 › 基础短语 › 第1集：20 条地道口语短句，从见面寒暄到道别。听完视频，来练练这些短语吧。',
+    createdAt: 1795012831834,
+    playCount: 0,
+    translationBookId: 'phrases_basic_ep01',
+  },
 ]
