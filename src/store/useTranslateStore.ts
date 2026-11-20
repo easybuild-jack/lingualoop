@@ -23,10 +23,13 @@ export function progressBookIdOf(currentBookId: string): string {
   return lastProgressBookId
 }
 
+export type TranslatePracticeMode = 'blind' | 'follow'
+
 interface TranslateState {
   books: TranslationBook[]
   currentBookId: string
   currentSentenceIndex: number
+  practiceMode: TranslatePracticeMode
   isPeeking: boolean
   isSentenceCompleted: boolean
   audioRate: number
@@ -43,6 +46,8 @@ interface TranslateState {
   nextSentence: () => void
   prevSentence: () => void
   restartBook: () => void
+  setPracticeMode: (mode: TranslatePracticeMode) => void
+  togglePracticeMode: () => void
   setPeeking: (peeking: boolean) => void
   setAudioRate: (rate: number) => void
   toggleAudioRate: () => void
@@ -66,6 +71,7 @@ export const useTranslateStore = create<TranslateState>()(
       books: DEFAULT_TRANSLATION_BOOKS,
       currentBookId: DEFAULT_TRANSLATION_BOOKS[0]?.id || '',
       currentSentenceIndex: 0,
+      practiceMode: 'blind',
       isPeeking: false,
       isSentenceCompleted: false,
       audioRate: 0.88,
@@ -159,6 +165,16 @@ export const useTranslateStore = create<TranslateState>()(
 
       setPeeking: (peeking: boolean) => {
         set({ isPeeking: peeking })
+      },
+
+      setPracticeMode: (mode: TranslatePracticeMode) => {
+        set({ practiceMode: mode })
+      },
+
+      togglePracticeMode: () => {
+        set((state) => ({
+          practiceMode: state.practiceMode === 'blind' ? 'follow' : 'blind',
+        }))
       },
 
       setAudioRate: (rate: number) => {
@@ -309,6 +325,7 @@ export const useTranslateStore = create<TranslateState>()(
       storage: createJSONStorage(() => createScopedProgressStorage(TRANSLATE_PROGRESS_KEYS)),
       partialize: (state) => ({
         currentBookId: progressBookIdOf(state.currentBookId) || undefined,
+        practiceMode: state.practiceMode,
         audioRate: state.audioRate,
         isAutoPlayAudio: state.isAutoPlayAudio,
         completedSentenceIds: state.completedSentenceIds,
