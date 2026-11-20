@@ -13,7 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import type { TranslationSentenceItem } from '@/types'
-import { parseSentenceIntoWords, extractAutoKeywords } from '@/lib/sentenceParser'
+import { parseSentenceIntoWords, selectWarmupWords } from '@/lib/sentenceParser'
 import { SentenceUnderlineSlots } from '@/components/translate/SentenceUnderlineSlots'
 import { audioEngine } from '@/core/audioEngine'
 import { isShortcutMatch } from '@/lib/shortcuts'
@@ -42,22 +42,15 @@ export function TranslateCard({
   onPrev,
   isActive = true,
 }: TranslateCardProps) {
-  // 提取本句的核心词汇列表 (支持预置配置与智能提取)
-  const keywords = useMemo(() => {
-    if (sentence.keywords && sentence.keywords.length > 0) {
-      return sentence.keywords
-    }
-    return extractAutoKeywords(
-      sentence.sentenceEn,
-      sentence.grammar?.tokens,
-      sentence.sentenceZh
-    )
-  }, [sentence])
+  // 本句的热身单词（只含单个单词；为空则直接整句翻译）
+  const keywords = useMemo(() => selectWarmupWords(sentence), [sentence])
 
   // 阶段管理：先核心词热身 ('keyword') -> 再整句翻译 ('sentence')
-  const [stage, setStage] = useState<'keyword' | 'sentence'>(() =>
+  const [stageState, setStage] = useState<'keyword' | 'sentence'>(() =>
     keywords.length > 0 ? 'keyword' : 'sentence'
   )
+  // 没有热身单词的句子在任何时刻都按整句阶段渲染与响应按键（含切句后重置生效前的那一帧）
+  const stage = keywords.length > 0 ? stageState : 'sentence'
   const [currentKeywordIndex, setCurrentKeywordIndex] = useState(0)
   const [keywordInput, setKeywordInput] = useState('')
   const [keywordError, setKeywordError] = useState(false)
@@ -125,7 +118,6 @@ export function TranslateCard({
   // 当前进行中的核心词
   const currentKeyword = keywords[currentKeywordIndex]
   const cleanTargetWord = currentKeyword ? normalizeKeyword(currentKeyword.word) : ''
-  const isPhraseKeyword = currentKeyword?.kind === 'phrase' || cleanTargetWord.includes(' ')
 
   // 当离开练习页 tab 时，立即终止正在播放或计划播放的语音
   useEffect(() => {
@@ -618,12 +610,8 @@ export function TranslateCard({
             </div>
             <p className="text-xs text-muted-foreground">
               {isFollowMode
-                ? isPhraseKeyword
-                  ? '请对照灰色英文底字跟写英语短语，单词之间用空格分隔（拼对后自动推进）'
-                  : '请对照灰色英文底字跟写核心英语单词（拼对后自动推进）'
-                : isPhraseKeyword
-                  ? '请拼写对应的英语短语，单词之间用空格分隔（拼对后自动推进）'
-                  : '请拼写对应的核心英语单词（拼对后自动推进）'}
+                ? '请对照灰色英文底字跟写核心英语单词（拼对后自动推进）'
+                : '请拼写对应的核心英语单词（拼对后自动推进）'}
             </p>
           </div>
 
