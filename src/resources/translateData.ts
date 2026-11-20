@@ -570,7 +570,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
     isCustom: false,
     totalSentences: 20,
     createdAt: 1795012831834,
-    updatedAt: 1795012831834,
+    updatedAt: 1795145495486,
     sentences: [
       {
         id: 'phrases_basic_ep01_s01',
@@ -579,18 +579,19 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Nice to meet you', meaningZh: '很高兴认识你', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s01_k1', word: 'nice', meaningZh: '令人愉快的；高兴的', pos: 'adj.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s01_k2', word: 'meet', meaningZh: '认识；见面', pos: 'v.', kind: 'word' },
         ],
         grammar: {
-          patternZh: '主语 + 系动词 + 表语 + 不定式定语',
-          patternCode: 'S + Link + P + Attr(to do)',
-          summary: 'It 是形式主语，is 是系动词，nice 作表语；to meet you 是不定式，说明“高兴”的原因。视频里常省略 It is，直接说 Nice to meet you。',
+          patternZh: '形式主语 + 系动词 + 表语 + 不定式真正主语',
+          patternCode: 'S(formal) + Link + P + S(to do)',
+          summary: 'It 是形式主语，is 是系动词，nice 作表语；to meet you 是后置的不定式短语，充当真正主语。其中 meet 是不定式内的动词，you 是它的宾语。视频中的 Nice to meet you 省略了 It is，常用于初次见面。',
           tokens: [
             { text: 'It', cleanText: 'It', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '形式主语，引出后面的评价。' },
             { text: 'is', cleanText: 'is', roleZh: '系动词', roleCode: 'Link', pos: 'v.', explanation: 'be 动词，连接主语和表语。' },
             { text: 'nice', cleanText: 'nice', roleZh: '表语', roleCode: 'P', pos: 'adj.', explanation: '形容词作表语：令人愉快的、高兴的。' },
-            { text: 'to', cleanText: 'to', roleZh: '定语（不定式）', roleCode: 'Attr', pos: 'part.', explanation: '不定式符号，与 meet you 一起说明原因。' },
-            { text: 'meet', cleanText: 'meet', roleZh: '定语（不定式）', roleCode: 'Attr', pos: 'v.', explanation: '不定式中的动词：认识、见面。' },
+            { text: 'to', cleanText: 'to', roleZh: '真正主语（不定式短语的一部分）', roleCode: 'S', pos: 'part.', explanation: '不定式标记；to meet you 整体是后置的真正主语。' },
+            { text: 'meet', cleanText: 'meet', roleZh: '真正主语（不定式短语的一部分）', roleCode: 'S', pos: 'v.', explanation: '不定式中的动词，表示见面或认识；属于真正主语短语。' },
             { text: 'you.', cleanText: 'you', roleZh: '宾语（不定式内）', roleCode: 'O', pos: 'pron.', explanation: 'meet 的宾语：你。' },
           ],
         },
@@ -603,16 +604,16 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'What\'s up', meaningZh: '最近怎么样；你好吗', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s02_k1', word: 'what is up', meaningZh: '最近怎么样；近来可好', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '主语 + 系动词 + 表语',
           patternCode: 'S + Link + P',
-          summary: 'What 作主语，is 是系动词，up 作表语。这是很口语的打招呼，视频里缩写成 What\'s up? 句库展开为 What is，热身短语按视频形式收录，输入时要带撇号：What\'s up。',
+          summary: 'What 作主语，is 是系动词，up 在这里按形容词分析，作表语。What is up 是询问近况的口语问候，意思是“最近怎么样”，通常说成 What\'s up。应把整个表达联系起来理解。',
           tokens: [
             { text: 'What', cleanText: 'What', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '疑问代词作主语，这里不是询问具体事物，而是打招呼。' },
             { text: 'is', cleanText: 'is', roleZh: '系动词', roleCode: 'Link', pos: 'v.', explanation: 'be 动词，视频里与 What 缩合成 What\'s。' },
-            { text: 'up?', cleanText: 'up', roleZh: '表语', roleCode: 'P', pos: 'adv.', explanation: '副词作表语，和 What is 一起表示“怎么样、在忙什么”。' },
+            { text: 'up?', cleanText: 'up', roleZh: '表语', roleCode: 'P', pos: 'adj.', explanation: '这里按形容词分析，作表语，谈及近况；与 What is 合成问候语“最近怎么样”，应结合整个表达理解。' },
           ],
         },
         pronunciation: null,
@@ -624,7 +625,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Come on in', meaningZh: '请进', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s03_k2', word: 'come in', meaningZh: '进来', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 状语 + 状语',
@@ -645,14 +646,14 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Have a seat', meaningZh: '请坐', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s04_k1', word: 'seat', meaningZh: '座位', pos: 'n.', kind: 'word' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语',
           patternCode: 'V + O',
-          summary: '祈使句省略主语 you，have 在这里表示“用、就”，a seat 是宾语，整句是请人坐下的礼貌说法。',
+          summary: '祈使句省略主语 you，have a seat 是请对方坐下的礼貌表达；have 是谓语，a seat 是名词短语作宾语，seat 表示座位。',
           tokens: [
-            { text: 'Have', cleanText: 'Have', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '祈使句动词原形，这里是“请用、请就”。' },
+            { text: 'Have', cleanText: 'Have', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '祈使句用动词原形开头；have a seat 整体表示“坐下、就座”，用于礼貌地请人坐下。' },
             { text: 'a', cleanText: 'a', roleZh: '定语', roleCode: 'Attr', pos: 'art.', explanation: '不定冠词，修饰 seat。' },
             { text: 'seat.', cleanText: 'seat', roleZh: '宾语', roleCode: 'O', pos: 'n.', explanation: '座位；have a seat 合在一起表示“请坐”。' },
           ],
@@ -666,14 +667,14 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Help yourself', meaningZh: '请自便', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s05_k2', word: 'help yourself', meaningZh: '请自便；自己取用', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语',
           patternCode: 'V + O',
-          summary: '祈使句省略主语 you，help yourself 是固定说法，请对方自己取用食物或自行方便，不是“帮助自己”的字面意思。',
+          summary: '祈使句省略主语 you，help 是谓语，反身代词 yourself 作宾语。help yourself 是固定说法，用于请对方自便、自己取用食物或饮料。',
           tokens: [
-            { text: 'Help', cleanText: 'Help', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '祈使句动词原形；在短语里是“请随便用”。' },
+            { text: 'Help', cleanText: 'Help', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '动词原形作谓语，与 yourself 构成固定表达，表示请对方自己取用。' },
             { text: 'yourself.', cleanText: 'yourself', roleZh: '宾语', roleCode: 'O', pos: 'pron.', explanation: '反身代词，和 help 构成 help yourself“请自便”。' },
           ],
         },
@@ -686,12 +687,12 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Hang on', meaningZh: '等一下；稍等', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s06_k1', word: 'hang on', meaningZh: '稍等；别挂断', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 状语',
           patternCode: 'V + Adv',
-          summary: '祈使句省略主语 you，hang on 是口语固定短语，表示“等一下、别挂断”，这里的 on 是副词小品词，不是“挂在……上”。',
+          summary: '祈使句省略主语 you，hang on 是口语固定短语，表示“等一下”，通话时也可表示“别挂断”。on 是与 hang 连用的副词小品词，整个短语应结合语境理解。',
           tokens: [
             { text: 'Hang', cleanText: 'Hang', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '祈使句动词原形，和 on 组成短语 hang on。' },
             { text: 'on.', cleanText: 'on', roleZh: '状语（小品词）', roleCode: 'Adv', pos: 'adv.', explanation: '副词小品词，与 hang 构成 hang on“等一下”。' },
@@ -706,7 +707,8 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Take your time', meaningZh: '慢慢来；不着急', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s07_k1', word: 'time', meaningZh: '时间', pos: 'n.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s07_k2', word: 'take your time', meaningZh: '慢慢来；不用着急', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语',
@@ -727,7 +729,8 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Let me see', meaningZh: '让我想想', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s08_k1', word: 'let', meaningZh: '让；允许', pos: 'v.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s08_k2', word: 'see', meaningZh: '想一想；弄明白', pos: 'v.', kind: 'word' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语 + 宾语补足语',
@@ -748,7 +751,8 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Sounds good', meaningZh: '听起来不错', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s09_k1', word: 'sounds', meaningZh: '听起来（第三人称单数形式）', pos: 'v.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s09_k2', word: 'good', meaningZh: '好的；不错的', pos: 'adj.', kind: 'word' },
         ],
         grammar: {
           patternZh: '主语 + 感官系动词 + 表语',
@@ -769,7 +773,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'That works', meaningZh: '那样可以；行得通', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s10_k1', word: 'works', meaningZh: '行得通；有效（第三人称单数形式）', pos: 'v.', kind: 'word' },
         ],
         grammar: {
           patternZh: '主语 + 谓语',
@@ -789,7 +793,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Got it', meaningZh: '明白了；知道了', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s11_k1', word: 'got', meaningZh: '明白；领会（过去式）', pos: 'v.', kind: 'word' },
         ],
         grammar: {
           patternZh: '主语 + 谓语 + 宾语',
@@ -810,7 +814,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Go ahead', meaningZh: '请说吧；你先来', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s12_k2', word: 'go ahead', meaningZh: '请说吧；请继续', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 状语',
@@ -830,15 +834,15 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'No worries', meaningZh: '没关系；别担心', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s13_k1', word: 'worries', meaningZh: '担心；烦恼（复数形式）', pos: 'n.', kind: 'word' },
         ],
         grammar: {
-          patternZh: '定语 + 表语（省略 It\'s）',
-          patternCode: 'Attr + P',
-          summary: '这是口语固定短句，相当于 It\'s no problem / Don\'t worry，省略了 It\'s。no 修饰 worries，整句用来安慰对方或回应道谢。',
+          patternZh: '独立名词短语应答',
+          patternCode: 'NP(fragment)',
+          summary: 'No worries 是名词短语形式的独立应答，常用于回应道谢或道歉，表示“没关系”，也可用于安慰对方，表示“别担心”。no 限定复数名词 worries，worries 是短语的中心名词；这里没有明示的主语和谓语。',
           tokens: [
-            { text: 'No', cleanText: 'No', roleZh: '定语', roleCode: 'Attr', pos: 'det.', explanation: '限定词，表示“没有”。' },
-            { text: 'worries.', cleanText: 'worries', roleZh: '表语', roleCode: 'P', pos: 'n.', explanation: 'worry 的复数；在这个固定说法里表示“不用担心”。' },
+            { text: 'No', cleanText: 'No', roleZh: '定语（限定词）', roleCode: 'Attr', pos: 'det.', explanation: '否定限定词，修饰 worries，表示“没有”。' },
+            { text: 'worries.', cleanText: 'worries', roleZh: '名词短语中心词', pos: 'n.', explanation: '名词 worry 的复数形式，表示“担心、烦恼”；在独立应答中作名词短语的中心词。' },
           ],
         },
         pronunciation: null,
@@ -850,12 +854,13 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'I\'m on my way', meaningZh: '我在路上了', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s14_k1', word: 'way', meaningZh: '路；路线', pos: 'n.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s14_k2', word: 'on my way', meaningZh: '在路上；正在赶来', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
-          patternZh: '主语 + 系动词 + 介词 + 宾语',
-          patternCode: 'S + Link + Prep + O',
-          summary: 'I 是主语，am 是系动词，on my way 是介词短语作表语，表示“在路上”。视频里缩写成 I\'m on my way. 句库展开 I am，热身短语按视频形式收录，输入时要带撇号：I\'m on my way。',
+          patternZh: '主语 + 系动词 + 介词短语表语',
+          patternCode: 'S + Link + P(PP)',
+          summary: 'I 是主语，am 是系动词，on my way 整体作表语，表示“正在路上”。短语内部 on 是介词，my 修饰 way，way 是介词的宾语。视频采用缩写 I\'m，本练习采用展开形式 I am。',
           tokens: [
             { text: 'I', cleanText: 'I', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '句子的主语：我。' },
             { text: 'am', cleanText: 'am', roleZh: '系动词', roleCode: 'Link', pos: 'v.', explanation: 'be 动词，视频里与 I 缩合成 I\'m。' },
@@ -873,18 +878,19 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'be right back', meaningZh: '马上回来', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s15_k1', word: 'back', meaningZh: '回来；回到原处', pos: 'adv.', kind: 'word' },
+          { id: 'phrases_basic_ep01_s15_k2', word: 'right', meaningZh: '立即；马上', pos: 'adv.', kind: 'word' },
         ],
         grammar: {
-          patternZh: '主语 + 情态动词 + 系动词 + 状语',
-          patternCode: 'S + V + Link + Adv + Adv',
-          summary: 'I 是主语，will 是情态动词表示将来，be 是系动词，right back 作状语，表示很快回来。视频里常省略主语和 will，直接说 Be right back。这句是句库练习例句，不是视频里读出的完整句。',
+          patternZh: '主语 + 助动词 + 系动词 + 强调状语 + 表语',
+          patternCode: 'S + V(aux) + Link + Adv + P',
+          summary: 'I 是主语，will 是表示将来的情态助动词，be 是系动词；back 是副词，在这里作表语，表示回到原处；right 修饰 back，强调“马上”。视频中的 Be right back 是说话人表示自己马上回来的省略说法，本练习补全为 I will be right back。',
           tokens: [
             { text: 'I', cleanText: 'I', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '句子的主语：我。视频口语句里省略。' },
-            { text: 'will', cleanText: 'will', roleZh: '谓语（情态动词）', roleCode: 'V', pos: 'v.', explanation: '情态动词，表示将来；口语里也常缩成 I\'ll。' },
+            { text: 'will', cleanText: 'will', roleZh: '助动词', roleCode: 'V', pos: 'aux.', explanation: '表示将来的情态助动词，后接动词原形 be。' },
             { text: 'be', cleanText: 'be', roleZh: '系动词', roleCode: 'Link', pos: 'v.', explanation: '原形 be，与 will 连用，后面接回来的状态或位置。' },
             { text: 'right', cleanText: 'right', roleZh: '状语', roleCode: 'Adv', pos: 'adv.', explanation: '副词，修饰 back，表示“马上、立刻”。' },
-            { text: 'back.', cleanText: 'back', roleZh: '状语（地点）', roleCode: 'Adv', pos: 'adv.', explanation: '副词，表示“回来”；be right back 是目标短语。' },
+            { text: 'back.', cleanText: 'back', roleZh: '表语', roleCode: 'P', pos: 'adv.', explanation: '副词 back 在 be 后作表语，表示回来、回到原处。' },
           ],
         },
         pronunciation: null,
@@ -896,18 +902,18 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'need a hand', meaningZh: '需要帮忙', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s16_k2', word: 'need a hand', meaningZh: '需要帮忙', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '助动词 + 主语 + 谓语 + 宾语',
-          patternCode: 'V(Do) + S + V + O',
+          patternCode: 'V(aux) + S + V + O',
           summary: '一般疑问句用 Do 开头，you 是主语，need 是实义动词，a hand 是宾语。need a hand 是口语，表示“需要帮忙”。视频里常省略 Do you，直接说 Need a hand? 这句是句库练习例句，不是视频里读出的完整句。',
           tokens: [
-            { text: 'Do', cleanText: 'Do', roleZh: '谓语（助动词）', roleCode: 'V', pos: 'v.', explanation: '助动词，用来构成一般疑问句，没有实际词义。' },
+            { text: 'Do', cleanText: 'Do', roleZh: '助动词', roleCode: 'V', pos: 'aux.', explanation: '助动词，置于主语前构成一般现在时的一般疑问句。' },
             { text: 'you', cleanText: 'you', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '疑问句的主语：你。' },
             { text: 'need', cleanText: 'need', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '实义动词：需要。' },
             { text: 'a', cleanText: 'a', roleZh: '定语', roleCode: 'Attr', pos: 'art.', explanation: '不定冠词，修饰 hand。' },
-            { text: 'hand?', cleanText: 'hand', roleZh: '宾语', roleCode: 'O', pos: 'n.', explanation: '字面是“一只手”，在短语 need a hand 里表示“帮忙”。' },
+            { text: 'hand?', cleanText: 'hand', roleZh: '宾语', roleCode: 'O', pos: 'n.', explanation: '名词，在 need a hand 中表示“帮助、援手”；a hand 整体作 need 的宾语。' },
           ],
         },
         pronunciation: null,
@@ -919,12 +925,12 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'Here you go', meaningZh: '给你；拿去吧', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s17_k1', word: 'here', meaningZh: '在这儿；递东西时表示给你', pos: 'adv.', kind: 'word' },
         ],
         grammar: {
           patternZh: '状语 + 主语 + 谓语',
           patternCode: 'Adv + S + V',
-          summary: 'Here 放在句首，you 是主语，go 是谓语。这是把东西递给对方时的固定口语，相当于“给你、拿去吧”，不要按字面理解成“你从这里走”。',
+          summary: 'Here 是置于句首的地点副词，you 是主语，go 是谓语。Here you go 是递东西给对方时的固定口语，整句表示“给你、拿去吧”。',
           tokens: [
             { text: 'Here', cleanText: 'Here', roleZh: '状语（地点）', roleCode: 'Adv', pos: 'adv.', explanation: '地点副词放在句首，提醒对方“这儿、给你”。' },
             { text: 'you', cleanText: 'you', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '句子的主语：你。' },
@@ -940,7 +946,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'I appreciate it', meaningZh: '真谢谢你；我很感激', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s18_k1', word: 'appreciate', meaningZh: '感激；感谢', pos: 'v.', kind: 'word' },
         ],
         grammar: {
           patternZh: '主语 + 谓语 + 宾语',
@@ -961,16 +967,16 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'You\'re welcome', meaningZh: '不客气', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s19_k1', word: 'welcome', meaningZh: '受欢迎的；回应感谢时表示不客气', pos: 'adj.', kind: 'word' },
         ],
         grammar: {
           patternZh: '主语 + 系动词 + 表语',
           patternCode: 'S + Link + P',
-          summary: 'You 是主语，are 是系动词，welcome 作表语。这是对谢谢的常用回应。视频里缩写成 You\'re welcome. 句库展开 You are，热身短语按视频形式收录，输入时要带撇号：You\'re welcome。',
+          summary: 'You 是主语，are 是系动词，welcome 是形容词，作表语。You are welcome 是回应感谢的固定表达，整句表示“不客气”。视频采用缩写 You\'re，本练习采用展开形式 You are。',
           tokens: [
             { text: 'You', cleanText: 'You', roleZh: '主语', roleCode: 'S', pos: 'pron.', explanation: '句子的主语：你。' },
             { text: 'are', cleanText: 'are', roleZh: '系动词', roleCode: 'Link', pos: 'v.', explanation: 'be 动词，视频里与 You 缩合成 You\'re。' },
-            { text: 'welcome.', cleanText: 'welcome', roleZh: '表语', roleCode: 'P', pos: 'adj.', explanation: '形容词作表语：受欢迎的；You\'re welcome 表示“不客气”。' },
+            { text: 'welcome.', cleanText: 'welcome', roleZh: '表语', roleCode: 'P', pos: 'adj.', explanation: '形容词作表语，基本义为“受欢迎的”；在本句这个回应感谢的固定表达中，整句表示“不客气”。' },
           ],
         },
         pronunciation: null,
@@ -982,12 +988,12 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         category: '基础短语',
         difficulty: 'easy',
         keywords: [
-          { id: 'k1', word: 'See you later', meaningZh: '回头见；再见', pos: 'phr.', kind: 'phrase' },
+          { id: 'phrases_basic_ep01_s20_k1', word: 'later', meaningZh: '稍后；以后', pos: 'adv.', kind: 'word' },
         ],
         grammar: {
-          patternZh: '祈使句：谓语 + 宾语 + 状语',
+          patternZh: '告别用语省略句：谓语 + 宾语 + 时间状语',
           patternCode: 'V + O + Adv',
-          summary: '告别用语，省略主语 I，see 是谓语，you 是宾语，later 是时间状语。和 See you tonight 同一类结构。',
+          summary: 'See you later 是约定俗成的告别表达，可理解为 I will see you later 的省略说法，意思是“回头见”。see 是保留的动词，you 是宾语，later 是时间状语。',
           tokens: [
             { text: 'See', cleanText: 'See', roleZh: '谓语', roleCode: 'V', pos: 'v.', explanation: '动词原形，告别时省略 I will。' },
             { text: 'you', cleanText: 'you', roleZh: '宾语', roleCode: 'O', pos: 'pron.', explanation: 'see 的宾语：你。' },
