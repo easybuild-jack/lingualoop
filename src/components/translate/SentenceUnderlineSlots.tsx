@@ -10,6 +10,7 @@ interface SentenceUnderlineSlotsProps {
   errorIndices: number[]
   isPeeking: boolean
   isCompleted: boolean
+  isFollowMode?: boolean
   onWordClick?: (index: number) => void
 }
 
@@ -20,6 +21,7 @@ export function SentenceUnderlineSlots({
   errorIndices,
   isPeeking,
   isCompleted,
+  isFollowMode = false,
   onWordClick,
 }: SentenceUnderlineSlotsProps) {
   return (
@@ -32,6 +34,7 @@ export function SentenceUnderlineSlots({
         const cleanWord = token.cleanWord
         const targetLen = cleanWord.length
         const currentLen = typedText.length
+        const remainingGhost = isFollowMode ? cleanWord.slice(currentLen) : ''
 
         return (
           <div
@@ -50,13 +53,17 @@ export function SentenceUnderlineSlots({
               核心单词槽位：
               1. 绝不出现任何边框背景或发光阴影块 (bg-transparent, 无 shadow)，只有底部的单线下划横杠
               2. 翻译时英文字体字号放大，与主题色 (text-primary / border-primary) 严格保持一致
-              3. 提示已移至页面最上方，此处绝不重叠提示，保证输入纯净
+              3. 跟写模式在槽位内显示未输入部分的灰色英文底字，打字时逐字母覆盖变亮
               4. 只有在检查发现错误时才显示红色 (text-destructive / border-destructive)
             */}
             <div
-              style={{
-                width: `${Math.max(targetLen, currentLen, 1)}ch`,
-              }}
+              style={
+                isFollowMode
+                  ? undefined
+                  : {
+                      width: `${Math.max(targetLen, currentLen, 1)}ch`,
+                    }
+              }
               className={`relative h-full flex items-end justify-start px-0.5 pb-1.5 bg-transparent transition-colors ${
                 hasError
                   ? 'text-destructive border-b-2 border-destructive animate-shake'
@@ -69,7 +76,7 @@ export function SentenceUnderlineSlots({
                 {/* 用户已输入的英文字符：字号放大，清晰醒目，仅报错时才转红 */}
                 {typedText && (
                   <span
-                    className={`leading-none ${
+                    className={`leading-none whitespace-pre ${
                       hasError ? 'text-destructive' : 'text-foreground'
                     }`}
                   >
@@ -84,6 +91,13 @@ export function SentenceUnderlineSlots({
                       hasError ? 'bg-destructive' : 'bg-primary'
                     }`}
                   />
+                )}
+
+                {/* 跟写模式：未输入部分的灰色英文底字 */}
+                {isFollowMode && !isCompleted && remainingGhost && (
+                  <span className="leading-none whitespace-pre text-muted-foreground opacity-40 select-none pointer-events-none">
+                    {remainingGhost}
+                  </span>
                 )}
               </div>
             </div>

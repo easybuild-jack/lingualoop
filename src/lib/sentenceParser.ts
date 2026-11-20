@@ -226,6 +226,21 @@ export function extractAutoKeywords(
   return candidateKeywords
 }
 
+/** 热身只练单个单词：短语（kind 为 phrase 或含空格）一律不进热身 */
+export function isWarmupWord(keyword: SentenceKeywordItem): boolean {
+  const word = keyword.word?.trim() ?? ''
+  return keyword.kind !== 'phrase' && word.length > 0 && !/\s/.test(word)
+}
+
+/**
+ * 本句的热身单词。数据里给了 keywords（包括空数组）就以数据为准，过滤后为空即跳过热身直接练整句；
+ * 只有完全没提供 keywords 的句子才自动提取。
+ */
+export function selectWarmupWords(sentence: TranslationSentenceItem): SentenceKeywordItem[] {
+  if (Array.isArray(sentence.keywords)) return sentence.keywords.filter(isWarmupWord)
+  return extractAutoKeywords(sentence.sentenceEn, sentence.grammar?.tokens, sentence.sentenceZh).filter(isWarmupWord)
+}
+
 /**
  * 标点符号正则判定：包含各类英文常用标点符号
  */

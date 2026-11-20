@@ -13,7 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import type { TranslationSentenceItem } from '@/types'
-import { parseSentenceIntoWords, extractAutoKeywords } from '@/lib/sentenceParser'
+import { parseSentenceIntoWords, selectWarmupWords } from '@/lib/sentenceParser'
 import { SentenceUnderlineSlots } from '@/components/translate/SentenceUnderlineSlots'
 import { audioEngine } from '@/core/audioEngine'
 import { isShortcutMatch } from '@/lib/shortcuts'
@@ -42,22 +42,15 @@ export function TranslateCard({
   onPrev,
   isActive = true,
 }: TranslateCardProps) {
-  // 提取本句的核心词汇列表 (支持预置配置与智能提取)
-  const keywords = useMemo(() => {
-    if (sentence.keywords && sentence.keywords.length > 0) {
-      return sentence.keywords
-    }
-    return extractAutoKeywords(
-      sentence.sentenceEn,
-      sentence.grammar?.tokens,
-      sentence.sentenceZh
-    )
-  }, [sentence])
+  // 本句的热身单词（只含单个单词；为空则直接整句翻译）
+  const keywords = useMemo(() => selectWarmupWords(sentence), [sentence])
 
   // 阶段管理：先核心词热身 ('keyword') -> 再整句翻译 ('sentence')
-  const [stage, setStage] = useState<'keyword' | 'sentence'>(() =>
+  const [stageState, setStage] = useState<'keyword' | 'sentence'>(() =>
     keywords.length > 0 ? 'keyword' : 'sentence'
   )
+  // 没有热身单词的句子在任何时刻都按整句阶段渲染与响应按键（含切句后重置生效前的那一帧）
+  const stage = keywords.length > 0 ? stageState : 'sentence'
   const [currentKeywordIndex, setCurrentKeywordIndex] = useState(0)
   const [keywordInput, setKeywordInput] = useState('')
   const [keywordError, setKeywordError] = useState(false)
@@ -90,6 +83,8 @@ export function TranslateCard({
 
   // 翻译 Store
   const {
+    practiceMode,
+    setPracticeMode,
     isPeeking,
     setPeeking,
     isSpeaking,
@@ -102,6 +97,8 @@ export function TranslateCard({
     repeatSentenceKey,
     repeatCurrentSentence,
   } = useTranslateStore()
+
+  const isFollowMode = practiceMode === 'follow'
 
   // 切题或重复练习时重置状态：重新从核心词开始热身
   useEffect(() => {
@@ -121,7 +118,6 @@ export function TranslateCard({
   // 当前进行中的核心词
   const currentKeyword = keywords[currentKeywordIndex]
   const cleanTargetWord = currentKeyword ? normalizeKeyword(currentKeyword.word) : ''
-  const isPhraseKeyword = currentKeyword?.kind === 'phrase' || cleanTargetWord.includes(' ')
 
   // 当离开练习页 tab 时，立即终止正在播放或计划播放的语音
   useEffect(() => {
@@ -483,6 +479,38 @@ export function TranslateCard({
         </div>
 
         <div className="flex items-center gap-1">
+          {/* 练习模式切换：盲写模式 / 跟写模式 */}
+          <div
+            className="inline-flex items-center h-8 p-0.5 rounded-md bg-muted border border-border mr-1"
+            role="group"
+            aria-label="练习模式切换"
+          >
+            <button
+              type="button"
+              onClick={() => setPracticeMode('blind')}
+              title="盲写模式：隐藏英文底字，根据中文译文独立拼写"
+              className={`h-7 px-2.5 rounded-[5px] text-xs transition-colors cursor-pointer ${
+                practiceMode === 'blind'
+                  ? 'bg-background text-foreground font-medium shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              盲写模式
+            </button>
+            <button
+              type="button"
+              onClick={() => setPracticeMode('follow')}
+              title="跟写模式：在输入槽显示灰色英文底字，原位跟打"
+              className={`h-7 px-2.5 rounded-[5px] text-xs transition-colors cursor-pointer ${
+                practiceMode === 'follow'
+                  ? 'bg-background text-foreground font-medium shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              跟写模式
+            </button>
+          </div>
+
           {/* 发音播报按钮 (手动点击重复播放当前单词或整句读音) */}
           <button
             type="button"
@@ -581,8 +609,8 @@ export function TranslateCard({
               {currentKeyword.meaningZh}
             </div>
             <p className="text-xs text-muted-foreground">
-              {isPhraseKeyword
-                ? '请拼写对应的英语短语，单词之间用空格分隔（拼对后自动推进）'
+              {isFollowMode
+                ? '请对照灰色英文底字跟写核心英语单词（拼对后自动推进）'
                 : '请拼写对应的核心英语单词（拼对后自动推进）'}
             </p>
           </div>
@@ -590,9 +618,13 @@ export function TranslateCard({
           {/* 纯净平直单词横杠输入槽：英文字体字号放大，与译文字号对调 */}
           <div className="flex items-center justify-center py-4">
             <div
-              style={{
-                width: `${Math.max(currentKeyword.word.length, keywordInput.length, 1)}ch`,
-              }}
+              style={
+                isFollowMode
+                  ? undefined
+                  : {
+                      width: `${Math.max(currentKeyword.word.length, keywordInput.length, 1)}ch`,
+                    }
+              }
               className={`relative h-14 sm:h-16 xl:h-20 flex items-end justify-start px-1 pb-1.5 bg-transparent border-b-2 font-serif text-3xl sm:text-4xl xl:text-5xl transition-colors ${keywordError
                   ? 'text-destructive border-destructive animate-shake'
                   : isKeywordSuccess
@@ -623,6 +655,13 @@ export function TranslateCard({
                       : 'bg-primary'
                   }`}
               />
+
+              {/* 跟写模式：未输入部分的灰色英文底字 */}
+              {isFollowMode && !isKeywordSuccess && currentKeyword.word.slice(keywordInput.length) && (
+                <span className="leading-none whitespace-pre text-muted-foreground opacity-40 select-none pointer-events-none">
+                  {currentKeyword.word.slice(keywordInput.length)}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -631,7 +670,7 @@ export function TranslateCard({
         <div className="flex-1 flex flex-col justify-start items-center pt-6 sm:pt-8 xl:pt-10 space-y-6 animate-fadeIn">
           <div className="text-center space-y-1.5">
             <p className="text-xs text-muted-foreground">
-              请根据译文输入对应的英文整句
+              {isFollowMode ? '请对照下方灰色英文底字跟写整句' : '请根据译文输入对应的英文整句'}
             </p>
             {/* 译文字体增大 1 号，纯白且不粗 */}
             <div className="text-lg sm:text-xl xl:text-2xl font-normal text-white leading-relaxed max-w-2xl mx-auto">
@@ -648,6 +687,7 @@ export function TranslateCard({
               errorIndices={errorIndices}
               isPeeking={isPeeking}
               isCompleted={isCompleted}
+              isFollowMode={isFollowMode}
               onWordClick={(idx) => {
                 if (!isCompleted) {
                   setActiveWordIndex(idx)
