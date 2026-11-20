@@ -603,9 +603,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '最近怎么样？',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s02_k1', word: 'what is up', meaningZh: '最近怎么样；近来可好', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '主语 + 系动词 + 表语',
           patternCode: 'S + Link + P',
@@ -624,9 +622,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '请进。',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s03_k2', word: 'come in', meaningZh: '进来', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '祈使句：谓语 + 状语 + 状语',
           patternCode: 'V + Adv + Adv',
@@ -666,9 +662,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '请自便。',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s05_k2', word: 'help yourself', meaningZh: '请自便；自己取用', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语',
           patternCode: 'V + O',
@@ -686,9 +680,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '等一下。',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s06_k1', word: 'hang on', meaningZh: '稍等；别挂断', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '祈使句：谓语 + 状语',
           patternCode: 'V + Adv',
@@ -708,7 +700,6 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         difficulty: 'easy',
         keywords: [
           { id: 'phrases_basic_ep01_s07_k1', word: 'time', meaningZh: '时间', pos: 'n.', kind: 'word' },
-          { id: 'phrases_basic_ep01_s07_k2', word: 'take your time', meaningZh: '慢慢来；不用着急', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '祈使句：谓语 + 宾语',
@@ -813,9 +804,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '请说吧。',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s12_k2', word: 'go ahead', meaningZh: '请说吧；请继续', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '祈使句：谓语 + 状语',
           patternCode: 'V + Adv',
@@ -855,7 +844,6 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         difficulty: 'easy',
         keywords: [
           { id: 'phrases_basic_ep01_s14_k1', word: 'way', meaningZh: '路；路线', pos: 'n.', kind: 'word' },
-          { id: 'phrases_basic_ep01_s14_k2', word: 'on my way', meaningZh: '在路上；正在赶来', pos: 'phr.', kind: 'phrase' },
         ],
         grammar: {
           patternZh: '主语 + 系动词 + 介词短语表语',
@@ -901,9 +889,7 @@ export const DEFAULT_TRANSLATION_BOOKS: TranslationBook[] = [
         sentenceZh: '你要帮忙吗？',
         category: '基础短语',
         difficulty: 'easy',
-        keywords: [
-          { id: 'phrases_basic_ep01_s16_k2', word: 'need a hand', meaningZh: '需要帮忙', pos: 'phr.', kind: 'phrase' },
-        ],
+        keywords: [],
         grammar: {
           patternZh: '助动词 + 主语 + 谓语 + 宾语',
           patternCode: 'V(aux) + S + V + O',
