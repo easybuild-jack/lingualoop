@@ -181,20 +181,6 @@ export interface KeySoundOption {
   switchType: string;
 }
 
-export interface UserSettings {
-  theme: 'dark' | 'light' | 'system';
-  phoneticPreference: 'us' | 'uk';              // 默认优先展示英音还是美音
-  autoPlayAudio: boolean;                       // 切词时是否自动播放发音
-  audioRate: number;                            // 播放倍速 (0.75, 1.0, 1.25)
-  keySoundPack: string;                         // 轴体名称 (如 'Cherry MX Blues', 'Holy Pandas')
-  keySoundVolume: number;                       // 按键音量 (0.0 ~ 1.0)
-  isKeySoundEnabled: boolean;                   // 按键音开关
-  isWrongBeepEnabled: boolean;                  // 错误蜂鸣音开关
-  isCorrectSoundEnabled: boolean;               // 完成提示音开关
-  feedbackVolume: number;                       // 提示音量
-  defaultUnitSize: number;                      // 默认单元容量
-}
-
 export interface ShortcutConfig {
   peekHint: string;            // 偷看提示 (默认 Tab)
   replayAudio: string;         // 发音朗读 (默认 Ctrl+J)
@@ -265,13 +251,5 @@ export interface TranslationBook {
   sentences: TranslationSentenceItem[];
   createdAt: number;
   updatedAt: number;
-}
-
-export interface TranslationRecord {
-  sentenceId: string;
-  bookId: string;
-  isCompleted: boolean;
-  errorCount: number;
-  lastPracticedAt: number;
 }
 

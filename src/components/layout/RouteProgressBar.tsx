@@ -105,7 +105,3 @@ export function RouteProgressBar() {
 export function startRouteProgressBar() {
   useNavigationStore.getState().startNavigation()
 }
-
-export function completeRouteProgressBar() {
-  useNavigationStore.getState().finishNavigation()
-}

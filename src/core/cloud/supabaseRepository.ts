@@ -65,8 +65,6 @@ function fail(error: unknown, fallback: string): never {
 const PAGE_SIZE = 1000
 /** 批量写入每批行数，避免单个请求体过大 */
 const WRITE_BATCH_SIZE = 500
-/** `in` 过滤拼在 URL 上，分批避免 URL 过长 */
-const IN_FILTER_CHUNK = 100
 
 type PageResult = PromiseLike<{ data: unknown; error: unknown }>
 

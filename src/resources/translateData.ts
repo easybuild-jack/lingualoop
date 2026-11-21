@@ -996,14 +996,6 @@ const OFFICIAL_TRANSLATION_BOOK_IDS = new Set(
   DEFAULT_TRANSLATION_BOOKS.filter((book) => book.isOfficial).map((book) => book.id)
 )
 
-const OFFICIAL_SENTENCE_IDS = new Set(
-  DEFAULT_TRANSLATION_BOOKS.filter((book) => book.isOfficial).flatMap((book) => book.sentences.map((s) => s.id))
-)
-
 export function isOfficialTranslationBook(bookId: string | undefined | null): boolean {
   return Boolean(bookId) && OFFICIAL_TRANSLATION_BOOK_IDS.has(bookId as string)
-}
-
-export function isOfficialSentence(sentenceId: string): boolean {
-  return OFFICIAL_SENTENCE_IDS.has(sentenceId)
 }

@@ -8,7 +8,6 @@ interface SentenceUnderlineSlotsProps {
   activeWordIndex: number
   typedWords: string[]
   errorIndices: number[]
-  isPeeking: boolean
   isCompleted: boolean
   isFollowMode?: boolean
   onWordClick?: (index: number) => void
@@ -19,7 +18,6 @@ export function SentenceUnderlineSlots({
   activeWordIndex,
   typedWords,
   errorIndices,
-  isPeeking,
   isCompleted,
   isFollowMode = false,
   onWordClick,

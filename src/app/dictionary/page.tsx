@@ -303,11 +303,7 @@ export default function DictionaryPage() {
 
     suggestionDebounceRef.current = setTimeout(async () => {
       try {
-        const list = await searchWordSuggestions(
-          text,
-          currentBook?.id || 'book_cet4',
-          currentBook?.name || 'CET-4 核心词库'
-        )
+        const list = await searchWordSuggestions(text)
         setSuggestions(list)
       } catch (err) {
         console.error('Failed to get suggestions:', err)

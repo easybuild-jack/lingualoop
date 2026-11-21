@@ -327,7 +327,6 @@ export default function TranslatePage() {
                     sentenceIndex={currentSentenceIndex}
                     totalSentences={totalSentences}
                     onNext={nextSentence}
-                    onPrev={prevSentence}
                     isActive={activeTab === 'practice'}
                   />
                 ) : (

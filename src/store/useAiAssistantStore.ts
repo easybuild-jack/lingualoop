@@ -436,14 +436,12 @@ export const useAiAssistantStore = create<AiAssistantState>()(
         // 开始真实大模型流式调用，并施加 60 秒心跳超时检测
         const controller = new AbortController()
         activeChatAbortController = controller
-        let isTimedOut = false
 
         // 60 秒无响应心跳检测
         let timeoutTimer: NodeJS.Timeout | null = null
         const resetTimeout = () => {
           if (timeoutTimer) clearTimeout(timeoutTimer)
           timeoutTimer = setTimeout(() => {
-            isTimedOut = true
             controller.abort()
           }, 60000)
         }
@@ -506,7 +504,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
             isStreaming: false,
           })
           return
-        } catch (err: unknown) {
+        } catch {
           if (timeoutTimer) clearTimeout(timeoutTimer)
           activeChatAbortController = null
 

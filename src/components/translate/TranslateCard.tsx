@@ -30,7 +30,6 @@ interface TranslateCardProps {
   sentenceIndex: number
   totalSentences: number
   onNext: () => void
-  onPrev: () => void
   isActive?: boolean
 }
 
@@ -39,7 +38,6 @@ export function TranslateCard({
   sentenceIndex,
   totalSentences,
   onNext,
-  onPrev,
   isActive = true,
 }: TranslateCardProps) {
   // 本句的热身单词（只含单个单词；为空则直接整句翻译）
@@ -685,7 +683,6 @@ export function TranslateCard({
               activeWordIndex={activeWordIndex}
               typedWords={typedWords}
               errorIndices={errorIndices}
-              isPeeking={isPeeking}
               isCompleted={isCompleted}
               isFollowMode={isFollowMode}
               onWordClick={(idx) => {

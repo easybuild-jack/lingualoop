@@ -174,7 +174,7 @@ compile v. 编译；编纂`
             }, aiConfig)
             if (reconciled) entries.push(reconciled)
           }
-        } catch (err) {
+        } catch {
           alert('JSON 解析失败，请检查文件格式')
         }
       } else {
