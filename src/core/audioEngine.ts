@@ -78,6 +78,16 @@ export const IPA_AUDIO_MAP: Record<string, string> = {
   'r': 'r',
   'w': 'w',
   'j': 'j',
+
+  // 常见拼读组合音 (8)
+  'ʃn': 'shn',
+  'ʒn': 'zhn',
+  'tʃə': 'cher',
+  'ʒə': 'zher',
+  'ɔːl': 'o_long_l',
+  'əs': 'schwa_s',
+  'ŋk': 'ngk',
+  'kw': 'kw',
 }
 
 /** 同一个词的发音节流窗口：首次立即出声，其后 3 秒内的重复触发直接丢弃 */
