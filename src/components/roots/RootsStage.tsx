@@ -12,7 +12,6 @@ export function RootsStage() {
     rootSearchQuery,
     setRootSearchQuery,
     setRootIndex,
-    activeRootIndex,
   } = useWorkspaceStore()
 
   const [isDetailOpen, setIsDetailOpen] = useState(false)

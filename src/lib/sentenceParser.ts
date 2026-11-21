@@ -159,8 +159,7 @@ export function toLemmaBaseForm(rawWord: string): string {
  */
 export function extractAutoKeywords(
   sentenceEn: string,
-  grammarTokens?: SentenceTokenGrammar[],
-  _sentenceZh?: string
+  grammarTokens?: SentenceTokenGrammar[]
 ): SentenceKeywordItem[] {
   const words = parseSentenceIntoWords(sentenceEn, grammarTokens)
   const candidateKeywords: SentenceKeywordItem[] = []
@@ -238,7 +237,7 @@ export function isWarmupWord(keyword: SentenceKeywordItem): boolean {
  */
 export function selectWarmupWords(sentence: TranslationSentenceItem): SentenceKeywordItem[] {
   if (Array.isArray(sentence.keywords)) return sentence.keywords.filter(isWarmupWord)
-  return extractAutoKeywords(sentence.sentenceEn, sentence.grammar?.tokens, sentence.sentenceZh).filter(isWarmupWord)
+  return extractAutoKeywords(sentence.sentenceEn, sentence.grammar?.tokens).filter(isWarmupWord)
 }
 
 /**
@@ -382,7 +381,7 @@ export function parseCustomSentenceText(rawContent: string): TranslationSentence
         difficulty: 'medium',
         isCustom: true,
         createdAt: Date.now(),
-        keywords: extractAutoKeywords(en, defaultTokens, zh),
+        keywords: extractAutoKeywords(en, defaultTokens),
         grammar: {
           patternZh: '练习句型',
           patternCode: 'Sentence',

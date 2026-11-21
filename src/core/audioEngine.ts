@@ -325,7 +325,7 @@ class AudioEngine {
       }
     }, { once: true })
 
-    audio.play().catch((err) => {
+    audio.play().catch(() => {
       if (!settled) {
         settled = true
         this.playSpeechSynthesis(sentence, accent, rate, onEnd)

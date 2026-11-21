@@ -525,7 +525,6 @@ function BooksHubContent() {
   // 累计全书各单元进度与已学词量（即使单元处于进行中，也按已完成单词数如实计入全书总进度）
   let totalCompletedWords = 0
   let totalBookCapacity = 0
-  let masteredUnitsCount = 0
 
   for (let index = 0; index < totalUnits; index++) {
     const unitMeta = activeUnits?.[index]
@@ -539,7 +538,6 @@ function BooksHubContent() {
     totalBookCapacity += expectedCount
 
     if (progress?.status === 'completed') {
-      masteredUnitsCount += 1
       totalCompletedWords += expectedCount
     } else if (progress?.completedWordIds?.length) {
       totalCompletedWords += Math.min(expectedCount, progress.completedWordIds.length)

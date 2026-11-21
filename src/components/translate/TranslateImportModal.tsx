@@ -4,7 +4,6 @@ import React, { useState, useId } from 'react'
 import {
   X,
   Upload,
-  FileText,
   Check,
   AlertCircle,
   HelpCircle,

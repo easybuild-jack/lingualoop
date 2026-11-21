@@ -452,8 +452,6 @@ export function WordContextPanels({
           isOpen={Boolean(lookupWordInfo)}
           onClose={() => setLookupWordInfo(null)}
           wordQuery={lookupWordInfo.word}
-          sentenceEn={lookupWordInfo.sentenceEn}
-          sentenceCn={lookupWordInfo.sentenceCn}
           targetRect={lookupWordInfo.targetRect}
         />
       )}

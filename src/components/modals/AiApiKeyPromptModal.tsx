@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { KeyRound, Sparkles, ArrowRight, X, Bot } from 'lucide-react'
+import { KeyRound, Sparkles, ArrowRight, X } from 'lucide-react'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 

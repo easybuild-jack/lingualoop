@@ -16,8 +16,6 @@ export interface WordLookupModalProps {
   isOpen: boolean
   onClose: () => void
   wordQuery: string | null
-  sentenceEn?: string
-  sentenceCn?: string
   targetRect?: DOMRect | null
 }
 
@@ -25,8 +23,6 @@ export function WordLookupModal({
   isOpen,
   onClose,
   wordQuery,
-  sentenceEn,
-  sentenceCn,
   targetRect,
 }: WordLookupModalProps) {
   const [mounted, setMounted] = useState(false)

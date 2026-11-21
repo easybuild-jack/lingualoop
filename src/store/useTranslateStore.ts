@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { TranslationBook, TranslationSentenceItem } from '@/types'
+import type { TranslationBook } from '@/types'
 import { DEFAULT_TRANSLATION_BOOKS, isOfficialTranslationBook } from '@/resources/translateData'
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
