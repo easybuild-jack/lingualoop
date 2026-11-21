@@ -4,7 +4,9 @@
 
 # LinguaLoop
 
-**An open-source, local-first, all-in-one English learning loop web app**
+**From your first phonetic symbol to your first real English conversation.**
+
+*An open-source, highly flexible, and completely free personal English learning assistant — supporting offline local use, cross-device sync, and team sharing.*
 
 English · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./README.zh-HK.md) · [繁體中文（台灣）](./README.zh-TW.md) · [日本語](./README.ja.md)
 
@@ -12,39 +14,68 @@ English · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./REA
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Dexie.js](https://img.shields.io/badge/Dexie.js-IndexedDB-10B981)](https://dexie.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Optional-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![GitHub Stars](https://img.shields.io/github/stars/easybuild-jack/lingualoop?style=flat&color=f59e0b)](https://github.com/easybuild-jack/lingualoop/stargazers)
 
 [Live Demo](https://www.lingualoop.com.cn) · [Architecture (ZH)](./docs/architecture.md) · [Developer Guide (ZH)](./docs/development.md) · [SEO Guide (ZH)](./docs/seo.md)
 
+<br />
+
+<img src="./public/og-image.png" alt="LinguaLoop Preview" width="840" />
+
 </div>
 
 ---
 
-## ✨ Introduction
+## ✨ Why LinguaLoop?
 
-**LinguaLoop** is an **open-source, local-first** modern English learning web application built with **Next.js 16 + React 19 + TypeScript 5 + Tailwind CSS 4**.
+Most English apps split learning into disconnected fragments — one app for flashcards, another for listening, another for grammar, and yet another for speaking.
 
-It connects **IPA phonetics, syllable-based vocabulary learning, blind dictation, roots & affixes, visual grammar, offline dictionary, bilingual reading, listening plaza, sentence translation, AI tutor, and AI speaking partner** into a cohesive listening-speaking-reading-writing-translating loop. With zero required backend, all progress stays in your browser by default and works offline—while optionally supporting **BYOK AI models** and **Supabase cloud sync**.
+**LinguaLoop** connects all **5 core skills (Listening · Speaking · Reading · Writing · Translation)** across **12 integrated modules** into **one continuous learning loop**:
+
+> **Build the Foundation → Immerse in Input → Activate Output** — so you can truly **understand, speak, read, and write**.
+
+| 5 Core Skills | 12 Learning Modules | 50,000+ Offline Entries | 100% Open Source |
+| :---: | :---: | :---: | :---: |
+| Listening · Speaking · Reading · Writing · Translation | End-to-end connected loop | Built-in local dictionary | Free to customize & self-host |
 
 ---
 
 ## 🚀 Live Demo
 
-- **Website**: [https://www.lingualoop.com.cn](https://www.lingualoop.com.cn)
-- **Out of the Box**: No sign-up required. All progress and custom decks are stored locally in your browser (PWA desktop install supported).
+- **Official Site**: [https://www.lingualoop.com.cn](https://www.lingualoop.com.cn)
+- **Zero Friction**: No sign-up required — open the page and start practicing immediately (PWA desktop install supported).
 
 ---
 
-## 🎯 Key Features
+## 🗺️ Complete Learning Loop (12 Modules)
 
-- **Complete English Learning Loop**: Covers 48 IPA phonetics, syllable breakdown, audio/meaning blind dictation, mistake drills, roots & affixes map, 16-tense & syntax diagrams, bilingual reading, listening videos, and two-stage sentence translation (warmup keywords → full-sentence typing → word-by-word grammar breakdown).
-- **Built-in Decks & Offline Dictionary**: Ships with curated vocabulary decks (Basic, CET-4/6, Kaoyan, Essential 4000, IT English) plus CSV/TXT/JSON custom deck import. Instant local cache lookup with on-demand AI enrichment for syllables, examples, phrases, and etymology.
-- **Local-First + Optional Supabase Cloud Sync**: Runs 100% locally via IndexedDB and `localStorage` out of the box. Connect your own Supabase project anytime for multi-device sync, built-in account progress isolation, shared/personal content visibility, and idempotent manual sync.
-- **BYOK Stateless AI Tutor & Speaking Partner**: Plug in your own OpenAI-compatible LLM (DeepSeek, Doubao, Qwen, OpenAI, etc.) and Doubao/Qwen TTS & ASR. Server routes act strictly as stateless proxies—credentials and audio are never persisted or logged.
-- **Immersive Desktop-Grade UX**: Multiple dark theme skins via CSS variables, mechanical keyboard switch sounds (Howler.js), customizable global shortcuts, and PWA offline support.
-- **AI-Friendly Engineering Setup**: Includes dedicated [Architecture](./docs/architecture.md) and [Developer Guide](./docs/development.md) docs for fast onboarding by both human engineers and AI coding agents.
+| Stage | Modules & Highlights |
+| --- | --- |
+| **1. Foundation · Sound & Vocab** | **IPA Learning** (48 phonetic symbols + 42 phonics combos, tap to hear) · **IPA Practice** (built-in IPA keyboard drills) · **Word Learning** (syllable breakdown & etymology typing) · **Roots & Affixes** (cognate word family map) |
+| **2. Retention & Tools** | **Mistake & Starred Book** (**3-in-a-row streak** anti-illusion mastery) · **Offline Dictionary** (50,000+ entries instant lookup + AI enrichment) · **Deck Manager** (CET-4/6, Kaoyan, Essential 4000, IT English + CSV/TXT/JSON custom import) |
+| **3. Input · Listen & Read** | **Listening Plaza** (phrases, dialogues & English radio with speed control & bilingual subtitles) · **Bilingual Reading** (**IPA / English / Chinese 3-line view**, click any word to look up & pronounce) · **Visual Grammar** (parts of speech, 16 tenses & syntax derivation) |
+| **4. Output · Write & Speak** | **Blind Dictation** (listen & spell from memory) · **Sentence Translation** (keyword warmup → full-sentence typing → word-by-word grammar analysis) · **AI Speaking Partner** (coffee shop, travel, tech interview & IELTS role-play with instant grammar & pronunciation feedback) |
+
+---
+
+## 🔥 Crafted Details That Make Learning Addictive
+
+- 🎯 **Anti-Illusion "3-in-a-Row" Mastery**: Any typo or hint peek automatically sends the word to your mistake book — it only clears after **3 consecutive blind-typing hits**.
+- 🎹 **13 Real Mechanical Keyboard Switch Sounds**: Sampled Cherry MX Blues/Browns, Topre, Alpacas, NovelKeys Creams, IBM Buckling Spring and more (via Howler.js) — turning dictation into a satisfying typing experience.
+- 🎨 **7 Eye-Friendly Themes (Dark & Light)**: Calm dark modes for deep focus and warm paper-ink light modes — instant full-page switching via CSS variables.
+- 🗣️ **AI Speaking Partner (The Final Link)**: Role-play real-life scenarios anytime, get instant grammar corrections, and turn unknown words from conversations directly into your vocabulary deck.
+
+---
+
+## 🌐 Built for Total Freedom
+
+| Mode | What You Get |
+| --- | --- |
+| 📴 **Offline Ready** | 50,000+ dictionary entries & built-in decks load locally; install as a PWA and study without internet. |
+| 🔄 **Cross-Device Sync** | Connect your own Supabase database to sync decks, mistake books, and progress across devices. |
+| 👥 **Team & Family Sharing** | Per-account progress isolation with flexible **Shared / Personal** visibility for decks, sentences, articles, and videos — learn and curate together. |
+| ✨ **Fully Personalized (BYOK)** | Import your own study materials, switch themes & shortcuts, and plug in your own LLM / TTS / ASR keys (stateless proxy, zero server storage). |
 
 ---
 
@@ -55,7 +86,7 @@ It connects **IPA phonetics, syllable-based vocabulary learning, blind dictation
 | Core | Next.js 16 (App Router) · React 19 · TypeScript 5 |
 | UI & Motion | Tailwind CSS 4 · Framer Motion · Lucide React |
 | State & Storage | Zustand 5 · Dexie.js 4 (IndexedDB) · PWA |
-| Optional Cloud | Supabase (`@supabase/supabase-js`) · PostgreSQL RPC |
+| Cloud Sync (Optional) | Supabase (`@supabase/supabase-js`) · PostgreSQL RPC |
 | Audio & Speech | Howler.js · Web Speech Synthesis API · Doubao / Qwen TTS & ASR |
 
 ---
@@ -97,29 +128,29 @@ npm run lint      # Run ESLint
 | Feature | How to Configure |
 | --- | --- |
 | **AI Dictionary / Tutor / Speaking** | Open **Settings → AI Models / Speech** in the app and enter your own API Key (stored only in your browser) |
-| **Multi-Device Sync (Supabase)** | Run [`supabase/schema.sql`](./supabase/schema.sql) in your Supabase SQL Editor, then enter Project URL & Anon Key in **Settings → Cloud Sync** |
+| **Cross-Device & Team Sync (Supabase)** | Run [`supabase/schema.sql`](./supabase/schema.sql) in your Supabase SQL Editor, then enter Project URL & Anon Key in **Settings → Cloud Sync** |
 | **Custom Domain (SEO)** | Set `NEXT_PUBLIC_SITE_URL=https://your-domain.com` before building (optional) |
 
 ---
 
 ## 📚 Documentation
 
-- 📖 **[Architecture (ZH)](./docs/architecture.md)**: Project overview, feature map, tech stack, system architecture diagram, and technical roadmap
-- 🛠 **[Developer Guide (ZH)](./docs/development.md)**: Technical handbook for developers and AI agents covering architecture rules, core workflows, coding standards, and checklists
-- 🔍 **[SEO Guide (ZH)](./docs/seo.md)**: Brand conventions, route metadata catalog, and search engine submission guide
-- 🎬 **[Official Samples Guide (ZH)](./docs/official-samples.md)**: How built-in listening videos and translation decks are structured and validated
+- 📖 **[Architecture (ZH)](./docs/architecture.md)**: System architecture, tech roadmap, data routing, and directory layout
+- 🛠 **[Developer Guide (ZH)](./docs/development.md)**: Technical handbook for developers and AI coding agents (rules, workflows, conventions & checklists)
+- 🔍 **[SEO Guide (ZH)](./docs/seo.md)**: Brand conventions, route metadata catalog, and search engine submission
+- 🎬 **[Official Samples Guide (ZH)](./docs/official-samples.md)**: Built-in listening videos & translation decks guide
 
 ---
 
 ## 🤝 Feedback & Issues
 
-You are welcome to **Fork** and customize LinguaLoop for your own use or self-hosting. For bug reports or feature suggestions, please open an [Issue](https://github.com/easybuild-jack/lingualoop/issues).
+You are welcome to **Fork** and customize LinguaLoop for personal, family, or team use. For bug reports or feature suggestions, please open an [Issue](https://github.com/easybuild-jack/lingualoop/issues).
 
 ---
 
 ## ☕ Sponsor / Buy Me a Coffee
 
-If **LinguaLoop** helps your English learning or saves you time, feel free to buy me a cup of coffee!
+If **LinguaLoop** helps your English learning or inspires your project, feel free to buy me a cup of coffee!
 
 <table>
   <tr>
