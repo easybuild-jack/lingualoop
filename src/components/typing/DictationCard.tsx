@@ -5,6 +5,7 @@ import { Volume2 } from 'lucide-react'
 import type { DictationCueMode, WordItem } from '@/types'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { WordCardShell } from '@/components/typing/WordCardShell'
+import { PracticeProgress } from '@/components/typing/PracticeProgress'
 import { TypingLines } from '@/components/typing/TypingLines'
 import { WordMeaning } from '@/components/word/WordDisplay'
 import { getWordExamples } from '@/lib/wordExamples'
@@ -21,6 +22,8 @@ interface DictationCardProps {
   cueMode?: DictationCueMode
   phoneticPreference: 'us' | 'uk'
   remainingLoops?: number
+  /** 页面数据是否就绪，用于进度占位 */
+  isReady?: boolean
 }
 
 const DICTATION_AI_SECTIONS = ['core', 'examples'] as const
@@ -34,6 +37,7 @@ export function DictationCard({
   isPeeking,
   phoneticPreference,
   remainingLoops = 1,
+  isReady = true,
 }: DictationCardProps) {
   const word = useEnsureAiWordSections(sourceWord, DICTATION_AI_SECTIONS)
 
@@ -64,6 +68,7 @@ export function DictationCard({
       word={word}
       phoneticPreference={phoneticPreference}
       remainingLoops={remainingLoops}
+      headerLeft={<PracticeProgress isReady={isReady} />}
       className="pt-12 xl:pt-14 pb-2"
     >
       <div className="flex flex-col h-full min-h-0">

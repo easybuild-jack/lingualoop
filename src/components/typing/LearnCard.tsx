@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Scissors, Combine, Star } from 'lucide-react'
 import type { WordItem } from '@/types'
 import { WordCardShell } from '@/components/typing/WordCardShell'
+import { PracticeProgress } from '@/components/typing/PracticeProgress'
 import { TypingLines } from '@/components/typing/TypingLines'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { formatShortcutDisplay } from '@/lib/shortcuts'
@@ -23,6 +24,8 @@ interface LearnCardProps {
   hasTypo: boolean
   phoneticPreference: 'us' | 'uk'
   remainingLoops?: number
+  /** 页面数据是否就绪，用于进度占位 */
+  isReady?: boolean
 }
 
 /** 跟学单词页：上半区专注跟打，下半区左右分栏展示例句/短语与构词 */
@@ -32,6 +35,7 @@ export function LearnCard({
   hasTypo,
   phoneticPreference,
   remainingLoops = 1,
+  isReady = true,
 }: LearnCardProps) {
   const isSplit = useWorkspaceStore((s) => s.isCurrentWordSplit)
   const toggleSplit = useWorkspaceStore((s) => s.toggleCurrentWordSplit)
@@ -97,9 +101,10 @@ export function LearnCard({
       word={word}
       phoneticPreference={phoneticPreference}
       remainingLoops={remainingLoops}
+      headerLeft={<PracticeProgress isReady={isReady} />}
       headerActions={headerActions}
       showAudioButton={false}
-      className="pt-12 xl:pt-14 pb-2"
+      className="pt-[38px] xl:pt-[46px] pb-2"
     >
       <div>
         <WordHeadline word={word} isSplit={isSplit} />
@@ -117,6 +122,7 @@ export function LearnCard({
         contextTab={contextTab}
         onContextTabChange={setContextTab}
         etymologyErrorText="构词分析失败，下次进入时将重新补全"
+        spacingClass="mt-12 xl:mt-16"
       />
     </WordCardShell>
   )

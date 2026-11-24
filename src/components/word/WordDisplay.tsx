@@ -241,6 +241,8 @@ interface WordContextPanelsProps {
   contextTab: WordContextTab
   onContextTabChange: (tab: WordContextTab) => void
   etymologyErrorText: string
+  /** 与上方单词区的间距，练习页可加大以拉开层次 */
+  spacingClass?: string
 }
 
 /** 下半区：左侧例句/短语，右侧构词；用细线分隔，不套卡片 */
@@ -250,6 +252,7 @@ export function WordContextPanels({
   contextTab,
   onContextTabChange,
   etymologyErrorText,
+  spacingClass = 'mt-5 xl:mt-7',
 }: WordContextPanelsProps) {
   const [speakingSentenceIdx, setSpeakingSentenceIdx] = useState<number | null>(null)
   const [lookupWordInfo, setLookupWordInfo] = useState<{
@@ -283,7 +286,7 @@ export function WordContextPanels({
   }
 
   return (
-    <div className="grid grid-cols-12 mt-5 xl:mt-7 border-t border-border flex-1 min-h-0 text-left">
+    <div className={`grid grid-cols-12 ${spacingClass} border-t border-border flex-1 min-h-0 text-left`}>
       <section className="col-span-8 pt-4 xl:pt-5 pr-6 xl:pr-8 flex flex-col min-h-0">
         <div className="flex items-end justify-between gap-3">
           <div className="flex items-center gap-5" role="tablist" aria-label="语境内容">

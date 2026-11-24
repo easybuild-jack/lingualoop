@@ -79,6 +79,7 @@ export function DictationStage({
                 isPeeking={isPeeking}
                 phoneticPreference={phoneticPreference}
                 remainingLoops={currentWordRemainingLoops}
+                isReady={isReady}
               />
 
               {/* 未点击「开始默写」时的沉浸引导蒙层 */}
