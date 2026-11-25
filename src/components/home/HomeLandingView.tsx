@@ -171,6 +171,43 @@ function SectionHeading({ eyebrow, title, desc }: { eyebrow: string; title: Reac
   )
 }
 
+/** 液态玻璃追光卡片：鼠标移动时触发内部柔光、局部 1.5px 边框点亮与轻微 3D 倾角 */
+function LiquidLightCard({
+  children,
+  className = '',
+  maxTilt = 2.4,
+}: {
+  children: React.ReactNode
+  className?: string
+  maxTilt?: number
+}) {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const card = e.currentTarget
+    const rect = card.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    card.style.setProperty('--mx', `${x}px`)
+    card.style.setProperty('--my', `${y}px`)
+    const rx = (y / rect.height - 0.5) * -maxTilt * 2
+    const ry = (x / rect.width - 0.5) * maxTilt * 2
+    card.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`
+  }
+
+  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)'
+  }
+
+  return (
+    <div
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      className={`liquid-light-card ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
+
 export function HomeLandingView() {
   const skinId = useWorkspaceStore((s) => s.skinId)
   const setSkinId = useWorkspaceStore((s) => s.setSkinId)
@@ -247,7 +284,7 @@ export function HomeLandingView() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.08 }}
-                className="mt-6 text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.1] text-foreground"
+                className="mt-6 text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.15] text-foreground"
               >
                 从第一个音标，
                 <br />
@@ -358,12 +395,12 @@ export function HomeLandingView() {
                 const Icon = s.icon
                 return (
                   <Reveal key={s.key} delay={i * 0.07} className="h-full">
-                  <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all duration-300 ease-out hover:scale-[1.05] hover:-translate-y-1 hover:border-primary/50 hover:shadow-2xl hover:z-10">
-                    <span className="pointer-events-none absolute -right-3 -top-6 font-serif text-[120px] leading-none text-primary/[0.07] transition-all duration-500 group-hover:text-primary/[0.16] group-hover:scale-110">
+                  <LiquidLightCard className="group h-full overflow-hidden rounded-2xl border border-border bg-card p-6 hover:z-10">
+                    <span className="pointer-events-none absolute -right-3 -top-6 z-[1] font-serif text-[120px] leading-none text-primary/[0.07] transition-all duration-500 group-hover:text-primary/[0.16] group-hover:scale-110">
                       {s.key}
                     </span>
-                    <div className="relative">
-                      <div className="size-11 rounded-xl bg-primary/12 text-primary flex items-center justify-center transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
+                    <div className="relative z-[1]">
+                      <div className="size-11 rounded-xl bg-primary/12 text-primary flex items-center justify-center">
                         <Icon className="size-5" />
                       </div>
                       <div className="mt-5 text-xs font-mono uppercase tracking-wider text-muted-foreground">{s.en}</div>
@@ -381,7 +418,7 @@ export function HomeLandingView() {
                         ))}
                       </div>
                     </div>
-                  </div>
+                  </LiquidLightCard>
                   </Reveal>
                 )
               })}

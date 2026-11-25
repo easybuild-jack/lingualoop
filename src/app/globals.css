@@ -282,6 +282,81 @@
   .animate-error-box {
     animation: error-box-pulse 0.45s ease-in-out 3 forwards;
   }
+
+  /* 液态玻璃追光卡片：光随鼠标 + 局部 1.5px 边框点亮 + 轻微 3D 倾角 */
+  .liquid-light-card {
+    position: relative;
+    transform-style: preserve-3d;
+    backdrop-filter: blur(22px) saturate(135%);
+    -webkit-backdrop-filter: blur(22px) saturate(135%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 14px 36px -18px rgba(0, 0, 0, 0.48);
+    transition: transform 0.22s ease-out, box-shadow 0.3s ease;
+    will-change: transform;
+  }
+
+  .liquid-light-card:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 22px 48px -18px rgba(0, 0, 0, 0.58);
+  }
+
+  .liquid-light-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(
+      340px circle at var(--mx, 50%) var(--my, 50%),
+      rgb(var(--primary-rgb) / 0.14),
+      transparent 68%
+    );
+    transition: opacity 0.3s ease;
+    z-index: 0;
+  }
+
+  .liquid-light-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(
+      220px circle at var(--mx, 50%) var(--my, 50%),
+      rgb(var(--primary-rgb) / 0.72),
+      transparent 65%
+    );
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    transition: opacity 0.3s ease;
+    z-index: 3;
+  }
+
+  .liquid-light-card:hover::before,
+  .liquid-light-card:hover::after {
+    opacity: 1;
+  }
+}
+
+:root[data-skin="muted-parchment"] .liquid-light-card,
+:root[data-skin="avocado-cream"] .liquid-light-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 14px 32px -16px rgba(24, 36, 32, 0.12);
+}
+
+:root[data-skin="muted-parchment"] .liquid-light-card:hover,
+:root[data-skin="avocado-cream"] .liquid-light-card:hover {
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 20px 44px -16px rgba(24, 36, 32, 0.16);
 }
 
 /* 音节纯文字亮度扫描动效：极轻柔的由暗渐进变亮，过渡舒缓平静 */
