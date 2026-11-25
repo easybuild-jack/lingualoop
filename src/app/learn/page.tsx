@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { HeaderToolbar } from '@/components/layout/HeaderToolbar'
 import { LearnStage } from '@/components/typing/LearnStage'
-import { PracticeFooter } from '@/components/typing/PracticeFooter'
 import { useWorkspaceStore, ensureWorkspaceHydrated } from '@/store/useWorkspaceStore'
 
 export default function LearnPage() {
@@ -112,8 +111,6 @@ export default function LearnPage() {
           onStartLearning={handleStartLearning}
         />
       </div>
-
-      <PracticeFooter isReady={isReady} />
     </div>
   )
 }

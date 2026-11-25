@@ -77,6 +77,7 @@ export function LearnStage({
                 hasTypo={hasTypo}
                 phoneticPreference={phoneticPreference}
                 remainingLoops={currentWordRemainingLoops}
+                isReady={isReady}
               />
 
               {/* 未点击「开始学习」时的沉浸引导蒙层 */}

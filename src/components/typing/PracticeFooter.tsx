@@ -4,6 +4,7 @@ import React from 'react'
 import { Star } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { formatShortcutDisplay } from '@/lib/shortcuts'
+import { PracticeProgress } from '@/components/typing/PracticeProgress'
 
 const KBD_CLASS =
   'h-6 min-w-6 px-1.5 inline-flex items-center justify-center rounded border border-border border-b-2 font-mono text-[12px] text-foreground/70 transition-colors'
@@ -25,36 +26,19 @@ export function PracticeFooter({ showPeekHint = false, isReady = true }: Practic
     prevWord,
     nextWord,
     isErrorPracticeActive,
-    conqueredErrorWordIds,
     toggleCurrentWordSplit,
     mode,
     starredWordIds,
     starCurrentWord,
-    isUnitLoading,
   } = useWorkspaceStore()
-
-  const total = currentLoadedWords.length || 20
-  const currentNum = Math.min(activeWordIndex + 1, total)
-  const isDictationError = isErrorPracticeActive && mode === 'dictation'
 
   const currentWord = currentLoadedWords[activeWordIndex]
   const isStarred = Boolean(currentWord && starredWordIds?.includes(currentWord.id))
 
-  const isPreparing = !isReady || isUnitLoading
-
   return (
     <footer className="w-full px-6 py-3 xl:py-4 flex items-center justify-center pointer-events-auto z-30 shrink-0">
       <div className="w-[800px] xl:w-[940px] 2xl:w-[1060px] max-w-[94vw] pt-3 xl:pt-4 border-t border-border flex items-center justify-between gap-4 text-[14px] text-muted-foreground flex-wrap">
-        <div className="flex items-baseline gap-1.5 tabular-nums">
-          <span className="text-foreground font-medium">
-            {isPreparing
-              ? '···'
-              : isDictationError
-              ? `${conqueredErrorWordIds?.length || 0} / ${total}`
-              : `${currentNum} / ${total}`}
-          </span>
-          <span>{isDictationError ? '已消灭' : '单词'}</span>
-        </div>
+        <PracticeProgress isReady={isReady} />
 
         <div className="flex items-center gap-4 xl:gap-5 flex-wrap justify-end">
           {showPeekHint && (

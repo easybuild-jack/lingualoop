@@ -38,8 +38,8 @@ export function WordCardShell({
         className || 'pt-5 pb-6 px-7 xl:pt-6 xl:pb-7 xl:px-10 2xl:pt-8 2xl:pb-8 2xl:px-12'
       }`}
     >
-      {/* 顶部左侧区域：词库来源徽标或循环剩余次数角标 */}
-      <div className="absolute top-3 left-0 xl:top-4 flex items-center gap-3 z-20 text-[14px] text-muted-foreground">
+      {/* 顶部左侧区域：练习进度、词库来源徽标或循环剩余次数角标；高度与右上角操作按钮对齐 */}
+      <div className="absolute top-2 left-0 xl:top-3 h-8 flex items-center gap-3 z-20 text-[14px] text-muted-foreground">
         {headerLeft}
         {remainingLoops > 1 && (
           <span className="tabular-nums">

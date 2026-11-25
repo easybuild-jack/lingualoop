@@ -33,6 +33,7 @@ import { PrinciplesDonut } from './PrinciplesDonut'
 import { ModuleRouteMap } from './ModuleRouteMap'
 import { LoopDiagram } from './LoopDiagram'
 import { ProductPreview } from './ProductPreview'
+import { LiquidLightCard } from '@/components/ui/LiquidLightCard'
 
 /** 开源仓库地址（浏览器访问用，克隆地址为 https://github.com/easybuild-jack/lingualoop.git） */
 const GITHUB_REPO_URL = 'https://github.com/easybuild-jack/lingualoop'
@@ -247,7 +248,7 @@ export function HomeLandingView() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.08 }}
-                className="mt-6 text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.1] text-foreground"
+                className="mt-6 text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.15] text-foreground"
               >
                 从第一个音标，
                 <br />
@@ -358,12 +359,12 @@ export function HomeLandingView() {
                 const Icon = s.icon
                 return (
                   <Reveal key={s.key} delay={i * 0.07} className="h-full">
-                  <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all duration-300 ease-out hover:scale-[1.05] hover:-translate-y-1 hover:border-primary/50 hover:shadow-2xl hover:z-10">
-                    <span className="pointer-events-none absolute -right-3 -top-6 font-serif text-[120px] leading-none text-primary/[0.07] transition-all duration-500 group-hover:text-primary/[0.16] group-hover:scale-110">
+                  <LiquidLightCard className="group h-full overflow-hidden rounded-2xl border border-border bg-card p-6 hover:z-10">
+                    <span className="pointer-events-none absolute -right-3 -top-6 z-[1] font-serif text-[120px] leading-none text-primary/[0.07] transition-all duration-500 group-hover:text-primary/[0.16] group-hover:scale-110">
                       {s.key}
                     </span>
-                    <div className="relative">
-                      <div className="size-11 rounded-xl bg-primary/12 text-primary flex items-center justify-center transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
+                    <div className="relative z-[1]">
+                      <div className="size-11 rounded-xl bg-primary/12 text-primary flex items-center justify-center">
                         <Icon className="size-5" />
                       </div>
                       <div className="mt-5 text-xs font-mono uppercase tracking-wider text-muted-foreground">{s.en}</div>
@@ -381,7 +382,7 @@ export function HomeLandingView() {
                         ))}
                       </div>
                     </div>
-                  </div>
+                  </LiquidLightCard>
                   </Reveal>
                 )
               })}
@@ -633,7 +634,7 @@ export function HomeLandingView() {
                 <div className="flex items-start gap-3">
                   <Palette className="size-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">7 套护眼主题，点一下整页换肤</h3>
+                    <h3 className="text-lg font-semibold text-foreground">{SKINS.length} 套护眼主题，点一下整页换肤</h3>
                     <p className="text-sm text-muted-foreground mt-1">深色沉静专注，浅色纸墨温润。试试看，这个页面会跟着变。</p>
                   </div>
                 </div>

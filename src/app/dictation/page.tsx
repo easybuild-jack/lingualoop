@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { HeaderToolbar } from '@/components/layout/HeaderToolbar'
 import { DictationStage } from '@/components/typing/DictationStage'
-import { PracticeFooter } from '@/components/typing/PracticeFooter'
 import { useWorkspaceStore, ensureWorkspaceHydrated } from '@/store/useWorkspaceStore'
 
 export default function DictationPage() {
@@ -110,8 +109,6 @@ export default function DictationPage() {
           onStartDictation={handleStartDictation}
         />
       </div>
-
-      <PracticeFooter showPeekHint isReady={isReady} />
     </div>
   )
 }

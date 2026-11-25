@@ -34,29 +34,31 @@ export function ListenScene() {
   const words = ['Could', 'you', 'recommend', 'a', 'good', 'place', 'for', 'brunch?']
   const step = useStepper(words.length, 420)
   return (
-    <div className="space-y-6" onClick={() => speak(words.join(' '))}>
-      <div className="flex items-center justify-between text-xs">
+    <div className="h-full flex flex-col" onClick={() => speak(words.join(' '))}>
+      <div className="flex items-center justify-between text-xs shrink-0">
         <span className="px-2 py-0.5 rounded bg-primary/12 text-primary font-mono">听力广场 · 场景对话</span>
         <span className="font-mono text-muted-foreground">0.75x · <span className="text-primary">1.0x</span> · 1.25x</span>
       </div>
-      <div className="h-16 flex items-center justify-center gap-[3px]">
-        {Array.from({ length: 42 }).map((_, i) => (
-          <span
-            key={i}
-            style={{ animationDelay: `${(i % 7) * 0.12}s`, height: `${30 + ((i * 37) % 70)}%` }}
-            className="w-1 rounded-full bg-primary/70 origin-center animate-[home-wave_1.1s_ease-in-out_infinite]"
-          />
-        ))}
-      </div>
-      <div className="text-center space-y-2">
-        <p className="font-serif text-2xl leading-snug">
-          {words.map((w, i) => (
-            <span key={i} className={`transition-colors duration-200 ${i < step ? 'text-foreground' : 'text-muted-foreground/30'}`}>
-              {w}{' '}
-            </span>
+      <div className="flex-1 flex flex-col justify-center space-y-6">
+        <div className="h-16 flex items-center justify-center gap-[3px]">
+          {Array.from({ length: 42 }).map((_, i) => (
+            <span
+              key={i}
+              style={{ animationDelay: `${(i % 7) * 0.12}s`, height: `${30 + ((i * 37) % 70)}%` }}
+              className="w-1 rounded-full bg-primary/70 origin-center animate-[home-wave_1.1s_ease-in-out_infinite]"
+            />
           ))}
-        </p>
-        <p className="text-sm text-muted-foreground">你能推荐一个吃早午餐的好地方吗？</p>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="font-serif text-2xl leading-snug">
+            {words.map((w, i) => (
+              <span key={i} className={`transition-colors duration-200 ${i < step ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+                {w}{' '}
+              </span>
+            ))}
+          </p>
+          <p className="text-sm text-muted-foreground">你能推荐一个吃早午餐的好地方吗？</p>
+        </div>
       </div>
     </div>
   )
@@ -70,12 +72,12 @@ function SpeakScene() {
     { from: 'ai', text: 'Sounds fun! Where did you go hiking?' },
   ]
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between text-xs">
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between text-xs shrink-0">
         <span className="px-2 py-0.5 rounded bg-primary/12 text-primary font-mono">AI 口语陪练 · 日常闲聊</span>
         <span className="font-mono text-muted-foreground">实时纠音</span>
       </div>
-      <div className="space-y-2.5 min-h-[168px]">
+      <div className="mt-3 flex-1 space-y-2.5 overflow-hidden">
         {bubbles.slice(0, step + 1).map((b, i) => (
           <motion.div
             key={i}
@@ -99,9 +101,9 @@ function SpeakScene() {
           </motion.div>
         ))}
       </div>
-      <div className="flex justify-center pt-1">
-        <span className="relative size-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-          <Mic className="relative size-5" />
+      <div className="flex justify-center pt-2 shrink-0">
+        <span className="relative size-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+          <Mic className="relative size-4" />
         </span>
       </div>
     </div>
@@ -114,23 +116,25 @@ function ReadScene() {
     { words: [['occasional', 'əˈkeɪʒənl'], ['effort.', 'ˈefərt']], zh: '偶尔的心血来潮。' },
   ]
   return (
-    <div className="space-y-5">
-      <div className="text-xs">
+    <div className="h-full flex flex-col">
+      <div className="text-xs shrink-0">
         <span className="px-2 py-0.5 rounded bg-primary/12 text-primary font-mono">文章阅读 · 音标 + 译文对照</span>
       </div>
-      {lines.map((l, li) => (
-        <div key={li} className="space-y-1">
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {l.words.map(([w, ipa]) => (
-              <span key={w} onClick={() => speak(w)} className="inline-flex flex-col items-center cursor-pointer group">
-                <span className="text-xs text-muted-foreground group-hover:text-primary">{ipa}</span>
-                <span className="font-serif text-2xl text-foreground group-hover:text-primary">{w}</span>
-              </span>
-            ))}
+      <div className="flex-1 flex flex-col justify-center space-y-5">
+        {lines.map((l, li) => (
+          <div key={li} className="space-y-1">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {l.words.map(([w, ipa]) => (
+                <span key={w} onClick={() => speak(w)} className="inline-flex flex-col items-center cursor-pointer group">
+                  <span className="text-xs text-muted-foreground group-hover:text-primary">{ipa}</span>
+                  <span className="font-serif text-2xl text-foreground group-hover:text-primary">{w}</span>
+                </span>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">{l.zh}</p>
           </div>
-          <p className="text-sm text-muted-foreground">{l.zh}</p>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
@@ -142,44 +146,46 @@ function WriteScene() {
   const done = typed >= word.length
   let cursor = 0
   return (
-    <div className="space-y-5" onClick={() => speak(word)}>
-      <div className="flex items-center justify-between text-xs">
+    <div className="h-full flex flex-col" onClick={() => speak(word)}>
+      <div className="flex items-center justify-between text-xs shrink-0">
         <span className="px-2 py-0.5 rounded bg-primary/12 text-primary font-mono">单词默写 · 听音盲打</span>
         <span className="font-mono text-muted-foreground">三连对 <span className="text-primary">●●</span>○</span>
       </div>
-      <div className="text-center font-serif text-5xl tracking-tight">
-        {syllables.map((syl, si) => (
-          <React.Fragment key={si}>
-            {si > 0 && <span className={`mx-1 text-primary/70 transition-opacity ${done ? 'opacity-100' : 'opacity-0'}`}>·</span>}
-            {syl.split('').map((ch) => {
-              const pos = cursor++
-              return (
-                <span key={pos} className={pos < typed ? (done && si === 1 ? 'text-primary' : 'text-foreground') : 'text-muted-foreground/25'}>
-                  {ch}
-                </span>
-              )
-            })}
-          </React.Fragment>
-        ))}
+      <div className="flex-1 flex flex-col justify-center space-y-5">
+        <div className="text-center font-serif text-5xl tracking-tight">
+          {syllables.map((syl, si) => (
+            <React.Fragment key={si}>
+              {si > 0 && <span className={`mx-1 text-primary/70 transition-opacity ${done ? 'opacity-100' : 'opacity-0'}`}>·</span>}
+              {syl.split('').map((ch) => {
+                const pos = cursor++
+                return (
+                  <span key={pos} className={pos < typed ? (done && si === 1 ? 'text-primary' : 'text-foreground') : 'text-muted-foreground/25'}>
+                    {ch}
+                  </span>
+                )
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className={`grid grid-cols-3 gap-2 transition-all duration-500 ${done ? 'opacity-100' : 'opacity-0 translate-y-2'}`}>
+          {[
+            ['il-', '进入', false],
+            ['lumin', '光', true],
+            ['-ate', '使…', false],
+          ].map(([part, mean, root]) => (
+            <div
+              key={part as string}
+              className={`py-2 rounded-lg border text-center ${root ? 'border-primary/50 bg-primary/12' : 'border-border bg-muted/60'}`}
+            >
+              <div className={`font-mono text-sm font-semibold ${root ? 'text-primary' : 'text-foreground'}`}>{part}</div>
+              <div className="text-[12px] text-muted-foreground">{mean}</div>
+            </div>
+          ))}
+        </div>
+        <p className={`text-center text-xs text-muted-foreground transition-opacity ${done ? 'opacity-100' : 'opacity-0'}`}>
+          /ɪˈluːmɪneɪt/ v. 照亮；阐明 —— 把光投射进去
+        </p>
       </div>
-      <div className={`grid grid-cols-3 gap-2 transition-all duration-500 ${done ? 'opacity-100' : 'opacity-0 translate-y-2'}`}>
-        {[
-          ['il-', '进入', false],
-          ['lumin', '光', true],
-          ['-ate', '使…', false],
-        ].map(([part, mean, root]) => (
-          <div
-            key={part as string}
-            className={`py-2 rounded-lg border text-center ${root ? 'border-primary/50 bg-primary/12' : 'border-border bg-muted/60'}`}
-          >
-            <div className={`font-mono text-sm font-semibold ${root ? 'text-primary' : 'text-foreground'}`}>{part}</div>
-            <div className="text-[12px] text-muted-foreground">{mean}</div>
-          </div>
-        ))}
-      </div>
-      <p className={`text-center text-xs text-muted-foreground transition-opacity ${done ? 'opacity-100' : 'opacity-0'}`}>
-        /ɪˈluːmɪneɪt/ v. 照亮；阐明 —— 把光投射进去
-      </p>
     </div>
   )
 }
@@ -188,26 +194,28 @@ function TranslateScene() {
   const words = ['Yesterday', 'I', 'wrapped', 'up', 'the', 'project', 'ahead', 'of', 'schedule.']
   const step = useStepper(words.length, 380)
   return (
-    <div className="space-y-6">
-      <div className="text-xs">
+    <div className="h-full flex flex-col">
+      <div className="text-xs shrink-0">
         <span className="px-2 py-0.5 rounded bg-primary/12 text-primary font-mono">句子翻译 · 连词成句</span>
       </div>
-      <p className="text-center text-lg text-foreground font-medium">昨天我提前完成了这个项目。</p>
-      <div className="flex flex-wrap justify-center gap-x-2.5 gap-y-3">
-        {words.map((w, i) => (
-          <span
-            key={i}
-            className={`pb-0.5 border-b-2 font-serif text-xl transition-colors ${
-              i < step ? 'border-primary/60 text-foreground' : i === step ? 'border-primary text-primary' : 'border-border text-transparent'
-            }`}
-          >
-            {w}
-          </span>
-        ))}
+      <div className="flex-1 flex flex-col justify-center space-y-6">
+        <p className="text-center text-lg text-foreground font-medium">昨天我提前完成了这个项目。</p>
+        <div className="flex flex-wrap justify-center gap-x-2.5 gap-y-3">
+          {words.map((w, i) => (
+            <span
+              key={i}
+              className={`pb-0.5 border-b-2 font-serif text-xl transition-colors ${
+                i < step ? 'border-primary/60 text-foreground' : i === step ? 'border-primary text-primary' : 'border-border text-transparent'
+              }`}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          语法提示：<span className="text-primary">一般过去时</span> · 短语 <span className="font-mono text-primary">wrap up</span> = 完成收尾
+        </p>
       </div>
-      <p className="text-center text-xs text-muted-foreground">
-        语法提示：<span className="text-primary">一般过去时</span> · 短语 <span className="font-mono text-primary">wrap up</span> = 完成收尾
-      </p>
     </div>
   )
 }
@@ -277,10 +285,11 @@ export function HeroShowcase() {
           })}
         </div>
 
-        <div className="p-6 sm:p-7 min-h-[300px] cursor-pointer">
+        <div className="p-6 sm:p-7 h-[356px] overflow-hidden cursor-pointer">
           <AnimatePresence mode="wait">
             <motion.div
               key={scene.id}
+              className="h-full"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
