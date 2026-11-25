@@ -69,17 +69,17 @@ export function DictationCard({
       phoneticPreference={phoneticPreference}
       remainingLoops={remainingLoops}
       headerLeft={<PracticeProgress isReady={isReady} />}
-      className="pt-12 xl:pt-14 pb-2"
+      className="pt-[38px] xl:pt-[46px] pb-2"
     >
       <div className="flex flex-col h-full min-h-0">
-        {/* 线索：中文释义 */}
-        <div className="min-h-24 xl:min-h-28 flex flex-col items-center justify-center px-6">
+        {/* 线索：中文释义，固定高度以容纳两行释义，避免切换单词时上下跳动 */}
+        <div className="pt-5 xl:pt-7 h-36 xl:h-40 shrink-0 flex flex-col items-center justify-center px-6">
           <WordMeaning word={word} className="text-xl xl:text-2xl text-white" />
-          <p className="mt-3 text-[14px] text-muted-foreground">听发音，拼写出这个单词</p>
+          <p className="mt-3.5 text-[14px] text-muted-foreground">听发音，拼写出这个单词</p>
         </div>
 
         <div
-          className="relative w-full cursor-pointer"
+          className="relative w-full mt-2 xl:mt-3 cursor-pointer"
           onClick={() => {
             if (typeof document !== 'undefined' && document.activeElement && document.activeElement !== document.body) {
               (document.activeElement as HTMLElement).blur()
@@ -87,18 +87,20 @@ export function DictationCard({
           }}
         >
           <TypingLines target={word.name} currentInput={currentInput} hasTypo={hasTypo} />
+          <p
+            className="pointer-events-none absolute left-0 right-0 -bottom-6 h-5 text-center text-xs text-destructive"
+            aria-live="polite"
+          >
+            {hasTypo ? '字母输入错误，请按退格键 (Backspace) 修正' : ''}
+          </p>
         </div>
 
-        <p className="h-5 mt-2 text-center text-xs text-destructive" aria-live="polite">
-          {hasTypo ? '字母输入错误，请按退格键 (Backspace) 修正' : ''}
-        </p>
-
-        {/* 下半区：语境例句填空，目标词挖空，按 Tab 偷看 */}
+        {/* 下半区：语境例句填空，适当下移使上下留白比例与学习页更均衡 */}
         {(examples.length > 0 || examplesStatus === 'pending' || examplesStatus === 'error') && (
-          <section className="mt-4 xl:mt-6 border-t border-border flex-1 min-h-0 flex flex-col text-left pt-4 xl:pt-5">
-            <div className="flex items-end justify-between gap-3">
-              <div className="flex items-baseline gap-3">
-                <span className="text-sm text-foreground font-medium">例句填空</span>
+          <section className="mt-12 xl:mt-16 rounded-2xl bg-card/75 border border-border/60 px-4 py-3.5 xl:px-5 xl:py-4 flex-1 min-h-0 flex flex-col text-left backdrop-blur-md">
+            <div className="flex items-center justify-between gap-3 h-7 shrink-0">
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-xs xl:text-[13px] text-foreground/85 font-medium">例句填空</span>
                 <span className="text-xs text-muted-foreground hidden sm:inline">结合上下文推导拼写</span>
               </div>
               <div className="flex items-center gap-3">
@@ -110,7 +112,7 @@ export function DictationCard({
                   onPointerDown={() => useWorkspaceStore.getState().peekHint(true)}
                   onPointerUp={() => useWorkspaceStore.getState().peekHint(false)}
                   onPointerLeave={() => useWorkspaceStore.getState().peekHint(false)}
-                  className={`h-7 px-2.5 rounded-md text-xs transition-colors cursor-pointer select-none ${
+                  className={`h-7 px-2.5 rounded-lg text-xs transition-colors cursor-pointer select-none ${
                     isPeeking
                       ? 'text-accent bg-accent/10'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -122,13 +124,13 @@ export function DictationCard({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1 mt-2 custom-scrollbar">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1 mt-2.5 space-y-1.5 custom-scrollbar">
               {examplesStatus === 'pending' ? (
-                <div className="space-y-4 pt-3 animate-pulse" aria-label="AI 例句生成中">
+                <div className="space-y-3 pt-2 animate-pulse" aria-label="AI 例句生成中">
                   {[0, 1].map((item) => (
-                    <div key={item} className="space-y-2">
-                      <div className="h-5 w-11/12 rounded bg-muted" />
-                      <div className="h-4 w-2/3 rounded bg-muted" />
+                    <div key={item} className="rounded-xl bg-muted/40 p-3 space-y-2">
+                      <div className="h-4 w-11/12 rounded bg-muted" />
+                      <div className="h-3.5 w-2/3 rounded bg-muted" />
                     </div>
                   ))}
                 </div>
@@ -142,18 +144,18 @@ export function DictationCard({
                   return (
                     <div
                       key={idx}
-                      className={`grid grid-cols-[1.5rem_1fr_auto] gap-x-1 py-3 ${
-                        idx > 0 ? 'border-t border-dashed border-border' : ''
-                      }`}
+                      className="group rounded-xl grid grid-cols-[1.5rem_1fr_auto] items-start gap-x-2.5 px-2.5 py-2.5 hover:bg-muted/45 transition-colors"
                     >
                       <span
-                        className={`font-serif text-base pt-0.5 tabular-nums ${
-                          isPlaying ? 'text-primary' : 'text-muted-foreground/70'
+                        className={`mt-0.5 size-5 rounded-full text-[11px] font-mono tabular-nums flex items-center justify-center shrink-0 transition-colors ${
+                          isPlaying
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-primary/10 text-primary'
                         }`}
                       >
                         {idx + 1}
                       </span>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <InteractiveSentence
                           sentence={item.en}
                           wordName={word.name}
@@ -164,7 +166,7 @@ export function DictationCard({
                             setLookupWordInfo({ word: clickedWord, sentenceEn: en, sentenceCn: cn, targetRect: rect })
                           }}
                         />
-                        <p className="text-[14px] xl:text-sm text-muted-foreground leading-relaxed mt-1">
+                        <p className="text-[13.5px] xl:text-sm text-muted-foreground leading-relaxed mt-0.5">
                           {item.cn}
                         </p>
                       </div>
@@ -174,15 +176,15 @@ export function DictationCard({
                           e.stopPropagation()
                           handlePlaySentence(item.en, idx)
                         }}
-                        className={`size-8 -mt-1 rounded-md transition-colors cursor-pointer flex items-center justify-center ${
+                        className={`size-7 rounded-lg transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
                           isPlaying
-                            ? 'text-primary animate-pulse'
+                            ? 'text-primary bg-primary/12 animate-pulse'
                             : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted'
                         }`}
                         title="朗读例句"
                         aria-label="朗读例句"
                       >
-                        <Volume2 className="size-4" />
+                        <Volume2 className="size-3.5" />
                       </button>
                     </div>
                   )

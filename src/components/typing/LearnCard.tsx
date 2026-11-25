@@ -109,8 +109,8 @@ export function LearnCard({
       <div>
         <WordHeadline word={word} isSplit={isSplit} />
         <WordPhonetics word={word} phoneticPreference={phoneticPreference} />
-        {/* 释义：预留两行高度，避免释义换行时挤压跟打槽 */}
-        <div className="min-h-[48px] xl:min-h-[56px] flex items-center justify-center px-6 mt-1">
+        {/* 释义：固定两行高度，避免释义换行时挤压跟打槽导致跳动 */}
+        <div className="h-[56px] xl:h-[64px] shrink-0 flex items-center justify-center px-6 mt-1">
           <WordMeaning word={word} className="text-base xl:text-lg text-gray-200" />
         </div>
         <TypingLines target={word.name} currentInput={currentInput} hasTypo={hasTypo} />
@@ -122,7 +122,7 @@ export function LearnCard({
         contextTab={contextTab}
         onContextTabChange={setContextTab}
         etymologyErrorText="构词分析失败，下次进入时将重新补全"
-        spacingClass="mt-12 xl:mt-16"
+        spacingClass="mt-8 xl:mt-11"
       />
     </WordCardShell>
   )

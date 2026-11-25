@@ -33,6 +33,7 @@ import { PrinciplesDonut } from './PrinciplesDonut'
 import { ModuleRouteMap } from './ModuleRouteMap'
 import { LoopDiagram } from './LoopDiagram'
 import { ProductPreview } from './ProductPreview'
+import { LiquidLightCard } from '@/components/ui/LiquidLightCard'
 
 /** 开源仓库地址（浏览器访问用，克隆地址为 https://github.com/easybuild-jack/lingualoop.git） */
 const GITHUB_REPO_URL = 'https://github.com/easybuild-jack/lingualoop'
@@ -168,43 +169,6 @@ function SectionHeading({ eyebrow, title, desc }: { eyebrow: string; title: Reac
       <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tight text-foreground leading-tight">{title}</h2>
       {desc && <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">{desc}</p>}
     </Reveal>
-  )
-}
-
-/** 液态玻璃追光卡片：鼠标移动时触发内部柔光、局部 1.5px 边框点亮与轻微 3D 倾角 */
-function LiquidLightCard({
-  children,
-  className = '',
-  maxTilt = 2.4,
-}: {
-  children: React.ReactNode
-  className?: string
-  maxTilt?: number
-}) {
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const card = e.currentTarget
-    const rect = card.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    card.style.setProperty('--mx', `${x}px`)
-    card.style.setProperty('--my', `${y}px`)
-    const rx = (y / rect.height - 0.5) * -maxTilt * 2
-    const ry = (x / rect.width - 0.5) * maxTilt * 2
-    card.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`
-  }
-
-  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)'
-  }
-
-  return (
-    <div
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      className={`liquid-light-card ${className}`}
-    >
-      {children}
-    </div>
   )
 }
 
@@ -670,7 +634,7 @@ export function HomeLandingView() {
                 <div className="flex items-start gap-3">
                   <Palette className="size-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">7 套护眼主题，点一下整页换肤</h3>
+                    <h3 className="text-lg font-semibold text-foreground">{SKINS.length} 套护眼主题，点一下整页换肤</h3>
                     <p className="text-sm text-muted-foreground mt-1">深色沉静专注，浅色纸墨温润。试试看，这个页面会跟着变。</p>
                   </div>
                 </div>

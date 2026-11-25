@@ -245,7 +245,7 @@ interface WordContextPanelsProps {
   spacingClass?: string
 }
 
-/** 下半区：左侧例句/短语，右侧构词；用细线分隔，不套卡片 */
+/** 下半区：左侧例句/短语，右侧构词；采用柔和无压迫感的轻底色双区块，弱化生硬分割线 */
 export function WordContextPanels({
   word,
   phoneticPreference,
@@ -286,10 +286,15 @@ export function WordContextPanels({
   }
 
   return (
-    <div className={`grid grid-cols-12 ${spacingClass} border-t border-border flex-1 min-h-0 text-left`}>
-      <section className="col-span-8 pt-4 xl:pt-5 pr-6 xl:pr-8 flex flex-col min-h-0">
-        <div className="flex items-end justify-between gap-3">
-          <div className="flex items-center gap-5" role="tablist" aria-label="语境内容">
+    <div className={`grid grid-cols-12 gap-4 xl:gap-5 ${spacingClass} flex-1 min-h-0 text-left`}>
+      {/* 左侧：例句 / 短语柔和区块 */}
+      <section className="col-span-8 rounded-2xl bg-card/75 border border-border/60 px-4 py-3.5 xl:px-5 xl:py-4 flex flex-col min-h-0 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3 shrink-0">
+          <div
+            className="inline-flex items-center p-0.5 rounded-lg bg-muted/80"
+            role="tablist"
+            aria-label="语境内容"
+          >
             {([
               ['examples', '例句'],
               ['phrases', '短语'],
@@ -300,17 +305,17 @@ export function WordContextPanels({
                 role="tab"
                 aria-selected={contextTab === tab}
                 onClick={() => onContextTabChange(tab)}
-                className={`pb-1.5 text-sm border-b-2 transition-colors cursor-pointer ${
+                className={`px-3 py-1 text-xs xl:text-[13px] rounded-md transition-all cursor-pointer ${
                   contextTab === tab
-                    ? 'border-foreground text-foreground font-medium'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground font-medium shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <span className="pb-1.5 text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {contextStatus === 'pending'
               ? '生成中…'
               : contextStatus === 'error'
@@ -322,16 +327,16 @@ export function WordContextPanels({
         </div>
 
         <div
-          className={`min-h-0 flex-1 overflow-y-auto pr-1 mt-2 custom-scrollbar ${
-            contextTab === 'phrases' ? 'grid grid-cols-2 content-start gap-x-8' : ''
+          className={`min-h-0 flex-1 overflow-y-auto pr-1 mt-2.5 custom-scrollbar ${
+            contextTab === 'phrases' ? 'grid grid-cols-2 content-start gap-2.5' : 'space-y-1.5'
           }`}
         >
           {contextStatus === 'pending' ? (
-            <div className="col-span-2 space-y-4 pt-3 animate-pulse" aria-label="AI 语境内容生成中">
+            <div className="col-span-2 space-y-3 pt-2 animate-pulse" aria-label="AI 语境内容生成中">
               {[0, 1].map((item) => (
-                <div key={item} className="space-y-2">
-                  <div className="h-5 w-11/12 rounded bg-muted" />
-                  <div className="h-4 w-2/3 rounded bg-muted" />
+                <div key={item} className="rounded-xl bg-muted/40 p-3 space-y-2">
+                  <div className="h-4 w-11/12 rounded bg-muted" />
+                  <div className="h-3.5 w-2/3 rounded bg-muted" />
                 </div>
               ))}
             </div>
@@ -349,18 +354,24 @@ export function WordContextPanels({
               return (
                 <div
                   key={idx}
-                  className={`group grid grid-cols-[1.5rem_1fr_auto] gap-x-1 py-3 ${
-                    contextTab === 'examples' && idx > 0 ? 'border-t border-dashed border-border' : ''
+                  className={`group rounded-xl transition-colors ${
+                    contextTab === 'phrases'
+                      ? 'flex items-start justify-between gap-2 px-3 py-2.5 bg-muted/40 hover:bg-muted/70'
+                      : 'grid grid-cols-[1.5rem_1fr_auto] items-start gap-x-2.5 px-2.5 py-2.5 hover:bg-muted/45'
                   }`}
                 >
-                  <span
-                    className={`font-serif text-base pt-0.5 tabular-nums ${
-                      isPlaying ? 'text-primary' : 'text-muted-foreground/70'
-                    }`}
-                  >
-                    {idx + 1}
-                  </span>
-                  <div className="min-w-0">
+                  {contextTab === 'examples' && (
+                    <span
+                      className={`mt-0.5 size-5 rounded-full text-[11px] font-mono tabular-nums flex items-center justify-center shrink-0 transition-colors ${
+                        isPlaying
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-primary/10 text-primary'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <InteractiveSentence
                       sentence={item.en}
                       wordName={word.name}
@@ -369,7 +380,7 @@ export function WordContextPanels({
                         setLookupWordInfo({ word: clickedWord, sentenceEn: en, sentenceCn: cn, targetRect: rect })
                       }}
                     />
-                    <p className="text-[14px] xl:text-sm text-muted-foreground leading-relaxed mt-1">
+                    <p className="text-[13.5px] xl:text-sm text-muted-foreground leading-relaxed mt-0.5">
                       {item.cn}
                     </p>
                   </div>
@@ -379,15 +390,15 @@ export function WordContextPanels({
                       e.stopPropagation()
                       handlePlaySentence(item.en, idx)
                     }}
-                    className={`size-8 -mt-1 rounded-md transition-colors cursor-pointer flex items-center justify-center ${
+                    className={`size-7 rounded-lg transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
                       isPlaying
-                        ? 'text-primary animate-pulse'
+                        ? 'text-primary bg-primary/12 animate-pulse'
                         : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted'
                     }`}
                     title={`朗读${contextLabel}`}
                     aria-label={`朗读${contextLabel}`}
                   >
-                    <Volume2 className="size-4" />
+                    <Volume2 className="size-3.5" />
                   </button>
                 </div>
               )
@@ -396,58 +407,70 @@ export function WordContextPanels({
         </div>
       </section>
 
-      <section className="col-span-4 pt-4 xl:pt-5 pl-6 xl:pl-8 border-l border-border min-h-0 overflow-y-auto custom-scrollbar">
-        <div className="flex items-end justify-between pb-1.5">
-          <span className="text-sm text-muted-foreground">构词</span>
+      {/* 右侧：构词记忆柔和区块 */}
+      <section className="col-span-4 rounded-2xl bg-card/75 border border-border/60 px-4 py-3.5 xl:px-5 xl:py-4 flex flex-col min-h-0 backdrop-blur-md">
+        <div className="flex items-center justify-between h-7 shrink-0">
+          <span className="text-xs xl:text-[13px] font-medium text-foreground/85">构词拆解</span>
           {etymologyStatus === 'pending' && (
             <span className="text-xs text-muted-foreground">分析中…</span>
           )}
         </div>
 
-        {etymologyStatus === 'pending' ? (
-          <div className="space-y-3 pt-3 animate-pulse" aria-label="AI 构词分析中">
-            <div className="h-7 w-3/5 rounded bg-muted" />
-            <div className="h-4 w-4/5 rounded bg-muted" />
-            <div className="h-4 w-2/3 rounded bg-muted" />
-          </div>
-        ) : etymologyStatus === 'error' ? (
-          <p className="pt-3 text-sm text-muted-foreground">{etymologyErrorText}</p>
-        ) : morphemes.length > 0 ? (
-          <div className="pt-3">
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
-              {morphemes.map((morpheme, index) => (
-                <React.Fragment key={index}>
-                  {index > 0 && (
-                    <span className="font-serif text-2xl text-muted-foreground/60 leading-none pt-0.5">+</span>
-                  )}
-                  <span className="flex flex-col gap-1.5 min-w-0">
+        <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar mt-2.5">
+          {etymologyStatus === 'pending' ? (
+            <div className="space-y-3 pt-1 animate-pulse" aria-label="AI 构词分析中">
+              <div className="flex gap-2">
+                <div className="h-11 w-16 rounded-xl bg-muted" />
+                <div className="h-11 w-14 rounded-xl bg-muted" />
+              </div>
+              <div className="h-3.5 w-11/12 rounded bg-muted" />
+              <div className="h-3.5 w-3/4 rounded bg-muted" />
+            </div>
+          ) : etymologyStatus === 'error' ? (
+            <p className="pt-1 text-sm text-muted-foreground leading-relaxed">{etymologyErrorText}</p>
+          ) : morphemes.length > 0 ? (
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {morphemes.map((morpheme, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 && (
+                      <span className="font-serif text-base text-muted-foreground/50 leading-none">+</span>
+                    )}
                     <span
-                      className={`font-serif text-2xl xl:text-[1.75rem] leading-none ${
-                        morpheme.role === 'root' ? 'text-primary' : 'text-gray-100'
+                      className={`flex flex-col gap-0.5 px-2.5 py-1.5 rounded-xl border min-w-0 ${
+                        morpheme.role === 'root'
+                          ? 'bg-primary/10 border-primary/25'
+                          : 'bg-muted/50 border-border/60'
                       }`}
                     >
-                      {morpheme.text}
+                      <span
+                        className={`font-serif text-lg xl:text-xl leading-none ${
+                          morpheme.role === 'root' ? 'text-primary font-medium' : 'text-gray-100'
+                        }`}
+                      >
+                        {morpheme.text}
+                      </span>
+                      {morpheme.meaning && (
+                        <span className="text-[11px] text-muted-foreground leading-tight">{morpheme.meaning}</span>
+                      )}
                     </span>
-                    {morpheme.meaning && (
-                      <span className="text-xs text-muted-foreground">{morpheme.meaning}</span>
-                    )}
-                  </span>
-                </React.Fragment>
-              ))}
-            </div>
+                  </React.Fragment>
+                ))}
+              </div>
 
-            {derivation && (
-              <p className="mt-4 text-sm xl:text-[16px] text-gray-300 leading-relaxed">{derivation}</p>
-            )}
-          </div>
-        ) : (
-          <div className="pt-3 space-y-3">
-            {origin && <p className="text-sm xl:text-[16px] text-gray-300 leading-relaxed">{origin}</p>}
-            {derivation && (
-              <p className="text-sm xl:text-[16px] text-gray-300 leading-relaxed">{derivation}</p>
-            )}
-          </div>
-        )}
+              {derivation && (
+                <p className="mt-3.5 text-sm xl:text-[15px] text-gray-300 leading-relaxed">{derivation}</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {origin && <p className="text-sm xl:text-[15px] text-gray-300 leading-relaxed">{origin}</p>}
+              {derivation && (
+                <p className="text-sm xl:text-[15px] text-gray-300 leading-relaxed">{derivation}</p>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
       {lookupWordInfo && (

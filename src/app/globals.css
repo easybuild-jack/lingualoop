@@ -48,19 +48,6 @@
   --ring: #5EEAD4;
 }
 
-:root[data-skin="classic-emerald"] {
-  --background: #0B0C0E;
-  --sidebar-bg: #0B0C0E;
-  --card: rgba(255, 255, 255, 0.05);
-  --primary: #34D399;
-  --primary-hover: #6EE7B7;
-  --primary-rgb: 52 211 153;
-  --border: rgba(255, 255, 255, 0.1);
-  --muted: rgba(255, 255, 255, 0.08);
-  --muted-foreground: #9CA3AF;
-  --ring: #34D399;
-}
-
 :root[data-skin="sakura-pink"] {
   --background: #140E15;
   --sidebar-bg: #1E1420;
@@ -100,24 +87,24 @@
   --ring: #818CF8;
 }
 
-:root[data-skin="muted-parchment"] {
-  --background: #F5F1E8;
-  --foreground: #1C1917;
-  --sidebar-bg: #ECE6D8;
-  --card: rgba(255, 255, 255, 0.75);
-  --card-foreground: #1C1917;
-  --primary: #0D766E;
+:root[data-skin="pale-mist"] {
+  --background: #EAF1EF;
+  --foreground: #182624;
+  --sidebar-bg: #F4F8F7;
+  --card: rgba(255, 255, 255, 0.56);
+  --card-foreground: #182624;
+  --primary: #0F7F73;
   --primary-foreground: #FFFFFF;
-  --primary-hover: #115E59;
-  --primary-rgb: 13 118 110;
-  --secondary: #E5DFC9;
-  --secondary-foreground: #1C1917;
-  --muted: rgba(0, 0, 0, 0.05);
-  --muted-foreground: #78716C;
-  --accent: #D97706;
+  --primary-hover: #0B665C;
+  --primary-rgb: 15 127 115;
+  --secondary: #DDE8E5;
+  --secondary-foreground: #182624;
+  --muted: rgba(24, 52, 48, 0.06);
+  --muted-foreground: #667C78;
+  --accent: #C97308;
   --accent-foreground: #FFFFFF;
-  --border: rgba(13, 118, 110, 0.16);
-  --ring: #0D766E;
+  --border: rgba(24, 52, 48, 0.11);
+  --ring: #0F7F73;
 }
 
 :root[data-skin="avocado-cream"] {
@@ -290,16 +277,16 @@
     backdrop-filter: blur(22px) saturate(135%);
     -webkit-backdrop-filter: blur(22px) saturate(135%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.14),
-      0 14px 36px -18px rgba(0, 0, 0, 0.48);
+      inset 0 1px 0 var(--glass-highlight, rgba(255, 255, 255, 0.14)),
+      var(--glass-card-shadow, 0 14px 36px -18px rgba(0, 0, 0, 0.48));
     transition: transform 0.22s ease-out, box-shadow 0.3s ease;
     will-change: transform;
   }
 
   .liquid-light-card:hover {
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.22),
-      0 22px 48px -18px rgba(0, 0, 0, 0.58);
+      inset 0 1px 0 var(--glass-highlight, rgba(255, 255, 255, 0.22)),
+      var(--glass-card-hover-shadow, 0 22px 48px -18px rgba(0, 0, 0, 0.58));
   }
 
   .liquid-light-card::before {
@@ -311,7 +298,7 @@
     opacity: 0;
     background: radial-gradient(
       340px circle at var(--mx, 50%) var(--my, 50%),
-      rgb(var(--primary-rgb) / 0.14),
+      rgb(var(--primary-rgb) / 0.13),
       transparent 68%
     );
     transition: opacity 0.3s ease;
@@ -328,7 +315,7 @@
     opacity: 0;
     background: radial-gradient(
       220px circle at var(--mx, 50%) var(--my, 50%),
-      rgb(var(--primary-rgb) / 0.72),
+      rgb(var(--primary-rgb) / 0.65),
       transparent 65%
     );
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -345,18 +332,17 @@
   }
 }
 
-:root[data-skin="muted-parchment"] .liquid-light-card,
-:root[data-skin="avocado-cream"] .liquid-light-card {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 14px 32px -16px rgba(24, 36, 32, 0.12);
+/* 浅色皮肤（淡雾青 / 酪梨青灰）玻璃卡片高光与柔影 */
+:root[data-skin="pale-mist"] {
+  --glass-highlight: #ffffff;
+  --glass-card-shadow: 0 12px 28px -14px rgba(24, 52, 48, 0.12);
+  --glass-card-hover-shadow: 0 20px 42px -14px rgba(24, 52, 48, 0.18);
 }
 
-:root[data-skin="muted-parchment"] .liquid-light-card:hover,
-:root[data-skin="avocado-cream"] .liquid-light-card:hover {
-  box-shadow:
-    inset 0 1px 0 #ffffff,
-    0 20px 44px -16px rgba(24, 36, 32, 0.16);
+:root[data-skin="avocado-cream"] {
+  --glass-highlight: #ffffff;
+  --glass-card-shadow: 0 12px 28px -14px rgba(48, 60, 42, 0.11);
+  --glass-card-hover-shadow: 0 20px 42px -14px rgba(48, 60, 42, 0.16);
 }
 
 /* 音节纯文字亮度扫描动效：极轻柔的由暗渐进变亮，过渡舒缓平静 */
@@ -500,225 +486,14 @@
 
 @media (prefers-color-scheme: light) {
 
-  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .phonics-highlight,
-  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-400,
-  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-500 {
+  :root:not([data-skin="slate-mint"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .phonics-highlight,
+  :root:not([data-skin="slate-mint"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-400,
+  :root:not([data-skin="slate-mint"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .text-amber-500 {
     color: #B45309 !important;
     text-shadow: none !important;
     filter: none !important;
     text-decoration-color: #D97706 !important;
   }
-}
-
-/* ---------------------------------------------------------------------------
-   晨曦纸墨（muted-parchment）浅色纸质模式专属适配规则
-   在不影响其他暗色皮肤的前提下，将页面内浅色文字映射为清晰墨色
-   --------------------------------------------------------------------------- */
-:root[data-skin="muted-parchment"] {
-  color-scheme: light;
-}
-
-:root[data-skin="muted-parchment"] body {
-  color: #1C1917;
-}
-
-:root[data-skin="muted-parchment"] h1,
-:root[data-skin="muted-parchment"] h2,
-:root[data-skin="muted-parchment"] h3,
-:root[data-skin="muted-parchment"] h4 {
-  color: #1C1917;
-}
-
-:root[data-skin="muted-parchment"] .text-white,
-:root[data-skin="muted-parchment"] [class*="text-white"] {
-  color: #1C1917 !important;
-}
-
-:root[data-skin="muted-parchment"] .text-gray-100 {
-  color: #1C1917 !important;
-}
-
-:root[data-skin="muted-parchment"] .text-gray-200 {
-  color: #292524 !important;
-}
-
-:root[data-skin="muted-parchment"] .text-gray-300 {
-  color: #44403C !important;
-}
-
-:root[data-skin="muted-parchment"] .text-gray-400 {
-  color: #57534E !important;
-}
-
-:root[data-skin="muted-parchment"] .text-gray-500 {
-  color: #78716C !important;
-}
-
-:root[data-skin="muted-parchment"] .text-\[\#9CA3AF\],
-:root[data-skin="muted-parchment"] [class*="text-\[\#9CA3AF\]"] {
-  color: #57534E !important;
-}
-
-:root[data-skin="muted-parchment"] .text-muted-foreground,
-:root[data-skin="muted-parchment"] [class*="text-muted-foreground"] {
-  color: #78716C !important;
-}
-
-/* 实色品牌色与状态色按钮上的文字保持纯白，保证高对比可读性（排除带 / 的半透明背景，如 bg-destructive/10、bg-destructive/[0.04] 等） */
-:root[data-skin="muted-parchment"] button.bg-primary,
-:root[data-skin="muted-parchment"] button.bg-primary *,
-:root[data-skin="muted-parchment"] .btn-primary,
-:root[data-skin="muted-parchment"] .btn-primary *,
-:root[data-skin="muted-parchment"] .bg-primary:not([class*="/"]),
-:root[data-skin="muted-parchment"] .bg-primary:not([class*="/"]) *,
-:root[data-skin="muted-parchment"] button.bg-destructive,
-:root[data-skin="muted-parchment"] button.bg-destructive *,
-:root[data-skin="muted-parchment"] .bg-destructive:not([class*="/"]),
-:root[data-skin="muted-parchment"] .bg-destructive:not([class*="/"]) *,
-:root[data-skin="muted-parchment"] [class*="bg-rose-"]:not([class*="/"]),
-:root[data-skin="muted-parchment"] [class*="bg-rose-"]:not([class*="/"]) *,
-:root[data-skin="muted-parchment"] [class*="bg-green-600"]:not([class*="/"]),
-:root[data-skin="muted-parchment"] [class*="bg-green-600"]:not([class*="/"]) * {
-  color: #FFFFFF !important;
-}
-
-/* 浅色纸质模式下：明确保证打字输入槽中已输入的正确字母保持深青墨色，错误字母保持鲜明深红 */
-:root[data-skin="muted-parchment"] .text-primary {
-  color: var(--primary) !important;
-}
-
-:root[data-skin="muted-parchment"] .text-destructive {
-  color: #DC2626 !important;
-}
-
-:root[data-skin="muted-parchment"] .text-destructive\/40 {
-  color: rgba(220, 38, 38, 0.45) !important;
-}
-
-:root[data-skin="muted-parchment"] .text-primary\/35 {
-  color: rgba(13, 118, 110, 0.4) !important;
-}
-
-/* 浅色纸质模式下：例词高亮与组合拼读字母映射为高对比度深琥珀橙，解决浅色背景下看不清的问题 */
-:root[data-skin="muted-parchment"] .phonics-highlight,
-:root[data-skin="muted-parchment"] .text-amber-400,
-:root[data-skin="muted-parchment"] [class*="text-amber-400"],
-:root[data-skin="muted-parchment"] [class*="text-amber-300"] {
-  color: #B45309 !important;
-  text-shadow: none !important;
-  text-decoration-color: #D97706 !important;
-}
-
-:root[data-skin="muted-parchment"] .phonics-pattern-title {
-  color: #B45309 !important;
-  text-shadow: none !important;
-  filter: none !important;
-}
-
-/* 边框在浅色下的感知染色 */
-:root[data-skin="muted-parchment"] .border-white\/5,
-:root[data-skin="muted-parchment"] .border-white\/10,
-:root[data-skin="muted-parchment"] .border-white\/15,
-:root[data-skin="muted-parchment"] .border-white\/20,
-:root[data-skin="muted-parchment"] [class*="border-white/"],
-:root[data-skin="muted-parchment"] [class*="divide-white/"]>* {
-  border-color: rgba(13, 118, 110, 0.22) !important;
-}
-
-/* 半透明浅色背景块（包括下拉选择框与徽标） */
-:root[data-skin="muted-parchment"] .bg-white\/5,
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.02\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.025\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.03\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.04\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.05\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.06\],
-:root[data-skin="muted-parchment"] .bg-white\/\[0\.08\],
-:root[data-skin="muted-parchment"] [class*="bg-white/"] {
-  background-color: rgba(13, 118, 110, 0.06) !important;
-}
-
-:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.06\]:hover,
-:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.08\]:hover,
-:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.1\]:hover,
-:root[data-skin="muted-parchment"] .hover\:bg-white\/\[0\.12\]:hover,
-:root[data-skin="muted-parchment"] .hover\:bg-white\/10:hover,
-:root[data-skin="muted-parchment"] .hover\:bg-white\/5:hover,
-:root[data-skin="muted-parchment"] [class*="hover:bg-white/"]:hover {
-  background-color: rgba(13, 118, 110, 0.12) !important;
-}
-
-/* 磨砂玻璃卡片 */
-:root[data-skin="muted-parchment"] .glass-card {
-  background: rgba(255, 255, 255, 0.90) !important;
-  border: 1px solid rgba(13, 118, 110, 0.18) !important;
-  box-shadow: 0 10px 32px 0 rgba(70, 60, 45, 0.10) !important;
-}
-
-:root[data-skin="muted-parchment"] .glass-panel {
-  background: rgba(245, 241, 232, 0.98) !important;
-  border: 1px solid rgba(13, 118, 110, 0.22) !important;
-  color: #1C1917 !important;
-}
-
-/* 侧边栏与弹窗底色 */
-:root[data-skin="muted-parchment"] aside[data-sidebar] {
-  background-color: rgba(236, 230, 216, 0.95) !important;
-  border-color: rgba(13, 118, 110, 0.18) !important;
-}
-
-:root[data-skin="muted-parchment"] .bg-sidebar {
-  background-color: #ECE6D8 !important;
-  color: #1C1917 !important;
-}
-
-:root[data-skin="muted-parchment"] .bg-\[\#12141A\],
-:root[data-skin="muted-parchment"] [class*="bg-\[\#12141A\]"],
-:root[data-skin="muted-parchment"] .bg-\[\#181B22\],
-:root[data-skin="muted-parchment"] [class*="bg-\[\#181B22\]"] {
-  background-color: #FDFCFA !important;
-  border-color: rgba(13, 118, 110, 0.25) !important;
-  box-shadow: 0 16px 40px rgba(60, 50, 35, 0.18) !important;
-  color: #1C1917 !important;
-}
-
-:root[data-skin="muted-parchment"] .word-lookup-card,
-:root[data-skin="muted-parchment"] .word-lookup-arrow,
-:root[data-skin="muted-parchment"] .tooltip-box {
-  background-color: #FDFCFA !important;
-  border-color: rgba(13, 118, 110, 0.20) !important;
-  color: #1C1917 !important;
-  box-shadow: 0 16px 40px rgba(60, 50, 35, 0.16) !important;
-}
-
-/* 输入框聚焦与 placeholder 颜色 */
-:root[data-skin="muted-parchment"] input,
-:root[data-skin="muted-parchment"] textarea {
-  color: #1C1917 !important;
-}
-
-:root[data-skin="muted-parchment"] input::placeholder,
-:root[data-skin="muted-parchment"] textarea::placeholder {
-  color: #78716C !important;
-}
-
-/* 浅色滚动条 */
-:root[data-skin="muted-parchment"] ::-webkit-scrollbar-thumb {
-  background: rgba(13, 118, 110, 0.2) !important;
-}
-
-:root[data-skin="muted-parchment"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(13, 118, 110, 0.35) !important;
-}
-
-/* 进度环与进度条未完成底槽在晨曦纸墨（浅色）下的高对比度适配 */
-:root[data-skin="muted-parchment"] .progress-track {
-  background-color: rgba(13, 118, 110, 0.12) !important;
-  border-color: rgba(13, 118, 110, 0.22) !important;
-}
-
-:root[data-skin="muted-parchment"] .progress-ring-track {
-  stroke: rgba(13, 118, 110, 0.18) !important;
 }
 
 /* ---------------------------------------------------------------------------
@@ -933,6 +708,199 @@
   stroke: rgba(110, 118, 108, 0.20) !important;
 }
 
+/* ---------------------------------------------------------------------------
+   淡雾青（pale-mist）示例同款液态毛玻璃浅色模式专属适配规则
+   核心色系：冷雾青底(#EAF1EF) + 深墨字(#182624) + 青绿主色(#0F7F73) + 琥珀辅色(#C97308)
+   --------------------------------------------------------------------------- */
+:root[data-skin="pale-mist"] {
+  color-scheme: light;
+}
+
+:root[data-skin="pale-mist"] body {
+  color: #182624;
+}
+
+:root[data-skin="pale-mist"] h1,
+:root[data-skin="pale-mist"] h2,
+:root[data-skin="pale-mist"] h3,
+:root[data-skin="pale-mist"] h4 {
+  color: #182624;
+}
+
+:root[data-skin="pale-mist"] .text-white,
+:root[data-skin="pale-mist"] [class*="text-white"] {
+  color: #182624 !important;
+}
+
+:root[data-skin="pale-mist"] .text-gray-100 {
+  color: #182624 !important;
+}
+
+:root[data-skin="pale-mist"] .text-gray-200 {
+  color: #2B3D3A !important;
+}
+
+:root[data-skin="pale-mist"] .text-gray-300 {
+  color: #374A47 !important;
+}
+
+:root[data-skin="pale-mist"] .text-gray-400,
+:root[data-skin="pale-mist"] .text-gray-500,
+:root[data-skin="pale-mist"] .text-\[\#9CA3AF\],
+:root[data-skin="pale-mist"] [class*="text-\[\#9CA3AF\]"],
+:root[data-skin="pale-mist"] .text-muted-foreground,
+:root[data-skin="pale-mist"] [class*="text-muted-foreground"] {
+  color: #667C78 !important;
+}
+
+:root[data-skin="pale-mist"] button.bg-primary,
+:root[data-skin="pale-mist"] button.bg-primary *,
+:root[data-skin="pale-mist"] .btn-primary,
+:root[data-skin="pale-mist"] .btn-primary *,
+:root[data-skin="pale-mist"] .bg-primary:not([class*="/"]),
+:root[data-skin="pale-mist"] .bg-primary:not([class*="/"]) *,
+:root[data-skin="pale-mist"] button.bg-destructive,
+:root[data-skin="pale-mist"] button.bg-destructive *,
+:root[data-skin="pale-mist"] .bg-destructive:not([class*="/"]),
+:root[data-skin="pale-mist"] .bg-destructive:not([class*="/"]) *,
+:root[data-skin="pale-mist"] [class*="bg-rose-"]:not([class*="/"]),
+:root[data-skin="pale-mist"] [class*="bg-rose-"]:not([class*="/"]) *,
+:root[data-skin="pale-mist"] [class*="bg-green-600"]:not([class*="/"]),
+:root[data-skin="pale-mist"] [class*="bg-green-600"]:not([class*="/"]) * {
+  color: #FFFFFF !important;
+}
+
+:root[data-skin="pale-mist"] .text-primary {
+  color: #0F7F73 !important;
+}
+
+:root[data-skin="pale-mist"] .text-destructive {
+  color: #DC2626 !important;
+}
+
+:root[data-skin="pale-mist"] .text-destructive\/40 {
+  color: rgba(220, 38, 38, 0.45) !important;
+}
+
+:root[data-skin="pale-mist"] .text-primary\/35 {
+  color: rgba(15, 127, 115, 0.40) !important;
+}
+
+:root[data-skin="pale-mist"] .phonics-highlight,
+:root[data-skin="pale-mist"] .text-amber-400,
+:root[data-skin="pale-mist"] [class*="text-amber-400"],
+:root[data-skin="pale-mist"] [class*="text-amber-300"] {
+  color: #C97308 !important;
+  text-shadow: none !important;
+  text-decoration-color: #C97308 !important;
+}
+
+:root[data-skin="pale-mist"] .phonics-pattern-title {
+  color: #A15507 !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-skin="pale-mist"] .border-white\/5,
+:root[data-skin="pale-mist"] .border-white\/10,
+:root[data-skin="pale-mist"] .border-white\/15,
+:root[data-skin="pale-mist"] .border-white\/20,
+:root[data-skin="pale-mist"] [class*="border-white/"],
+:root[data-skin="pale-mist"] [class*="divide-white/"]>* {
+  border-color: rgba(24, 52, 48, 0.11) !important;
+}
+
+:root[data-skin="pale-mist"] .bg-white\/5,
+:root[data-skin="pale-mist"] .bg-white\/\[0\.02\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.025\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.03\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.04\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.05\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.06\],
+:root[data-skin="pale-mist"] .bg-white\/\[0\.08\],
+:root[data-skin="pale-mist"] [class*="bg-white/"] {
+  background-color: rgba(255, 255, 255, 0.62) !important;
+}
+
+:root[data-skin="pale-mist"] .hover\:bg-white\/\[0\.06\]:hover,
+:root[data-skin="pale-mist"] .hover\:bg-white\/\[0\.08\]:hover,
+:root[data-skin="pale-mist"] .hover\:bg-white\/\[0\.1\]:hover,
+:root[data-skin="pale-mist"] .hover\:bg-white\/\[0\.12\]:hover,
+:root[data-skin="pale-mist"] .hover\:bg-white\/10:hover,
+:root[data-skin="pale-mist"] .hover\:bg-white\/5:hover,
+:root[data-skin="pale-mist"] [class*="hover:bg-white/"]:hover {
+  background-color: rgba(255, 255, 255, 0.90) !important;
+}
+
+:root[data-skin="pale-mist"] .glass-card {
+  background: rgba(255, 255, 255, 0.66) !important;
+  border-color: rgba(255, 255, 255, 0.90) !important;
+  box-shadow: inset 0 1px 0 #FFFFFF, 0 14px 32px -14px rgba(24, 52, 48, 0.12) !important;
+}
+
+:root[data-skin="pale-mist"] .glass-panel {
+  background: rgba(248, 251, 250, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.88) !important;
+}
+
+:root[data-skin="pale-mist"] aside[data-sidebar] {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.62) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.90) !important;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+:root[data-skin="pale-mist"] .bg-sidebar {
+  background-color: #F4F8F7 !important;
+  color: #182624 !important;
+}
+
+:root[data-skin="pale-mist"] .bg-\[\#12141A\],
+:root[data-skin="pale-mist"] [class*="bg-\[\#12141A\]"],
+:root[data-skin="pale-mist"] .bg-\[\#181B22\],
+:root[data-skin="pale-mist"] [class*="bg-\[\#181B22\]"] {
+  background-color: rgba(252, 254, 253, 0.95) !important;
+  border-color: rgba(24, 52, 48, 0.14) !important;
+  box-shadow: 0 18px 42px -12px rgba(24, 52, 48, 0.16) !important;
+  color: #182624 !important;
+}
+
+:root[data-skin="pale-mist"] .word-lookup-card,
+:root[data-skin="pale-mist"] .word-lookup-arrow,
+:root[data-skin="pale-mist"] .tooltip-box {
+  background-color: rgba(252, 254, 253, 0.96) !important;
+  border-color: rgba(24, 52, 48, 0.12) !important;
+  color: #182624 !important;
+  box-shadow: 0 16px 40px rgba(24, 52, 48, 0.15) !important;
+}
+
+:root[data-skin="pale-mist"] input,
+:root[data-skin="pale-mist"] textarea {
+  color: #182624 !important;
+}
+
+:root[data-skin="pale-mist"] input::placeholder,
+:root[data-skin="pale-mist"] textarea::placeholder {
+  color: #667C78 !important;
+}
+
+:root[data-skin="pale-mist"] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 127, 115, 0.22) !important;
+}
+
+:root[data-skin="pale-mist"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 127, 115, 0.42) !important;
+}
+
+:root[data-skin="pale-mist"] .progress-track {
+  background-color: rgba(24, 52, 48, 0.10) !important;
+  border-color: rgba(24, 52, 48, 0.14) !important;
+}
+
+:root[data-skin="pale-mist"] .progress-ring-track {
+  stroke: rgba(24, 52, 48, 0.14) !important;
+}
+
 /* 语法研习页沿用词库管理页的可读字号下限（与全局一样抬一号） */
 .grammar-page [class~="text-[10px]"],
 .grammar-page [class~="text-[11px]"],
@@ -1003,9 +971,9 @@
   text-decoration: none !important;
 }
 
-:root[data-skin="muted-parchment"] .grammar-keyword,
+:root[data-skin="pale-mist"] .grammar-keyword,
 :root[data-skin="avocado-cream"] .grammar-keyword,
-:root[data-skin="muted-parchment"] .grammar-page .grammar-keyword,
+:root[data-skin="pale-mist"] .grammar-page .grammar-keyword,
 :root[data-skin="avocado-cream"] .grammar-page .grammar-keyword {
   color: #B45309 !important;
   text-decoration: none !important;
@@ -1013,8 +981,8 @@
 
 @media (prefers-color-scheme: light) {
 
-  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-keyword,
-  :root:not([data-skin="slate-mint"]):not([data-skin="classic-emerald"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-page .grammar-keyword {
+  :root:not([data-skin="slate-mint"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-keyword,
+  :root:not([data-skin="slate-mint"]):not([data-skin="sakura-pink"]):not([data-skin="peach-oolong"]):not([data-skin="oxford-twilight"]) .grammar-page .grammar-keyword {
     color: #B45309 !important;
     text-decoration: none !important;
   }

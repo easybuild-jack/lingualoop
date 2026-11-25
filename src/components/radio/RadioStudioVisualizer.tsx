@@ -53,8 +53,8 @@ export function RadioStudioVisualizer({
   const skinId = useWorkspaceStore((s) => s.skinId)
   const currentSkin = getSkin(skinId)
   const tokens = currentSkin.tokens
-  // 浅色主题判定 (如 酪梨青灰 avocado-cream、晨曦纸墨 muted-parchment)
-  const isLight = skinId === 'avocado-cream' || skinId === 'muted-parchment'
+  // 浅色主题判定 (如 淡雾青 pale-mist、酪梨青灰 avocado-cream)
+  const isLight = skinId === 'pale-mist' || skinId === 'avocado-cream'
 
   // 将主题 token 存入 Ref，供 60 FPS 渲染循环随时读取，无需频繁重建动画
   const themeTokensRef = useRef({ tokens, isLight })
