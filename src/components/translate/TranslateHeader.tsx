@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Plus, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search } from 'lucide-react'
 import { SkinPicker } from '@/components/layout/SkinPicker'
 
 interface TranslateHeaderProps {
@@ -10,6 +10,9 @@ interface TranslateHeaderProps {
   totalGroupsCount: number
   totalSentencesCount: number
   onOpenImport: () => void
+  showCloudRefresh?: boolean
+  isRefreshingCloud?: boolean
+  onRefreshCloud?: () => void
 }
 
 export function TranslateHeader({
@@ -18,6 +21,9 @@ export function TranslateHeader({
   totalGroupsCount,
   totalSentencesCount,
   onOpenImport,
+  showCloudRefresh = false,
+  isRefreshingCloud = false,
+  onRefreshCloud,
 }: TranslateHeaderProps) {
   return (
     <div className="shrink-0 flex flex-col sm:flex-row sm:items-end justify-between gap-4 select-none">
@@ -40,6 +46,19 @@ export function TranslateHeader({
             className="w-full h-8 pl-8 pr-3 rounded-md bg-white/[0.05] border border-transparent focus:border-border focus:bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors"
           />
         </div>
+
+        {showCloudRefresh && onRefreshCloud && (
+          <button
+            type="button"
+            onClick={onRefreshCloud}
+            disabled={isRefreshingCloud}
+            title="从云数据库实时刷新句库"
+            className="h-8 px-2.5 rounded-md border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground text-[13px] inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-60"
+          >
+            <RefreshCw className={`size-3.5 ${isRefreshingCloud ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">刷新</span>
+          </button>
+        )}
 
         <button
           type="button"

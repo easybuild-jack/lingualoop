@@ -10,7 +10,8 @@
  * 未配置数据库或未登录时不做任何请求——也就自然不会收词。
  */
 import { getCloudAccountId, isCloudSignedIn } from './config'
-import { cloudOperations, cloudRepositories, type CollectedWordRow } from './supabaseRepository'
+import { cloudOperations, type CollectedWordRow } from './supabaseRepository'
+import { getRepositories } from '@/db/repository'
 import { mergeWordsIntoBook } from '@/db'
 import { useAiAssistantStore } from '@/store/useAiAssistantStore'
 import { queryAiWordCore } from '@/lib/aiWordCore'
@@ -35,7 +36,8 @@ export interface CollectResult {
 }
 
 async function ensureCollectedBook(bookId: string, accountId: string): Promise<void> {
-  const existing = await cloudRepositories.books.get(bookId)
+  const repositories = getRepositories()
+  const existing = await repositories.books.get(bookId)
   if (existing) return
   const now = Date.now()
   const book: VocabularyBook = {
@@ -51,7 +53,7 @@ async function ensureCollectedBook(bookId: string, accountId: string): Promise<v
     createdAt: now,
     updatedAt: now,
   }
-  await cloudRepositories.books.put(book)
+  await repositories.books.put(book)
 }
 
 /**
@@ -91,7 +93,7 @@ async function processRow(row: CollectedWordRow, bookId: string): Promise<RowOut
   }
 
   // 读失败直接抛出，交给外层按可重试失败处理；绝不能把「读失败」当成「没有记录」去覆盖已有记录
-  const existing = await cloudRepositories.wordRecords.get(wordId)
+  const existing = await getRepositories().wordRecords.get(wordId)
   if (existing && (existing.isStarred || existing.isError)) return { kind: 'done' }
 
   let targetWord = provided

@@ -24,6 +24,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { BUILTIN_BOOKS } from '@/resources/books'
 import { getBookUnitProgressRecords, reconcileUnitProgressRecord, getCustomBooks } from '@/db'
 import { buildFixedUnitId, dictionaryLoader } from '@/core/dictionaryLoader'
+import { subscribeCloudRefresh } from '@/core/cloud/realtime'
 import { startRouteProgressBar } from '@/components/layout/RouteProgressBar'
 import { SkinPicker } from '@/components/layout/SkinPicker'
 import type { DictUnit, UnitProgressRecord, VocabularyBook, PracticeMode } from '@/types'
@@ -352,6 +353,7 @@ function BooksHubContent() {
     progressById: Record<string, UnitProgressRecord>
     wordCountById: Record<string, number>
   }>({ key: '', progressById: {}, wordCountById: {} })
+  const [cloudRefreshTick, setCloudRefreshTick] = useState(0)
 
   const loadBooks = useCallback(async () => {
     const updatedBuiltins = await Promise.all(
@@ -375,7 +377,11 @@ function BooksHubContent() {
   }, [])
 
   useEffect(() => {
-    loadBooks()
+    queueMicrotask(() => void loadBooks())
+    return subscribeCloudRefresh(() => {
+      void loadBooks()
+      setCloudRefreshTick((tick) => tick + 1)
+    })
   }, [loadBooks])
 
   // 当进入词库管理页或全局正在学习的词库就绪时，默认展示当前选中的词库
@@ -502,7 +508,7 @@ function BooksHubContent() {
     return () => {
       cancelled = true
     }
-  }, [activeBook.id, activeBook.isCustom, activeBook.totalWords, activeBook.unitSize, activeBook.words, progressMode])
+  }, [activeBook.id, activeBook.isCustom, activeBook.totalWords, activeBook.unitSize, activeBook.words, progressMode, cloudRefreshTick])
 
   // 该词库在当前对应模式（学习 vs 默写）下的单元进度
   const rawModeUnit = getBookModeUnit(activeBook.id, progressMode)

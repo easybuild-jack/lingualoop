@@ -18,6 +18,7 @@ import { RadioUploadModal } from '@/components/radio/RadioUploadModal'
 import { ArrowLeft, FolderOpen, RefreshCw, X } from 'lucide-react'
 import { isCloudMode } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
+import { subscribeCloudRefresh } from '@/core/cloud/realtime'
 import { getRepositories } from '@/db/repository'
 import {
   type LocalFolder,
@@ -109,26 +110,33 @@ export default function RadioPage() {
   const localSupported = useSyncExternalStore(noopSubscribe, isLocalVideoSupported, () => false)
   const folderSupported = useSyncExternalStore(noopSubscribe, isLocalFolderSupported, () => false)
 
-  // 云模式：加载数据库里的链接视频（共享 + 当前账号个人），内置示例仍以代码为准
+  // 云模式：实时加载数据库里的链接视频（共享 + 当前账号个人），内置示例仍以代码为准
   useEffect(() => {
     if (!isCloudMode()) return
     let cancelled = false
-    getRepositories()
-      .radio.getItems()
-      .then((remote) => {
-        if (cancelled) return
-        setItems((prev) => {
+    const loadCloudItems = (isInitial: boolean) => {
+      getRepositories()
+        .radio.getItems()
+        .then((remote) => {
+          if (cancelled) return
           const remoteIds = new Set(remote.map((item) => item.id))
-          return [...remote, ...prev.filter((item) => !remoteIds.has(item.id))]
+          setItems([
+            ...remote,
+            ...DEFAULT_SAMPLE_RADIO_ITEMS.filter((item) => !remoteIds.has(item.id)),
+          ])
+          setCloudError(null)
         })
-      })
-      .catch((error) => {
-        console.warn('[radio] failed to load cloud items:', error)
-        reportCloudError(error, '读取视频')
-        if (!cancelled) setCloudError('云数据库读取视频失败，暂时只能看到示例视频。')
-      })
+        .catch((error) => {
+          console.warn('[radio] failed to load cloud items:', error)
+          reportCloudError(error, '读取视频')
+          if (!cancelled && isInitial) setCloudError('云数据库读取视频失败，暂时只能看到示例视频。')
+        })
+    }
+    loadCloudItems(true)
+    const unsubscribe = subscribeCloudRefresh(() => loadCloudItems(false))
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [])
 

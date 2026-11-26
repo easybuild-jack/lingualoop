@@ -5,7 +5,7 @@ import { DEFAULT_TRANSLATION_BOOKS, isOfficialTranslationBook } from '@/resource
 import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { createScopedProgressStorage } from '@/core/cloud/scopedStorage'
-import { isCloudMode } from '@/core/cloud/config'
+import { isCloudMode, isCloudSignedIn } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
 import { getRepositories } from '@/db/repository'
 
@@ -39,6 +39,7 @@ interface TranslateState {
   isImportModalOpen: boolean
   isGrammarModalOpen: boolean
   repeatSentenceKey: number
+  isRefreshingCloudBooks: boolean
 
   // Actions
   selectBook: (bookId: string) => void
@@ -62,8 +63,12 @@ interface TranslateState {
   /** 云模式下先写数据库，失败时提示并返回 false，页面状态不变 */
   addCustomBook: (book: TranslationBook) => Promise<boolean>
   deleteCustomBook: (bookId: string) => Promise<boolean>
+  /** 云模式下实时从数据库重新拉取最新自定义句库（无数据库时跳过） */
+  refreshCloudBooks: () => Promise<void>
   setImportModalOpen: (open: boolean) => void
 }
+
+let inFlightBooksRefresh: Promise<void> | null = null
 
 export const useTranslateStore = create<TranslateState>()(
   persist(
@@ -81,6 +86,7 @@ export const useTranslateStore = create<TranslateState>()(
       isImportModalOpen: false,
       isGrammarModalOpen: false,
       repeatSentenceKey: 0,
+      isRefreshingCloudBooks: false,
 
       selectBook: (bookId: string) => {
         audioEngine.cancelPendingPlayback()
@@ -316,6 +322,54 @@ export const useTranslateStore = create<TranslateState>()(
         return true
       },
 
+      refreshCloudBooks: async () => {
+        if (!isCloudSignedIn()) return
+        if (inFlightBooksRefresh) return inFlightBooksRefresh
+
+        inFlightBooksRefresh = (async () => {
+          set({ isRefreshingCloudBooks: true })
+          try {
+            const repositories = getRepositories()
+            const [remoteBooks, remoteState] = await Promise.all([
+              repositories.translate.getBooks(),
+              repositories.translate.getState(),
+            ])
+            const nextBooks = [
+              ...DEFAULT_TRANSLATION_BOOKS,
+              ...remoteBooks.map((book) => ({ ...book, isCustom: true })),
+            ]
+            set((state) => {
+              const keepCurrent = nextBooks.some((b) => b.id === state.currentBookId)
+              const preferredFromCloud =
+                remoteState?.currentBookId && nextBooks.some((b) => b.id === remoteState.currentBookId)
+                  ? remoteState.currentBookId
+                  : null
+              const nextBookId = keepCurrent
+                ? state.currentBookId
+                : preferredFromCloud || nextBooks[0]?.id || ''
+              progressBookIdOf(nextBookId)
+              const remoteCompleted = (remoteState?.completedSentenceIds ?? {}) as Record<string, boolean>
+              const mergedCompleted: Record<string, boolean> = remoteState?.completedSentenceIds
+                ? { ...state.completedSentenceIds, ...remoteCompleted }
+                : state.completedSentenceIds
+              return {
+                books: nextBooks,
+                currentBookId: nextBookId,
+                completedSentenceIds: mergedCompleted,
+                ...(keepCurrent ? {} : { currentSentenceIndex: 0, isSentenceCompleted: false }),
+              }
+            })
+          } catch (error) {
+            reportCloudError(error, '读取云端句库')
+          } finally {
+            set({ isRefreshingCloudBooks: false })
+            inFlightBooksRefresh = null
+          }
+        })()
+
+        return inFlightBooksRefresh
+      },
+
       setImportModalOpen: (open: boolean) => {
         set({ isImportModalOpen: open })
       },
@@ -333,7 +387,9 @@ export const useTranslateStore = create<TranslateState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
-        // 保证默认预置题库始终合并存在
+        // 云模式下句库与位置完全以数据库为准，绝不用本地缓存覆盖内存里的云端句库
+        if (isCloudMode()) return
+        // 本地模式：保证默认预置题库始终合并存在
         const customBooks = (state.books || []).filter((b) => b.isCustom)
         state.books = [...DEFAULT_TRANSLATION_BOOKS, ...customBooks]
         if (!state.books.some((b) => b.id === state.currentBookId)) {
@@ -344,3 +400,19 @@ export const useTranslateStore = create<TranslateState>()(
     }
   )
 )
+
+/** 等待翻译 store 完成本地设置字段水合（供 CloudSyncGate 在拉取云端句库前调用） */
+export const ensureLocalTranslateHydrated = async (): Promise<void> => {
+  if (typeof window === 'undefined') return
+  if (useTranslateStore.persist?.hasHydrated?.()) return
+  await new Promise<void>((resolve) => {
+    const unsub = useTranslateStore.persist.onFinishHydration(() => {
+      unsub()
+      resolve()
+    })
+    setTimeout(() => {
+      unsub()
+      resolve()
+    }, 150)
+  })
+}

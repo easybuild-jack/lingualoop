@@ -17,6 +17,7 @@ import {
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { getActiveTroubleWords, removeErrorWord } from '@/db'
 import { audioEngine } from '@/core/audioEngine'
+import { subscribeCloudRefresh } from '@/core/cloud/realtime'
 import { startRouteProgressBar } from '@/components/layout/RouteProgressBar'
 import { SkinPicker } from '@/components/layout/SkinPicker'
 import type { WordMasteryRecord, WordItem } from '@/types'
@@ -53,13 +54,22 @@ export default function TroubleWordsPage() {
   const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
-    async function loadTroubleWords() {
-      setIsLoading(true)
+    let cancelled = false
+    async function loadTroubleWords(showSpinner: boolean) {
+      if (showSpinner) setIsLoading(true)
       const realTroubles = await getActiveTroubleWords()
+      if (cancelled) return
       setTroubleList(realTroubles)
-      setIsLoading(false)
+      if (showSpinner) setIsLoading(false)
     }
-    loadTroubleWords()
+    void loadTroubleWords(true)
+    const unsubscribe = subscribeCloudRefresh(() => {
+      void loadTroubleWords(false)
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   const starredCount = troubleList.filter((i) => i.record.isStarred).length

@@ -13,6 +13,7 @@ import { ReadingReaderView } from '@/components/reading/ReadingReaderView'
 import { ReadingUploadModal } from '@/components/reading/ReadingUploadModal'
 import { isCloudMode } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
+import { subscribeCloudRefresh } from '@/core/cloud/realtime'
 import { getRepositories } from '@/db/repository'
 
 const STORAGE_KEY = 'lingualoop_reading_articles_v1'
@@ -55,34 +56,40 @@ export default function ReadingPage() {
   // 云模式下列表返回前不允许增删，避免基于不完整的列表写库
   const [isCloudLoading, setIsCloudLoading] = useState(() => isCloudMode())
 
-  // 云模式下用数据库里的文章（内置示例文章仍以代码为准）
+  // 云模式下用数据库里的文章（内置示例文章仍以代码为准），切回页面时实时重查
   useEffect(() => {
     if (!isCloudMode()) return
     let cancelled = false
-    getRepositories()
-      .reading.getArticles()
-      .then((remote) => {
-        if (cancelled) return
-        const remoteIds = new Set(remote.map((article) => article.id))
-        const merged = [
-          ...remote,
-          ...DEFAULT_READING_ARTICLES.filter((article) => !remoteIds.has(article.id)),
-        ]
-        setArticles(merged)
-        setCurrentId((prev) => (merged.some((article) => article.id === prev) ? prev : merged[0]?.id || ''))
-      })
-      .catch((error) => {
-        console.warn('[reading] failed to load cloud articles:', error)
-        reportCloudError(error, '读取文章')
-        if (!cancelled) {
-          setLoadError('云数据库读取失败，暂时只能看到内置示例文章，上传与删除已暂停。')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsCloudLoading(false)
-      })
+    const loadCloudArticles = (isInitial: boolean) => {
+      getRepositories()
+        .reading.getArticles()
+        .then((remote) => {
+          if (cancelled) return
+          const remoteIds = new Set(remote.map((article) => article.id))
+          const merged = [
+            ...remote,
+            ...DEFAULT_READING_ARTICLES.filter((article) => !remoteIds.has(article.id)),
+          ]
+          setArticles(merged)
+          setLoadError(null)
+          setCurrentId((prev) => (merged.some((article) => article.id === prev) ? prev : merged[0]?.id || ''))
+        })
+        .catch((error) => {
+          console.warn('[reading] failed to load cloud articles:', error)
+          reportCloudError(error, '读取文章')
+          if (!cancelled && isInitial) {
+            setLoadError('云数据库读取失败，暂时只能看到内置示例文章，上传与删除已暂停。')
+          }
+        })
+        .finally(() => {
+          if (!cancelled && isInitial) setIsCloudLoading(false)
+        })
+    }
+    loadCloudArticles(true)
+    const unsubscribe = subscribeCloudRefresh(() => loadCloudArticles(false))
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [])
 
