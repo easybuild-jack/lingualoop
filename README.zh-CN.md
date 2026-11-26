@@ -19,10 +19,6 @@
 
 [在线体验](https://www.lingualoop.com.cn) · [项目说明文档](./docs/architecture.md) · [开发文档](./docs/development.md) · [SEO 说明](./docs/seo.md)
 
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop 产品预览" width="840" />
-
 </div>
 
 ---

@@ -31,13 +31,6 @@ export const SITE_KEYWORDS = [
   'AI口语陪练',
 ]
 
-export const OG_IMAGE = {
-  url: '/og-image.png',
-  width: 1200,
-  height: 630,
-  alt: `${SITE_BRAND} · 源码公开的英语学习闭环`,
-}
-
 interface SeoRoute {
   /** 标题中的页面名，标题为 `{name} | 林瓜鲁普 LinguaLoop` */
   name: string
@@ -147,13 +140,11 @@ export function buildPageMetadata(path: keyof typeof SEO_ROUTES): Metadata {
       url: path,
       title: fullTitle,
       description: route.description,
-      images: [OG_IMAGE],
     },
     twitter: {
-      card: 'summary_large_image',
+      card: 'summary',
       title: fullTitle,
       description: route.description,
-      images: [OG_IMAGE.url],
     },
     ...(route.index ? {} : { robots: { index: false, follow: false } }),
   }
@@ -199,7 +190,6 @@ export function homeJsonLd() {
         operatingSystem: 'Web',
         inLanguage: 'zh-CN',
         isAccessibleForFree: true,
-        image: absoluteUrl(OG_IMAGE.url),
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'CNY' },
         sameAs: [GITHUB_REPO_URL],
         featureList: ['音标练习', '背单词', '默写练习', '词根词缀', '英语语法', '英语听力', '句子翻译', '双语阅读', 'AI 口语陪练'],

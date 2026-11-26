@@ -19,10 +19,6 @@
 
 [ライブデモ](https://www.lingualoop.com.cn) · [アーキテクチャ (ZH)](./docs/architecture.md) · [開発者ガイド (ZH)](./docs/development.md) · [SEO ガイド (ZH)](./docs/seo.md)
 
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop プレビュー" width="840" />
-
 </div>
 
 ---

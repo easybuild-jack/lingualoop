@@ -18,7 +18,6 @@ import { SpeakingWindow } from '@/components/speaking/SpeakingWindow'
 import {
   HOME_DESCRIPTION,
   HOME_TITLE,
-  OG_IMAGE,
   SITE_BRAND,
   SITE_KEYWORDS,
   SITE_NAME,
@@ -42,13 +41,11 @@ export const metadata: Metadata = {
     url: '/',
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
-    images: [OG_IMAGE],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
-    images: [OG_IMAGE.url],
   },
   robots: {
     index: true,

@@ -19,10 +19,6 @@ English · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./REA
 
 [Live Demo](https://www.lingualoop.com.cn) · [Architecture (ZH)](./docs/architecture.md) · [Developer Guide (ZH)](./docs/development.md) · [SEO Guide (ZH)](./docs/seo.md)
 
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop Preview" width="840" />
-
 </div>
 
 ---
