@@ -5,8 +5,9 @@
  *   已配置 → 需要登录系统账号（accounts 表），业务数据按 account_id 读写云端，跨设备共享；
  *   未配置 → 一切留在浏览器（IndexedDB + localStorage），不需要登录，功能与以前完全一致。
  *
- * 配置本身（URL / anon key）与登录会话（账号 id）只存在本机 localStorage。
+ * 配置本身（URL / anon key，其中 anon key 加密存储）与登录会话（账号 id）只存在本机 localStorage，绝不入云。
  */
+import { decryptLocalSecret, encryptLocalSecret, isEncryptedLocalSecret } from '@/lib/localSecret'
 
 export interface CloudConfig {
   /** Supabase 项目地址，形如 https://xxxx.supabase.co */
@@ -39,9 +40,26 @@ export function getCloudConfig(): CloudConfig | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<CloudConfig>
     if (!parsed?.url || !parsed?.anonKey) return null
+    const decryptedKey = decryptLocalSecret(parsed.anonKey).trim()
+    if (!decryptedKey) return null
+    // 兼容历史明文 anonKey：首次读取时原地升级为密文存储
+    if (!isEncryptedLocalSecret(parsed.anonKey)) {
+      try {
+        localStorage.setItem(
+          CONFIG_KEY,
+          JSON.stringify({
+            ...parsed,
+            url: normalizeSupabaseUrl(parsed.url),
+            anonKey: encryptLocalSecret(decryptedKey),
+          })
+        )
+      } catch {
+        // 写入失败不影响本次读取
+      }
+    }
     return {
       url: normalizeSupabaseUrl(parsed.url),
-      anonKey: parsed.anonKey.trim(),
+      anonKey: decryptedKey,
       configuredAt: parsed.configuredAt ?? 0,
     }
   } catch {
@@ -50,13 +68,18 @@ export function getCloudConfig(): CloudConfig | null {
 }
 
 export function saveCloudConfig(url: string, anonKey: string): CloudConfig {
+  const cleanKey = anonKey.trim()
   const config: CloudConfig = {
     url: normalizeSupabaseUrl(url),
-    anonKey: anonKey.trim(),
+    anonKey: cleanKey,
     configuredAt: Date.now(),
   }
   if (canUseStorage()) {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
+    const stored: CloudConfig = {
+      ...config,
+      anonKey: encryptLocalSecret(cleanKey),
+    }
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(stored))
     // 重新配置意味着「回到云端」，之前选择的本地降级失效
     localStorage.removeItem(OFFLINE_FALLBACK_KEY)
     window.dispatchEvent(new Event(CLOUD_CONFIG_CHANGED_EVENT))

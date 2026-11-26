@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { createEncryptedFieldsStorage } from '@/lib/localSecret'
 import {
   getScenario,
   type CorrectionMode,
@@ -794,7 +795,15 @@ export const useSpeakingStore = create<SpeakingState>()(
     },
     {
       name: 'lingualoop_speaking_v3',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() =>
+        createEncryptedFieldsStorage([
+          ['tts', 'doubao', 'apiKey'],
+          ['tts', 'doubao', 'accessToken'],
+          ['tts', 'qwen', 'apiKey'],
+          ['asr', 'doubao', 'apiKey'],
+          ['asr', 'doubao', 'accessToken'],
+        ])
+      ),
       partialize: (st) => ({
         mode: st.mode,
         size: st.size,

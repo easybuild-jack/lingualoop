@@ -760,7 +760,7 @@ export function SettingsModal() {
                       </button>
                     </div>
                     <p className="text-sm text-muted-foreground/80 leading-relaxed">
-                      密钥只写入本机浏览器 LocalStorage（不加密，公用电脑请慎填）；请求优先由浏览器直连模型厂商，遇到跨域限制时经本站后端无状态转发，服务端不落盘、不写日志，也不参与账号同步。
+                      密钥仅加密存储在本地浏览器（不上传云端，公用电脑仍请慎填）；请求优先由浏览器直连模型厂商，遇到跨域限制时经本站后端无状态转发，服务端不落盘、不写日志，也不参与账号同步。
                     </p>
                   </div>
 
