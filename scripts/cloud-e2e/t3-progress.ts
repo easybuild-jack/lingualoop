@@ -95,7 +95,7 @@ async function main() {
   check('later changes are still written', sql(`select learned_root_ids ? 'root_after_reject' from app_state where account_id='${eve.accountId}'`) === 't')
   check('the rejected value is not re-sent', rejected === 1 && sql(`select count(*) from book_progress where book_id='book_rule'`) === '0', rejected)
 
-  console.log('# database unreachable: switches to local mode, no retry, nothing overwritten')
+  console.log('# database unreachable: stays in cloud mode, notice only, no auto-fallback')
   const localBefore = storage.getItem(WS)
   let attempts = 0
   cloud.appState.putBookModes = async () => {
@@ -107,19 +107,16 @@ async function main() {
   cloud.appState.putBookModes = realPut
   await sleep(300)
   await progress.waitForCloudWrites()
-  check('connection failure switches to local mode', !config.isCloudMode() && config.isOfflineFallback() && config.isCloudConfigured())
-  const pending = fallback.takePendingFallbackNotice()
-  check('notice kept for after the reload', pending?.startsWith(fallback.FALLBACK_NOTICE) === true && pending.includes('保存学习进度失败'), pending)
-  check('notice explains local data and how to merge back', fallback.FALLBACK_NOTICE.includes('这台设备上保存的数据') && fallback.FALLBACK_NOTICE.includes('数据库里的数据不会丢失') && fallback.FALLBACK_NOTICE.includes('「恢复云端连接」') && fallback.FALLBACK_NOTICE.includes('「同步资料」和「同步进度」'))
-  check('notice shown once', fallback.takePendingFallbackNotice() === null)
+  check('connection failure stays in cloud mode', config.isCloudMode() && !config.isOfflineFallback() && config.isCloudConfigured())
+  check('connection failure shows error notice', received.some((n) => n.tone === 'error' && n.text.includes('保存学习进度失败')), received)
   check('write attempted once, no background retry', attempts === 1 && sql(`select count(*) from book_progress where book_id='book_kaoyan'`) === '0', attempts)
-  store.setState({ currentUnitIndex: 8, bookModeProgress: { ...store.getState().bookModeProgress, book_gre: { learn: 2, dictation: 0, phonetic: 0 } } })
-  await progress.waitForCloudWrites()
-  check('later changes do not catch up the failed write', sql(`select count(*) from book_progress where book_id in ('book_kaoyan','book_gre')`) === '0' && sql(`select current_unit_index from app_state where account_id='${eve.accountId}'`) === '6')
-  check('switching does not overwrite local progress', storage.getItem(WS) === localBefore)
-  check('database progress untouched by the switch', bookRow(eve.accountId, 'book_cet4', 'learn') === '5')
-  check('after the switch reads and writes go to the local database', (await dbIndex.toggleStarWord('w_fallback', 'book_cet4')) === true && (await localRepositories.wordRecords.get('w_fallback'))?.isStarred === true && sql(`select count(*) from word_records where word_id='w_fallback'`) === '0')
-  check('a second failure does not switch again', fallback.switchToLocalMode('x') === false && fallback.takePendingFallbackNotice() === null)
+  check('failed write does not overwrite local progress', storage.getItem(WS) === localBefore)
+  check('database progress untouched', bookRow(eve.accountId, 'book_cet4', 'learn') === '5')
+
+  console.log('# manual disable cloud storage switches to local mode')
+  config.setOfflineFallback(true)
+  check('manual disable switches to local mode', !config.isCloudMode() && config.isOfflineFallback() && config.isCloudConfigured())
+  check('after manual disable reads and writes go to the local database', (await dbIndex.toggleStarWord('w_fallback', 'book_cet4')) === true && (await localRepositories.wordRecords.get('w_fallback'))?.isStarred === true && sql(`select count(*) from word_records where word_id='w_fallback'`) === '0')
   stop()
   config.setOfflineFallback(false)
 

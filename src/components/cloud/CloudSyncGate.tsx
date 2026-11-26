@@ -8,12 +8,11 @@ import { ensureLocalTranslateHydrated } from '@/store/useTranslateStore'
 import {
   cloudScopeSignature,
   getCloudSession,
-  isCloudConfigured,
   isCloudMode,
   isCloudSignedIn,
   subscribeCloudMode,
 } from '@/core/cloud/config'
-import { isNetworkCloudError, probeCloudConnection } from '@/core/cloud/client'
+import { probeCloudConnection } from '@/core/cloud/client'
 import { logoutAccount, verifyCurrentAccount } from '@/core/cloud/account'
 import { markCloudHydrated, resetCloudHydration } from '@/core/cloud/readiness'
 import {
@@ -25,7 +24,6 @@ import {
 import { refreshAllCloudData } from '@/core/cloud/realtime'
 import { clearLegacyCloudProgressCache } from '@/core/cloud/scopedStorage'
 import { pushCloudNotice, subscribeCloudNotices, type CloudNotice } from '@/core/cloud/notices'
-import { switchToLocalMode, takePendingFallbackNotice } from '@/core/cloud/fallback'
 import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 const INFO_TIMEOUT_MS = 8000
@@ -39,10 +37,9 @@ function loginHref(pathname: string | null): string {
 /**
  * 云数据库连接守卫。
  *
- * 配置了数据库时负责：未登录跳转登录页 → 启动体检 → 从数据库载入进度 → 之后学习进度的变更直接写数据库。
+ * 配置了数据库且开启云端存储时负责：未登录跳转登录页 → 启动体检 → 从数据库载入进度 → 之后学习进度的变更直接写数据库。
  * 这里没有任何本地与数据库之间的同步（手动同步在设置面板里）。
- * 连不上数据库时自动切到本地模式（fallback.ts），重载后在顶部提示；其他失败只在顶部提示。都不重发、不遮挡页面。
- * 未配置数据库时什么都不做，与纯本地版本完全一致。
+ * 连不上数据库或读写失败只在顶部提示，绝不自动切换本地模式；只有未配置或用户在设置里手动关闭云端存储时才走本地模式。
  */
 export function CloudSyncGate() {
   const router = useRouter()
@@ -53,7 +50,7 @@ export function CloudSyncGate() {
   const scopeRef = useRef<string | null>(null)
   const requiresLoginRedirect = useSyncExternalStore(
     subscribeCloudMode,
-    () => isCloudConfigured() && !getCloudSession() && !isChromelessRoute(pathname),
+    () => isCloudMode() && !getCloudSession() && !isChromelessRoute(pathname),
     () => false
   )
 
@@ -70,10 +67,8 @@ export function CloudSyncGate() {
     stopWrites()
     resetCloudHydration()
 
-    if (!isCloudConfigured()) {
+    if (!isCloudMode()) {
       markCloudHydrated()
-      const pending = takePendingFallbackNotice()
-      if (pending) pushCloudNotice(pending, 'error')
       return
     }
 
@@ -83,16 +78,8 @@ export function CloudSyncGate() {
       return
     }
 
-    if (!isCloudMode()) {
-      markCloudHydrated()
-      const pending = takePendingFallbackNotice()
-      if (pending) pushCloudNotice(pending, 'error')
-      return
-    }
-
     const probe = await probeCloudConnection()
     if (!probe.ok) {
-      if (probe.status === 'network' && switchToLocalMode(`连接失败：${probe.message}`)) return
       markCloudHydrated()
       pushCloudNotice(`云数据库无法使用：${probe.message}`, 'error')
       return
@@ -115,7 +102,6 @@ export function CloudSyncGate() {
       cleanupsRef.current.push(startWorkspaceProgressWrites(), startTranslateProgressWrites())
     } catch (error) {
       const reason = error instanceof Error ? error.message : '请稍后重试'
-      if (isNetworkCloudError(error) && switchToLocalMode(`载入学习进度失败：${reason}`)) return
       // 没能载入就不启动进度写入，避免用默认值覆盖数据库
       markCloudHydrated()
       pushCloudNotice(`从数据库载入学习进度失败：${reason}。本次的学习位置不会保存，请稍后重新加载。`, 'error')
@@ -137,33 +123,28 @@ export function CloudSyncGate() {
     const unsubscribeNotices = subscribeCloudNotices((notice) => {
       // 同样的提示只留最新一条，避免连续失败时刷屏
       setNotices((prev) => [...prev.filter((item) => item.text !== notice.text), notice].slice(-MAX_NOTICES))
-      // 错误提示（包括「已切换到本地模式」）留到用户手动关闭
+      // 错误提示留到用户手动关闭
       if (notice.tone !== 'error') setTimeout(() => dismiss(notice.id), INFO_TIMEOUT_MS)
     })
-    const handleOffline = () => {
-      switchToLocalMode('网络已断开')
-    }
     const refreshOnReturn = () => {
       if (!isCloudSignedIn()) return
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       void refreshAllCloudData()
     }
-    window.addEventListener('offline', handleOffline)
     window.addEventListener('focus', refreshOnReturn)
     document.addEventListener('visibilitychange', refreshOnReturn)
     return () => {
       stopWrites()
       unsubscribe()
       unsubscribeNotices()
-      window.removeEventListener('offline', handleOffline)
       window.removeEventListener('focus', refreshOnReturn)
       document.removeEventListener('visibilitychange', refreshOnReturn)
     }
   }, [start, stopWrites])
 
-  // 配置了数据库且未登录时，访问任何业务页面（首页与登录页除外）都先跳转到登录页
+  // 开启云端存储且未登录时，访问任何业务页面（首页与登录页除外）都先跳转到登录页
   useEffect(() => {
-    if (!isCloudConfigured() || getCloudSession() || isChromelessRoute(pathname)) return
+    if (!isCloudMode() || getCloudSession() || isChromelessRoute(pathname)) return
     router.replace(loginHref(pathname))
   }, [pathname, router])
 

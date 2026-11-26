@@ -4,7 +4,7 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigationStore } from '@/store/useNavigationStore'
-import { getCloudSession, isCloudConfigured, subscribeCloudMode } from '@/core/cloud/config'
+import { getCloudSession, isCloudMode, subscribeCloudMode } from '@/core/cloud/config'
 import { isChromelessRoute } from '@/lib/chromelessRoutes'
 
 /**
@@ -21,7 +21,7 @@ export function PageTransitionWrapper({ children }: { children: React.ReactNode 
   const [hydrated, setHydrated] = useState(false)
   const needsLogin = useSyncExternalStore(
     subscribeCloudMode,
-    () => isCloudConfigured() && !getCloudSession() && !isChromelessRoute(pathname),
+    () => isCloudMode() && !getCloudSession() && !isChromelessRoute(pathname),
     () => false
   )
 

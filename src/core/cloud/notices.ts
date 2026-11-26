@@ -1,12 +1,10 @@
 /**
  * 云模式下读写失败与操作结果的页面提示。
  *
- * 配置数据库后所有读写都直接打到数据库，失败不重发：
- * - 写入失败、或连不上数据库（读写都算）：自动切到本地模式（见 fallback.ts），重载后提示用户；
- * - 其他读取失败：只在页面顶部提示原因。
+ * 配置数据库且开启云端存储后，所有读写都直接打到数据库，失败不重发、不自动切到本地模式，
+ * 只在页面顶部提示原因。
  */
-import { cloudErrorMessage, isNetworkCloudError } from './client'
-import { switchToLocalMode } from './fallback'
+import { cloudErrorMessage } from './client'
 
 export type CloudNoticeTone = 'error' | 'info'
 
@@ -37,7 +35,6 @@ export function subscribeCloudNotices(listener: Listener): () => void {
 export function reportCloudError(error: unknown, action: string): void {
   const reason = error instanceof Error ? error.message : cloudErrorMessage(error)
   const text = `${action}失败：${reason}`
-  if (isNetworkCloudError(error) && switchToLocalMode(text)) return
   emit({ tone: 'error', text })
 }
 

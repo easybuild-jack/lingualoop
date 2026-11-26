@@ -5,8 +5,7 @@
  * 书内单元位置和翻译进度是 zustand store 的字段，这里负责：
  *   1. 启动时从数据库载入（数据库为准；没有记录就用默认值，不写空行）；
  *   2. 之后每次变更立即写数据库。写入按顺序逐个执行，不防抖、不排队、失败不重发：
- *      连不上数据库时本页停止写入并自动切到本地模式（fallback.ts）；数据库按业务规则拒绝时只提示。
- *      两种情况都不会在之后的变化里补写失败的那一次。
+ *      数据库报错或网络异常时只在页面顶部提示，不自动切到本地模式，也不在之后的变化里补写失败的那一次。
  *
  * 设置类字段（皮肤/音量/快捷键/AI Key）不在此列，永远只在本地。
  */
@@ -18,7 +17,6 @@ import type { BookModeEntry } from '@/db/repository'
 import type { PracticeMode } from '@/types'
 import { DEFAULT_TRANSLATION_BOOKS } from '@/resources/translateData'
 import { getCloudAccountId, isCloudMode } from './config'
-import { isNetworkCloudError } from './client'
 import { reportCloudError } from './notices'
 
 const PRACTICE_MODES: PracticeMode[] = ['learn', 'dictation', 'phonetic']
@@ -29,13 +27,11 @@ const LOOP_COUNT_VALUES = [1, 2, 3, 5] as const
 /* -------------------------------------------------------------------------- */
 
 const writeChains = new Map<string, Promise<void>>()
-/** 连不上数据库后本页不再写数据库（随即切到本地模式），之后的变化也不会补写 */
-let writesStopped = false
 
 /**
  * 同一类数据的写入按发生顺序逐个执行，避免旧值后到覆盖新值（app_state 没有「新者胜」触发器）。
  * owner 是开始写入监听时的账号：账号变了（如另一个标签页切换了账号）就不再写，避免写进新账号。
- * 数据库按业务规则拒绝的写入只提示，skip 把这次的值记为已处理，之后的变化不会把它再发一次。
+ * 写入失败时只提示错误，skip 把这次的值记为已处理，之后的变化不会把它再发一次，但后续新变更仍正常写入。
  */
 function enqueueWrite(
   key: string,
@@ -46,12 +42,11 @@ function enqueueWrite(
 ) {
   const previous = writeChains.get(key) ?? Promise.resolve()
   const next = previous.then(async () => {
-    if (writesStopped || !isCloudMode() || !owner || getCloudAccountId() !== owner) return
+    if (!isCloudMode() || !owner || getCloudAccountId() !== owner) return
     try {
       await task()
     } catch (error) {
-      if (isNetworkCloudError(error)) writesStopped = true
-      else skip()
+      skip()
       reportCloudError(error, action)
     }
   })
@@ -179,7 +174,6 @@ function markWorkspaceHandled() {
 /** 开始把学习位置的变更直接写入数据库，返回停止函数 */
 export function startWorkspaceProgressWrites(): () => void {
   const owner = getCloudAccountId()
-  writesStopped = false
   return useWorkspaceStore.subscribe(() => {
     if (changedBookModes().length === 0 && JSON.stringify(appStateSnapshot()) === storedAppState) return
     enqueueWrite('app_state', owner, '保存学习进度', writeWorkspaceProgress, markWorkspaceHandled)
@@ -226,7 +220,6 @@ export async function loadTranslateProgress(): Promise<void> {
 /** 开始把翻译进度的变更直接写入数据库（完成记录在服务端取并集），返回停止函数 */
 export function startTranslateProgressWrites(): () => void {
   const owner = getCloudAccountId()
-  writesStopped = false
   return useTranslateStore.subscribe(() => {
     if (JSON.stringify(translateStateSnapshot()) === storedTranslateState) return
     enqueueWrite(
