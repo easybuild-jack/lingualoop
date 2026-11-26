@@ -16,7 +16,6 @@ export type RadioScenario =
   | string
 
 export const DEFAULT_RADIO_SCENARIOS: RadioScenario[] = [
-  '官方示例',
   '日常生活',
   '职场商务',
   '旅游出行',

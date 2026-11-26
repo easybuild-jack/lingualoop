@@ -15,8 +15,9 @@ import { RadioFilters } from '@/components/radio/RadioFilters'
 import { RadioMainPlayer } from '@/components/radio/RadioMainPlayer'
 import { RadioCardList } from '@/components/radio/RadioCardList'
 import { RadioUploadModal } from '@/components/radio/RadioUploadModal'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { ArrowLeft, FolderOpen, RefreshCw, X } from 'lucide-react'
-import { isCloudMode } from '@/core/cloud/config'
+import { isCloudMode, subscribeCloudMode } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
 import { subscribeCloudRefresh } from '@/core/cloud/realtime'
 import { getRepositories } from '@/db/repository'
@@ -40,8 +41,8 @@ import {
   scanFolderVideos,
 } from '@/lib/radio/localVideos'
 
-type ActiveTab = RadioCategory | 'local' | 'player'
-type SourceSubTab = 'official' | 'custom'
+type ActiveTab = 'official' | RadioCategory | 'local' | 'player'
+type ScopeFilter = 'all' | 'personal' | 'shared'
 
 const CATEGORY_TABS: RadioCategory[] = ['phrases', 'dialogue', 'radio']
 
@@ -68,12 +69,13 @@ function localEntryToItem(entry: LocalVideoEntry, src: string): RadioItem {
 }
 
 export default function RadioPage() {
-  // 当前激活的 Tab：'phrases' (常用短语) | 'dialogue' (场景对话) | 'radio' (英语电台) | 'player' (共用播放页)
-  const [activeTab, setActiveTab] = useState<ActiveTab>('phrases')
-  // 「常用短语」与「英语电台」下的二级 Tab：官方示例 / 自定义
-  const [subTab, setSubTab] = useState<SourceSubTab>('official')
+  // 当前激活的 Tab：'official' (官方示例) | 'phrases' (常用短语) | 'dialogue' (场景对话) | 'radio' (英语电台) | 'local' (本地视频) | 'player' (共用播放页)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('official')
+  // 自定义分类下的归属筛选：全部 / 个人 / 共享
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
   // 记录最近一次浏览的列表分类 Tab，用于从共用播放页点击「返回列表」及添加视频时的默认分类
   const [lastCategoryTab, setLastCategoryTab] = useState<RadioCategory>('phrases')
+  const cloudMode = useSyncExternalStore(subscribeCloudMode, isCloudMode, () => false)
 
   // 视频列表（三个模块初始各有 1 个示例视频）
   const [items, setItems] = useState<RadioItem[]>(() => DEFAULT_SAMPLE_RADIO_ITEMS)
@@ -87,9 +89,10 @@ export default function RadioPage() {
   const [playMode, setPlayMode] = useState<PlayMode>('list-loop')
   const [volume, setVolume] = useState(0.8)
 
-  // 筛选与检索状态
+  // 筛选、分页与检索状态
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedScenario, setSelectedScenario] = useState<RadioScenario | 'all'>('all')
+  const [listPage, setListPage] = useState(1)
 
   // 弹窗状态
   const [isUploadOpen, setIsUploadOpen] = useState(false)
@@ -197,33 +200,56 @@ export default function RadioPage() {
     )
   }, [items, localItems, currentId])
 
-  // 当前处于的模块分类（如果在播放页，则以当前播放视频所属分类或最近浏览的分类为准；本机视频单独归为 local）
-  const activeCategory: RadioCategory | 'local' =
+  // 当前处于的模块分类（如果在播放页，则以当前播放视频所属分类或最近浏览的分类为准）
+  const activeCategory: 'official' | RadioCategory | 'local' =
     activeTab === 'player'
       ? currentItem?.isLocal
         ? 'local'
-        : currentItem?.category || lastCategoryTab
+        : currentItem?.isOfficial
+          ? 'official'
+          : currentItem?.category || lastCategoryTab
       : activeTab
 
-  // 「场景对话」模块下的场景标签池（内置五大默认场景 + 用户自定义新增的场景）
+  // 「场景对话」模块下的场景标签池（内置默认场景 + 用户自定义新增的场景，不含官方示例）
   const availableScenarios = useMemo(() => {
     const set = new Set<string>(DEFAULT_RADIO_SCENARIOS)
     items.forEach((item) => {
-      if (item.category === 'dialogue' && item.scenario) {
+      if (!item.isOfficial && item.category === 'dialogue' && item.scenario && item.scenario !== '官方示例') {
         set.add(item.scenario)
       }
     })
     return Array.from(set)
   }, [items])
 
-  // 各模块下的视频数量统计
+  // 官方示例数量与各自定义模块视频数量统计
+  const officialCount = useMemo(() => items.filter((item) => Boolean(item.isOfficial)).length, [items])
+
   const categoryCounts = useMemo(() => {
     const counts: Record<RadioCategory, number> = { phrases: 0, dialogue: 0, radio: 0 }
     items.forEach((item) => {
+      if (item.isOfficial) return
       counts[item.category] = (counts[item.category] || 0) + 1
     })
     return counts
   }, [items])
+
+  // 当前自定义模块下 个人 / 共享 数量统计
+  const scopeCounts = useMemo(() => {
+    let personal = 0
+    let shared = 0
+    if (activeCategory === 'official' || activeCategory === 'local') {
+      return { personal, shared }
+    }
+    items.forEach((item) => {
+      if (item.isOfficial || item.category !== activeCategory) return
+      if (activeCategory === 'dialogue' && selectedScenario !== 'all' && item.scenario !== selectedScenario) {
+        return
+      }
+      if (item.accountId) personal += 1
+      else shared += 1
+    })
+    return { personal, shared }
+  }, [items, activeCategory, selectedScenario])
 
   // 本机可播放清单：单独记住的文件在前（新的在上），文件夹里的视频按文件夹添加顺序 + 文件名顺序接在后面
   // 顺序即「下一集」的顺序，顺序播放时自动接着播下一个
@@ -247,15 +273,24 @@ export default function RadioPage() {
           localEntryToItem(entry, localItems.find((i) => i.id === entry.id)?.src ?? '')
         )
     }
+    if (activeCategory === 'official') {
+      const q = searchQuery.trim().toLowerCase()
+      return items.filter((item) => {
+        if (!item.isOfficial) return false
+        if (q && !item.title.toLowerCase().includes(q) && !(item.description || '').toLowerCase().includes(q)) {
+          return false
+        }
+        return true
+      })
+    }
     return items.filter((item) => {
-      if (item.category !== activeCategory) return false
-      if (activeCategory === 'phrases' || activeCategory === 'radio') {
-        const isOfficialItem = Boolean(item.isOfficial)
-        if (subTab === 'official' && !isOfficialItem) return false
-        if (subTab === 'custom' && isOfficialItem) return false
-      }
+      if (item.isOfficial || item.category !== activeCategory) return false
       if (activeCategory === 'dialogue' && selectedScenario !== 'all' && item.scenario !== selectedScenario) {
         return false
+      }
+      if (cloudMode) {
+        if (scopeFilter === 'personal' && !item.accountId) return false
+        if (scopeFilter === 'shared' && item.accountId) return false
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
@@ -265,12 +300,13 @@ export default function RadioPage() {
       }
       return true
     })
-  }, [items, allLocalEntries, localItems, activeCategory, subTab, selectedScenario, searchQuery])
+  }, [items, allLocalEntries, localItems, activeCategory, selectedScenario, cloudMode, scopeFilter, searchQuery])
 
   // 切换分类 Tab
   const handleSelectCategoryTab = (cat: RadioCategory) => {
     setActiveTab(cat)
     setLastCategoryTab(cat)
+    setListPage(1)
   }
 
   // 本地视频：向用户申请读权限 -> 拿 File -> 生成 blob URL -> 进播放页
@@ -672,65 +708,85 @@ export default function RadioPage() {
     }
     setItems((prev) => [newItem, ...prev])
     setLastCategoryTab(newItem.category)
-    if (newItem.category === 'phrases' || newItem.category === 'radio') setSubTab('custom')
     setCurrentId(newItem.id)
     setIsPlaying(true)
     setActiveTab('player')
     return true
   }
 
-  // 删除视频
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; title: string; isLocal: boolean } | null>(null)
+  const [isDeletingItem, setIsDeletingItem] = useState(false)
+
+  // 点击删除视频：先校验并弹出二次确认
   const handleDeleteItem = (id: string) => {
     const removed = items.find((i) => i.id === id) ?? localItems.find((i) => i.id === id)
     if (removed?.isOfficial) return
 
-    // 本机视频：只删除"记忆"和记录，不动磁盘上的文件
-    // 注意要按 allLocalEntries 判断：还没播放过的条目不在 localItems 里
-    if (removed?.isLocal || allLocalEntries.some((entry) => entry.id === id)) {
+    const isLocal = Boolean(removed?.isLocal || allLocalEntries.some((entry) => entry.id === id))
+    if (isLocal) {
       const inFolder = folderVideos.some((entry) => entry.id === id)
       if (inFolder) {
         // 文件夹里的条目是扫描出来的，删单条没意义（下次扫描又回来），引导移除整个文件夹
         setLocalError('文件夹里的视频不需要单独移除，点文件夹标签右侧的「×」可移除整个文件夹。')
         return
       }
-      const url = localUrlsRef.current.get(id)
-      if (url) {
-        URL.revokeObjectURL(url)
-        localUrlsRef.current.delete(id)
-      }
-      setLocalItems((prev) => prev.filter((i) => i.id !== id))
-      setLocalEntries((prev) => prev.filter((entry) => entry.id !== id))
-      deleteLocalVideo(id).catch((error) => {
-        console.warn('[radio] failed to delete local video:', error)
-        setLocalError('删除本地视频记录失败，请重试。')
-      })
-      if (currentId === id) {
-        // 当前这条被移除：清空选中，避免播放器继续持有已释放的 blob URL
-        setCurrentId('')
-        setIsPlaying(false)
-      }
+      const entry = allLocalEntries.find((e) => e.id === id)
+      setItemToDelete({ id, title: removed?.title || entry?.title || '该本地视频', isLocal: true })
       return
     }
 
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    if (isCloudMode() && removed && removed.accountId !== undefined) {
-      getRepositories()
-        .radio.deleteItem(id)
-        .catch((error) => {
-          console.warn('[radio] failed to delete item:', error)
-          reportCloudError(error, '删除视频')
-          setItems((prev) => (prev.some((i) => i.id === id) ? prev : [removed, ...prev]))
-          setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
-        })
-    }
-    if (currentId === id) {
-      const remaining = items.filter((i) => i.id !== id)
-      if (remaining.length > 0) {
-        setCurrentId(remaining[0].id)
-      } else {
-        setCurrentId('')
-        setIsPlaying(false)
+    if (!removed) return
+    setItemToDelete({ id, title: removed.title, isLocal: false })
+  }
+
+  // 确认永久删除视频：云模式先真实删库，成功后再更新列表
+  const handleConfirmDeleteItem = async () => {
+    if (!itemToDelete) return
+    const { id, isLocal } = itemToDelete
+    setIsDeletingItem(true)
+    try {
+      if (isLocal) {
+        await deleteLocalVideo(id)
+        const url = localUrlsRef.current.get(id)
+        if (url) {
+          URL.revokeObjectURL(url)
+          localUrlsRef.current.delete(id)
+        }
+        setLocalItems((prev) => prev.filter((i) => i.id !== id))
+        setLocalEntries((prev) => prev.filter((entry) => entry.id !== id))
+        if (currentId === id) {
+          setCurrentId('')
+          setIsPlaying(false)
+        }
+        setItemToDelete(null)
+        return
       }
+
+      const removed = items.find((i) => i.id === id)
+      if (isCloudMode() && removed && removed.accountId !== undefined) {
+        await getRepositories().radio.deleteItem(id)
+      }
+      const remaining = items.filter((i) => i.id !== id)
+      setItems(remaining)
+      if (currentId === id) {
+        if (remaining.length > 0) {
+          setCurrentId(remaining[0].id)
+        } else {
+          setCurrentId('')
+          setIsPlaying(false)
+        }
+      }
+      setItemToDelete(null)
+    } catch (error) {
+      console.warn('[radio] failed to delete item:', error)
+      if (isLocal) {
+        setLocalError('删除本地视频记录失败，请重试。')
+      } else {
+        reportCloudError(error, '删除视频')
+        setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+      }
+    } finally {
+      setIsDeletingItem(false)
     }
   }
 
@@ -741,7 +797,10 @@ export default function RadioPage() {
         {/* 顶部标题、搜索与添加入口 */}
         <RadioHeader
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={(q) => {
+            setSearchQuery(q)
+            setListPage(1)
+          }}
           totalCount={activeTab === 'local' ? allLocalEntries.length : items.length}
           actionLabel={
             activeTab === 'local'
@@ -793,9 +852,25 @@ export default function RadioPage() {
           </div>
         )}
 
-        {/* Tab 导航：常用短语 / 场景对话 / 英语电台 / 共用播放页 */}
+        {/* Tab 导航：官方示例 / 常用短语 / 场景对话 / 英语电台 / 本地视频 / 播放页 */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-border">
-          <div className="flex items-center gap-6 select-none">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 select-none">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('official')
+                setListPage(1)
+              }}
+              className={`-mb-px pb-2.5 text-sm border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === 'official'
+                  ? 'text-foreground font-medium border-primary'
+                  : 'text-muted-foreground hover:text-foreground border-transparent'
+              }`}
+            >
+              官方示例
+              <span className="ml-1.5 text-xs font-mono text-muted-foreground">{officialCount}</span>
+            </button>
+
             {CATEGORY_TABS.map((cat) => (
               <button
                 key={cat}
@@ -814,7 +889,10 @@ export default function RadioPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('local')}
+              onClick={() => {
+                setActiveTab('local')
+                setListPage(1)
+              }}
               className={`-mb-px pb-2.5 text-sm border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === 'local'
                   ? 'text-foreground font-medium border-primary'
@@ -843,7 +921,13 @@ export default function RadioPage() {
             <button
               type="button"
               onClick={() =>
-                setActiveTab(currentItem?.isLocal ? 'local' : currentItem?.category || lastCategoryTab)
+                setActiveTab(
+                  currentItem?.isLocal
+                    ? 'local'
+                    : currentItem?.isOfficial
+                      ? 'official'
+                      : currentItem?.category || lastCategoryTab
+                )
               }
               className="mb-1.5 self-start sm:self-auto h-7 px-2 rounded-md inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -931,38 +1015,48 @@ export default function RadioPage() {
               )}
             </div>
           )}
-          {/* 「常用短语」与「英语电台」下方二级页签：官方示例 / 自定义 */}
-          {(activeTab === 'phrases' || activeTab === 'radio') && (
+          {/* 仅「场景对话」显示场景分类筛选（不含官方示例） */}
+          {activeTab === 'dialogue' && (
+            <RadioFilters
+              selectedScenario={selectedScenario}
+              onSelectScenario={(sc) => {
+                setSelectedScenario(sc)
+                setListPage(1)
+              }}
+              availableScenarios={availableScenarios}
+            />
+          )}
+
+          {/* 自定义分类下的二级归属筛选：全部 / 个人 / 共享（云模式显示） */}
+          {cloudMode && (activeTab === 'phrases' || activeTab === 'dialogue' || activeTab === 'radio') && (
             <div className="shrink-0 flex items-center gap-1 select-none -ml-2.5">
               {(
                 [
-                  { id: 'official', label: '官方示例' },
-                  { id: 'custom', label: '自定义' },
+                  { id: 'all', label: '全部', count: null },
+                  { id: 'personal', label: '个人', count: scopeCounts.personal },
+                  { id: 'shared', label: '共享', count: scopeCounts.shared },
                 ] as const
               ).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setSubTab(tab.id)}
-                  className={`shrink-0 h-7 px-2.5 rounded-md text-[14px] transition-colors cursor-pointer ${
-                    subTab === tab.id
+                  onClick={() => {
+                    setScopeFilter(tab.id)
+                    setListPage(1)
+                  }}
+                  className={`shrink-0 h-7 px-2.5 rounded-md text-[13px] transition-colors cursor-pointer ${
+                    scopeFilter === tab.id
                       ? 'bg-primary/10 text-primary font-medium'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >
                   {tab.label}
+                  {tab.count !== null && (
+                    <span className="ml-1 text-[12px] font-mono opacity-60">{tab.count}</span>
+                  )}
                 </button>
               ))}
             </div>
-          )}
-
-          {/* 仅「场景对话」显示场景分类筛选 */}
-          {activeTab === 'dialogue' && (
-            <RadioFilters
-              selectedScenario={selectedScenario}
-              onSelectScenario={setSelectedScenario}
-              availableScenarios={availableScenarios}
-            />
           )}
 
           {/* 视频列表：仅「场景对话」显示场景副标题，日常短语和英语电台只显示名称 */}
@@ -970,26 +1064,25 @@ export default function RadioPage() {
             items={filteredItems}
             currentId={currentId}
             isPlaying={isPlaying}
+            cloudMode={cloudMode}
             showMetadata={activeTab === 'dialogue'}
+            page={listPage}
+            onPageChange={setListPage}
             emptyTitle={
               activeTab === 'local'
                 ? '还没有添加本地视频'
-                : (activeTab === 'phrases' || activeTab === 'radio') && subTab === 'official'
+                : activeTab === 'official'
                   ? '官方示例敬请期待'
-                  : activeTab === 'dialogue' && selectedScenario === '官方示例'
-                    ? '官方示例敬请期待'
-                    : '暂无自定义视频'
+                  : '暂无自定义视频'
             }
             emptyHint={
               activeTab === 'local'
                 ? folderSupported
                   ? '点右上角「选择本地视频」挑单个文件，或「选择文件夹」把一整季按顺序排进来'
                   : '点击右上角「选择本地视频」，选一次就会被记住（文件仍留在原位置）'
-                : (activeTab === 'phrases' || activeTab === 'radio') && subTab === 'official'
+                : activeTab === 'official'
                   ? '官方示例视频正在准备中，后续将陆续上线'
-                  : activeTab === 'dialogue' && selectedScenario === '官方示例'
-                    ? '官方示例视频正在准备中，后续将陆续上线'
-                    : '点击右上角「添加视频」添加自定义视频'
+                  : '点击右上角「添加视频」添加自定义视频'
             }
             onSelectItem={(item) => {
               if (!item.isLocal) setLastCategoryTab(item.category)
@@ -1029,9 +1122,24 @@ export default function RadioPage() {
       {/* 添加自定义视频弹窗（本机视频走系统文件选择器，不使用该弹窗） */}
       <RadioUploadModal
         isOpen={isUploadOpen}
-        defaultCategory={activeCategory === 'local' ? lastCategoryTab : activeCategory}
+        defaultCategory={activeCategory === 'local' || activeCategory === 'official' ? lastCategoryTab : activeCategory}
         onClose={() => setIsUploadOpen(false)}
         onAddItem={handleAddItem}
+      />
+
+      {/* 删除视频二次确认弹窗 */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(itemToDelete)}
+        title={itemToDelete?.isLocal ? '移除本地视频记录' : '永久删除影音条目'}
+        targetName={itemToDelete?.title ?? ''}
+        details={
+          itemToDelete?.isLocal
+            ? ['将从浏览器记录中真实清除，不会删除电脑磁盘上的原视频文件']
+            : [isCloudMode() ? '该条目将从云端数据库真实删除' : '该条目将从当前列表移除']
+        }
+        isDeleting={isDeletingItem}
+        onCancel={() => setItemToDelete(null)}
+        onConfirm={() => void handleConfirmDeleteItem()}
       />
 
       {/* 原生隐藏式音频播放节点 */}

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { createEncryptedFieldsStorage } from '@/lib/localSecret'
 import { streamAiChatCompletion, type AiChatMessage, type AiClientConfig } from '@/lib/aiClient'
 import { AI_ENGLISH_TEACHER_SYSTEM_PROMPT } from '@/lib/aiPrompts'
 
@@ -550,7 +551,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
     }),
     {
       name: 'lingualoop_ai_assistant_v6',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createEncryptedFieldsStorage([['aiConfig', 'apiKey']])),
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,
         sessions: state.sessions.slice(0, 40),

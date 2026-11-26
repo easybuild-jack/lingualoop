@@ -98,6 +98,10 @@ export interface TranslateRepository {
 
 export interface ReadingRepository {
   getArticles(): Promise<ReadingArticle[]>
+  /** 仅读取列表元数据（不含 paragraphs 正文），供列表页按需加载 */
+  getArticleSummaries(): Promise<ReadingArticle[]>
+  /** 按 id 读取单篇完整文章（含 paragraphs 正文） */
+  getArticle(articleId: string): Promise<ReadingArticle | undefined>
   putArticle(article: ReadingArticle): Promise<void>
   deleteArticle(articleId: string): Promise<void>
 }
@@ -182,6 +186,8 @@ export const localRepositories: Repositories = {
   },
   reading: {
     getArticles: async () => [],
+    getArticleSummaries: async () => [],
+    getArticle: async () => undefined,
     putArticle: async () => {},
     deleteArticle: async () => {},
   },

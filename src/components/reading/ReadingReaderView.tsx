@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, Loader2 } from 'lucide-react'
 import {
   type ReadingArticle,
   type ReadingFontSize,
@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 
 interface ReadingReaderViewProps {
   article: ReadingArticle | null
+  isLoading?: boolean
   showPhonetic: boolean
   onTogglePhonetic: () => void
   showTranslation: boolean
@@ -49,6 +50,7 @@ const FONT_SIZES: ReadingFontSize[] = ['sm', 'md', 'lg']
 
 export function ReadingReaderView({
   article,
+  isLoading = false,
   showPhonetic,
   onTogglePhonetic,
   showTranslation,
@@ -57,6 +59,15 @@ export function ReadingReaderView({
   onChangeFontSize,
 }: ReadingReaderViewProps) {
   const phoneticPreference = useWorkspaceStore((s) => s.phoneticPreference)
+
+  if (isLoading) {
+    return (
+      <div className="h-80 rounded-lg border border-dashed border-border flex flex-col items-center justify-center p-8 text-center text-muted-foreground select-none">
+        <Loader2 className="size-6 animate-spin text-primary mb-3" />
+        <p className="text-sm text-foreground">正在加载文章正文…</p>
+      </div>
+    )
+  }
 
   if (!article) {
     return (
