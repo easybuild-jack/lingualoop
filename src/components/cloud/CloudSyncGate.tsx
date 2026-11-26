@@ -3,12 +3,14 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Loader2, X } from 'lucide-react'
-import { ensureLocalWorkspaceHydrated } from '@/store/useWorkspaceStore'
+import { ensureLocalWorkspaceHydrated, useWorkspaceStore } from '@/store/useWorkspaceStore'
+import { ensureLocalTranslateHydrated } from '@/store/useTranslateStore'
 import {
   cloudScopeSignature,
   getCloudSession,
   isCloudConfigured,
   isCloudMode,
+  isCloudSignedIn,
   subscribeCloudMode,
 } from '@/core/cloud/config'
 import { isNetworkCloudError, probeCloudConnection } from '@/core/cloud/client'
@@ -20,6 +22,7 @@ import {
   startTranslateProgressWrites,
   startWorkspaceProgressWrites,
 } from '@/core/cloud/progress'
+import { refreshAllCloudData } from '@/core/cloud/realtime'
 import { clearLegacyCloudProgressCache } from '@/core/cloud/scopedStorage'
 import { pushCloudNotice, subscribeCloudNotices, type CloudNotice } from '@/core/cloud/notices'
 import { switchToLocalMode, takePendingFallbackNotice } from '@/core/cloud/fallback'
@@ -101,10 +104,13 @@ export function CloudSyncGate() {
         window.location.replace(loginHref(pathnameRef.current))
         return
       }
-      await ensureLocalWorkspaceHydrated()
+      await Promise.all([ensureLocalWorkspaceHydrated(), ensureLocalTranslateHydrated()])
       clearLegacyCloudProgressCache()
-      await loadWorkspaceProgress()
-      await loadTranslateProgress()
+      await Promise.all([
+        loadWorkspaceProgress(),
+        useWorkspaceStore.getState().syncStarredWordIds(),
+        loadTranslateProgress(),
+      ])
       markCloudHydrated()
       cleanupsRef.current.push(startWorkspaceProgressWrites(), startTranslateProgressWrites())
     } catch (error) {
@@ -137,12 +143,21 @@ export function CloudSyncGate() {
     const handleOffline = () => {
       switchToLocalMode('网络已断开')
     }
+    const refreshOnReturn = () => {
+      if (!isCloudSignedIn()) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      void refreshAllCloudData()
+    }
     window.addEventListener('offline', handleOffline)
+    window.addEventListener('focus', refreshOnReturn)
+    document.addEventListener('visibilitychange', refreshOnReturn)
     return () => {
       stopWrites()
       unsubscribe()
       unsubscribeNotices()
       window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('focus', refreshOnReturn)
+      document.removeEventListener('visibilitychange', refreshOnReturn)
     }
   }, [start, stopWrites])
 

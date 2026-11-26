@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
+import React, { Suspense, useState, useMemo, useEffect, useCallback, useSyncExternalStore } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { TranslateHeader } from '@/components/translate/TranslateHeader'
 import { TranslateFilters } from '@/components/translate/TranslateFilters'
@@ -10,6 +10,7 @@ import { SentenceGrammarModal } from '@/components/translate/SentenceGrammarModa
 import { TranslateImportModal } from '@/components/translate/TranslateImportModal'
 import { useTranslateStore } from '@/store/useTranslateStore'
 import { audioEngine } from '@/core/audioEngine'
+import { isCloudSignedIn, subscribeCloudMode } from '@/core/cloud/config'
 import { waitForCloudHydration } from '@/core/cloud/readiness'
 import { BookOpen, ArrowLeft, ArrowRight, Plus } from 'lucide-react'
 
@@ -50,6 +51,8 @@ export default function TranslatePage() {
     currentSentenceIndex,
     selectBook,
     deleteCustomBook,
+    refreshCloudBooks,
+    isRefreshingCloudBooks,
     nextSentence,
     prevSentence,
     setImportModalOpen,
@@ -157,6 +160,20 @@ export default function TranslatePage() {
     [deleteCustomBook]
   )
 
+  const cloudActive = useSyncExternalStore(subscribeCloudMode, isCloudSignedIn, () => false)
+
+  // 配置了数据库时，进入翻译页与切回列表页都实时从数据库拉取最新句库
+  useEffect(() => {
+    if (!cloudActive) return
+    let cancelled = false
+    void waitForCloudHydration().then(() => {
+      if (!cancelled) void refreshCloudBooks()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [cloudActive, refreshCloudBooks])
+
   // 支持键盘 ← / → 左右方向键翻页切换上一句 / 下一句 (仅在练习页激活)
   useEffect(() => {
     if (activeTab !== 'practice') return
@@ -199,6 +216,9 @@ export default function TranslatePage() {
           totalGroupsCount={books.length}
           totalSentencesCount={totalSentencesAllBooks}
           onOpenImport={() => setImportModalOpen(true)}
+          showCloudRefresh={cloudActive}
+          isRefreshingCloud={isRefreshingCloudBooks}
+          onRefreshCloud={() => void refreshCloudBooks()}
         />
 
         {/* Tab 导航：句库列表（默认）与翻译练习 */}
@@ -209,6 +229,7 @@ export default function TranslatePage() {
               onClick={() => {
                 audioEngine.cancelPendingPlayback()
                 setActiveTab('list')
+                if (isCloudSignedIn()) void refreshCloudBooks()
               }}
               className={`-mb-px pb-2.5 text-sm border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'list'
@@ -250,6 +271,7 @@ export default function TranslatePage() {
                 onClick={() => {
                   audioEngine.cancelPendingPlayback()
                   setActiveTab('list')
+                  if (isCloudSignedIn()) void refreshCloudBooks()
                 }}
                 className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0"
               >

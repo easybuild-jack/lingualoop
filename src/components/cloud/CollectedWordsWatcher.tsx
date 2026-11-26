@@ -7,8 +7,7 @@ import { audioEngine } from '@/core/audioEngine'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
 import { isCloudSignedIn, subscribeCloudMode } from '@/core/cloud/config'
 import { pullCollectedWords } from '@/core/cloud/collector'
-import { isNetworkCloudError } from '@/core/cloud/client'
-import { switchToLocalMode } from '@/core/cloud/fallback'
+import { notifyCloudRefresh } from '@/core/cloud/realtime'
 
 interface SyncToastItem {
   id: string
@@ -38,6 +37,7 @@ export function CollectedWordsWatcher() {
       if (!result) return
 
       await useWorkspaceStore.getState().syncStarredWordIds()
+      notifyCloudRefresh()
 
       try {
         audioEngine.playCorrectSound(0.4)
@@ -57,9 +57,8 @@ export function CollectedWordsWatcher() {
         },
       ])
     } catch (error) {
+      // 后台收件箱轮询遇到瞬时网络波动时只记日志、跳过本轮，绝不把已配置数据库的整站偷偷降级到本地模式
       console.warn('[CollectedWordsWatcher] pull failed:', error)
-      // 收件箱是后台轮询：只有连不上数据库才切到本地模式，其他失败不打扰用户
-      if (isNetworkCloudError(error)) switchToLocalMode('收件箱连接失败')
     } finally {
       isPollingRef.current = false
     }
