@@ -6,7 +6,7 @@
 
 **從第一個音標，到第一場 English 對話。**
 
-*一款開源、高度靈活、完全自由的私人英語學習助手 —— 既支援本地離線，亦支援跨裝置同步與團隊共享。*
+*一款原始碼公開、高度靈活的私人英語學習助手 —— 既支援本地離線，亦支援跨裝置同步與家庭共享；個人非商業使用免費。*
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 繁體中文（香港） · [繁體中文（台灣）](./README.zh-TW.md) · [日本語](./README.ja.md)
 
@@ -18,10 +18,6 @@
 [![GitHub Stars](https://img.shields.io/github/stars/easybuild-jack/lingualoop?style=flat&color=f59e0b)](https://github.com/easybuild-jack/lingualoop/stargazers)
 
 [網上體驗](https://www.lingualoop.com.cn) · [項目說明文檔](./docs/architecture.md) · [開發文檔](./docs/development.md) · [SEO 說明](./docs/seo.md)
-
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop 產品預覽" width="840" />
 
 </div>
 
@@ -35,9 +31,9 @@
 
 > **打基礎 → 大量輸入 → 主動輸出** —— 讓每一個學過的單詞、練過的句型，最終都能**聽得懂、說得出、讀得順、寫得對**。
 
-| 5 項技能 | 12 個學習模塊 | 5 萬+ 離線詞條 | 100% 代碼開源 |
+| 5 項技能 | 12 個學習模塊 | 5 萬+ 離線詞條 | 原始碼公開 |
 | :---: | :---: | :---: | :---: |
-| 聽 · 說 · 讀 · 寫 · 譯 | 環環相扣的學習閉環 | 內置詞典秒級查詞 | 私人訂製 · 自由部署 |
+| 聽 · 說 · 讀 · 寫 · 譯 | 環環相扣的學習閉環 | 內置詞典秒級查詞 | 個人免費 · 自行部署 |
 
 ---
 
@@ -68,7 +64,7 @@
 
 ---
 
-## 🌐 高度靈活、完全自由的私人學習系統
+## 🌐 高度靈活的私人學習系統
 
 | 能力 | 使用體驗 |
 | --- | --- |
@@ -144,7 +140,18 @@ npm run lint      # ESLint 代碼規範檢查
 
 ## 🤝 反饋與交流
 
-歡迎 **Fork** 本項目按需自訂，打造屬於個人、家庭或團隊的英語學習系統。如在使用過程中遇到問題、發現 Bug 或有功能建議，歡迎前往 [Issues](https://github.com/easybuild-jack/lingualoop/issues) 反饋交流。
+歡迎在[許可證](#-許可證)容許的範圍內 **Fork** 本項目並自行部署，打造屬於個人或家庭的英語學習系統。如在使用過程中遇到問題、發現 Bug 或有功能建議，歡迎前往 [Issues](https://github.com/easybuild-jack/lingualoop/issues) 反饋交流。
+
+---
+
+## 📄 許可證
+
+LinguaLoop 是**原始碼公開（source-available）項目，並非 OSI 定義的開源項目**。原始碼依據 [PolyForm Noncommercial License 1.0.0](./LICENSE)（SPDX：`PolyForm-Noncommercial-1.0.0`）公開發佈。
+
+- ✅ **容許**：個人學習，以及個人或家庭在無商業目的下自行部署使用。
+- 💼 **須事先取得作者書面授權**：公司使用、商業培訓機構使用、用於收費產品或服務、轉售，或將 LinguaLoop 作為託管服務 / 收費服務對外提供。
+- 📜 完整條款以 [LICENSE](./LICENSE) 檔案為準；本摘要如與 LICENSE 不一致，以 LICENSE 為準。
+- 📮 **商業授權**：請在 [Issues](https://github.com/easybuild-jack/lingualoop/issues) 中建立標題為「Commercial License Inquiry（商業授權查詢）」的 Issue 聯絡作者。
 
 ---
 
