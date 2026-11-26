@@ -35,7 +35,7 @@ import { LoopDiagram } from './LoopDiagram'
 import { ProductPreview } from './ProductPreview'
 import { LiquidLightCard } from '@/components/ui/LiquidLightCard'
 
-/** 开源仓库地址（浏览器访问用，克隆地址为 https://github.com/easybuild-jack/lingualoop.git） */
+/** 源码仓库地址（浏览器访问用，克隆地址为 https://github.com/easybuild-jack/lingualoop.git） */
 const GITHUB_REPO_URL = 'https://github.com/easybuild-jack/lingualoop'
 
 function GithubIcon({ className }: { className?: string }) {
@@ -58,7 +58,7 @@ const STATS = [
   { value: '5', label: '项技能 听说读写译' },
   { value: '12', label: '个学习模块' },
   { value: '5 万+', label: '离线词条' },
-  { value: '100%', label: '代码完全开源' },
+  { value: '100%', label: '源码公开可查' },
 ]
 
 const SKILLS = [
@@ -241,7 +241,7 @@ export function HomeLandingView() {
                 className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/[0.08] text-xs text-primary"
               >
                 <Sparkles className="size-3.5" />
-                <span>开源项目 · 私人订制英语学习闭环</span>
+                <span>源码公开 · 私人订制英语学习闭环</span>
               </motion.div>
 
               <motion.h1
@@ -703,7 +703,7 @@ export function HomeLandingView() {
           <div className="flex items-center gap-2">
             <img src="/logo111.png" alt="LinguaLoop" className="size-5 object-contain" />
             <span className="font-serif text-sm text-foreground">LinguaLoop</span>
-            <span>· 开源的私人英语学习闭环</span>
+            <span>· 源码公开 · 个人非商业使用免费</span>
           </div>
           <div className="flex items-center gap-4">
             <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer" className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors">

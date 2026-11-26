@@ -1,7 +1,7 @@
 {
   "name": "林瓜鲁普 LinguaLoop",
   "short_name": "LinguaLoop",
-  "description": "林瓜鲁普（LinguaLoop）是开源、本地优先的英语学习网站，把音标、词汇、语法、听力、阅读、写作和 AI 口语连成一个闭环，听说读写译一站式完成。",
+  "description": "林瓜鲁普（LinguaLoop）是源码公开、本地优先的英语学习网站，把音标、词汇、语法、听力、阅读、写作和 AI 口语连成一个闭环，听说读写译一站式完成。",
   "id": "/",
   "start_url": "/",
   "scope": "/",
