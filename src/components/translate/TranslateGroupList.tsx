@@ -8,7 +8,6 @@ export const TRANSLATE_PAGE_SIZE = 30
 
 interface TranslateGroupListProps {
   books: TranslationBook[]
-  currentBookId: string
   completedSentenceIds: Record<string, boolean>
   cloudMode: boolean
   page: number
@@ -31,17 +30,8 @@ function buildPageNumbers(current: number, total: number): Array<number | 'ellip
   return pages
 }
 
-function bookScopeBadge(book: TranslationBook): { label: string; className: string } | null {
-  if (!book.isCustom) return null
-  if (book.accountId) {
-    return { label: '个人', className: 'bg-primary/10 text-primary' }
-  }
-  return { label: '共享', className: 'bg-emerald-500/10 text-emerald-400' }
-}
-
 export function TranslateGroupList({
   books,
-  currentBookId,
   completedSentenceIds,
   cloudMode,
   page,
@@ -86,16 +76,11 @@ export function TranslateGroupList({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10">
         {pagedBooks.map((book) => {
-          const isCurrent = book.id === currentBookId
-          const scenario =
-            book.scenario === '工作实战' || book.scenario === '工作沟通'
-              ? '工作常用'
-              : book.scenario || '日常生活'
           const total = book.sentences.length
           const completedCount = book.sentences.filter((s) => completedSentenceIds[s.id]).length
           const isAllCompleted = total > 0 && completedCount === total
           const firstSentence = book.sentences[0]
-          const scopeBadge = cloudMode ? bookScopeBadge(book) : null
+          const isPrivate = cloudMode && Boolean(book.isCustom) && Boolean(book.accountId)
 
           return (
             <article
@@ -103,38 +88,41 @@ export function TranslateGroupList({
               onClick={() => onSelectGroup(book.id)}
               className="group border-t border-border py-5 flex flex-col gap-3 cursor-pointer select-none"
             >
-              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5 min-w-0">
-                  <span className="truncate">
-                    {scenario} · <span className="font-mono">{total}</span> 句
-                  </span>
-                  {scopeBadge && (
-                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] leading-none ${scopeBadge.className}`}>
-                      {scopeBadge.label}
-                    </span>
-                  )}
-                  {isCurrent && !book.isOfficial && <span className="shrink-0 text-primary">上次练习</span>}
-                </span>
-                {book.isCustom && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeleteCustomGroup(book.id, book.name)
-                    }}
-                    title="删除此自定义分组"
-                    className="size-6 rounded-md flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                )}
-              </div>
-
               <div>
-                <h4 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                  {book.name}
-                </h4>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isPrivate && (
+                      <span
+                        title="私人句库"
+                        className="size-[18px] shrink-0 rounded-full bg-amber-400/15 border border-amber-400/50 text-amber-400 text-[10px] font-medium inline-flex items-center justify-center leading-none"
+                      >
+                        私
+                      </span>
+                    )}
+                    <h4 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                      {book.name}
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {total} 句
+                    </span>
+                    {book.isCustom && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteCustomGroup(book.id, book.name)
+                        }}
+                        title="删除此自定义分组"
+                        className="size-6 shrink-0 rounded-md flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed line-clamp-2">
                   {book.description || '精选场景地道英文表达，学练结合'}
                 </p>
               </div>

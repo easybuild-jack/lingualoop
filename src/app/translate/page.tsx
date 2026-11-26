@@ -146,27 +146,28 @@ export default function TranslatePage() {
     return counts
   }, [visibleBooks, cloudActive, scopeFilter, matchesScope, normalizeScenario])
 
-  // 当前场景下各归属分类数量（全部 / 个人 / 共享）
+  // 当前场景下各归属分类数量（个人 / 共享）
   const scopeCounts = useMemo(() => {
-    let all = 0
     let personal = 0
     let shared = 0
     visibleBooks.forEach((b) => {
       const sc = normalizeScenario(b.scenario)
       if (selectedScenario !== 'all' && sc !== selectedScenario) return
-      all += 1
       if (b.isCustom) {
         if (b.accountId) personal += 1
         else shared += 1
       }
     })
-    return { all, personal, shared }
+    return { personal, shared }
   }, [visibleBooks, selectedScenario, normalizeScenario])
 
   const totalScenarioCount = useMemo(() => {
     if (!cloudActive || scopeFilter === 'all') return visibleBooks.length
     return visibleBooks.filter((b) => matchesScope(b, scopeFilter)).length
   }, [visibleBooks, cloudActive, scopeFilter, matchesScope])
+
+  // 「工作常用」仅针对个人，不展示也不应用归属筛选
+  const showScopeFilter = cloudActive && selectedScenario !== '工作常用'
 
   // 根据当前选中的场景、归属与搜索词筛选后的分组列表
   const filteredBooks = useMemo(() => {
@@ -175,7 +176,7 @@ export default function TranslatePage() {
       if (selectedScenario !== 'all' && sc !== selectedScenario) {
         return false
       }
-      if (cloudActive && !matchesScope(book, scopeFilter)) {
+      if (showScopeFilter && !matchesScope(book, scopeFilter)) {
         return false
       }
       if (searchQuery.trim()) {
@@ -194,7 +195,7 @@ export default function TranslatePage() {
       }
       return true
     })
-  }, [visibleBooks, selectedScenario, cloudActive, scopeFilter, searchQuery, normalizeScenario, matchesScope])
+  }, [visibleBooks, selectedScenario, showScopeFilter, scopeFilter, searchQuery, normalizeScenario, matchesScope])
 
   // 选择某个分组后，自动切换到翻译练习页
   const handleSelectGroup = useCallback(
@@ -361,11 +362,12 @@ export default function TranslatePage() {
 
         {/* Tab 1 页面内容：句库列表页 (默认展示) */}
         <div className={activeTab === 'list' ? 'space-y-4 animate-fadeIn' : 'hidden'}>
-          {/* 场景分类页签筛选 (与听力模块分类一致 + 工作沟通) */}
+          {/* 场景分类页签筛选 (与听力模块分类一致 + 工作常用) */}
           <TranslateFilters
             selectedScenario={selectedScenario}
             onSelectScenario={(sc) => {
               setSelectedScenario(sc)
+              if (sc === '工作常用') setScopeFilter('all')
               setListPage(1)
             }}
             availableScenarios={availableScenarios}
@@ -373,8 +375,8 @@ export default function TranslatePage() {
             totalCount={totalScenarioCount}
           />
 
-          {/* 归属筛选：全部 / 个人 / 共享（云模式显示） */}
-          {cloudActive && (
+          {/* 归属筛选：全部 / 个人 / 共享（云模式显示，「工作常用」仅针对个人不显示） */}
+          {showScopeFilter && (
             <div className="shrink-0 flex items-center gap-1 overflow-x-auto max-w-full custom-scrollbar select-none -ml-2.5">
               {(
                 [
@@ -411,7 +413,6 @@ export default function TranslatePage() {
           {/* 场景分组卡片网格列表（每页最多 30 条） */}
           <TranslateGroupList
             books={filteredBooks}
-            currentBookId={currentBookId}
             completedSentenceIds={completedSentenceIds}
             cloudMode={cloudActive}
             page={listPage}
