@@ -1,9 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Check, Cloud, CloudOff, Database, FolderSync, KeyRound, ListChecks, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react'
+import { Check, Cloud, CloudOff, Database, Eye, EyeOff, FolderSync, KeyRound, ListChecks, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react'
 import {
-  clearCloudConfig,
   getCloudConfig,
   getCloudSession,
   isCloudConfigured,
@@ -41,6 +40,7 @@ export function CloudSyncPanel() {
   const session = getCloudSession()
   const [url, setUrl] = useState(existing?.url ?? '')
   const [anonKey, setAnonKey] = useState(existing?.anonKey ?? '')
+  const [showAnonKey, setShowAnonKey] = useState(false)
   const [busy, setBusy] = useState<
     'idle' | 'testing' | 'saving' | 'password' | 'logout' | 'sync-content' | 'sync-progress'
   >('idle')
@@ -55,7 +55,7 @@ export function CloudSyncPanel() {
   const cloudActive = isCloudMode()
   const fallback = isOfflineFallback()
 
-  const statusLabel = !configured ? '未配置（本地模式）' : cloudActive ? '已连接云端' : '已配置但使用本地模式'
+  const statusLabel = !configured ? '未配置（本地模式）' : cloudActive ? '已开启云端存储' : '已关闭云端存储（本地模式）'
   const statusTone = !configured
     ? 'bg-transparent text-muted-foreground border-border'
     : cloudActive
@@ -124,12 +124,12 @@ export function CloudSyncPanel() {
     }
   }
 
-  const handleDisconnect = () => {
-    clearCloudConfig()
+  const handleDisableCloudStorage = () => {
+    setOfflineFallback(true)
     window.location.reload()
   }
 
-  const handleRestoreCloud = () => {
+  const handleEnableCloudStorage = () => {
     setOfflineFallback(false)
     window.location.reload()
   }
@@ -169,8 +169,8 @@ export function CloudSyncPanel() {
         <div>
           <h3 className="text-sm font-semibold text-foreground">云数据库 (Cloud Database)</h3>
           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-            配置 Supabase 后需要登录账号：错词本、学习进度按账号保存，自定义词库、句库、阅读文章与影音可选「个人」或「共享」，换设备登录同一账号即可继续学。
-            未配置时全部数据只留在本机，无需登录，与本机模式完全一致。
+            配置 Supabase 并开启云端存储后需要登录账号：错词本、学习进度按账号保存，自定义词库、句库、阅读文章与影音可选「个人」或「共享」，换设备登录同一账号即可继续学。
+            未配置或手动关闭云端存储时，全部数据只留在本机，无需登录。
           </p>
         </div>
         <span className={`shrink-0 self-start px-3 py-1 rounded-full text-xs font-semibold border ${statusTone}`}>
@@ -196,14 +196,26 @@ export function CloudSyncPanel() {
             <label className="text-sm font-semibold text-foreground block mb-1.5">
               anon public key
             </label>
-            <textarea
-              value={anonKey}
-              onChange={(event) => setAnonKey(event.target.value)}
-              rows={3}
-              spellCheck={false}
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              className="w-full bg-transparent border border-border rounded-md px-4 py-3 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 resize-none break-all"
-            />
+            <div className="relative">
+              <input
+                type={showAnonKey ? 'text' : 'password'}
+                value={anonKey}
+                onChange={(event) => setAnonKey(event.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full bg-transparent border border-border rounded-md px-4 py-3 pr-11 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAnonKey((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                aria-label={showAnonKey ? '隐藏 anon public key' : '显示 anon public key'}
+                title={showAnonKey ? '隐藏' : '查看'}
+              >
+                {showAnonKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
               位置：Supabase 控制台 → Project Settings → API。该 key 会长期保存在本机浏览器，请勿使用 service_role key。
             </p>
@@ -229,15 +241,26 @@ export function CloudSyncPanel() {
             {busy === 'saving' ? <Loader2 className="size-4 animate-spin" /> : <Cloud className="size-4" />}
             <span>{configured ? '保存并重新加载' : '保存并启用'}</span>
           </button>
-          {configured && (
+          {configured && cloudActive && (
             <button
               type="button"
-              onClick={handleDisconnect}
+              onClick={handleDisableCloudStorage}
               disabled={busy !== 'idle'}
               className="h-9 px-4 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
             >
               <CloudOff className="size-4" />
-              <span>断开配置</span>
+              <span>关闭云端存储</span>
+            </button>
+          )}
+          {configured && !cloudActive && (
+            <button
+              type="button"
+              onClick={handleEnableCloudStorage}
+              disabled={busy !== 'idle'}
+              className="h-9 px-4 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 text-sm inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              <Cloud className="size-4" />
+              <span>开启云端存储</span>
             </button>
           )}
         </div>
@@ -374,7 +397,7 @@ export function CloudSyncPanel() {
           </div>
           {!cloudActive && (
             <p className="text-xs text-amber-400/90 leading-relaxed">
-              当前处于本地模式，先在下方恢复云端连接后再同步。恢复后页面会从数据库重新载入，本地模式期间的学习记录不会自动上传，请点上面两个按钮手动同步。
+              当前已关闭云端存储（使用本地模式）。如需同步，请先开启云端存储；开启后页面会从数据库重新载入，本地模式期间的学习记录不会自动上传，请点上面两个按钮手动同步。
             </p>
           )}
           {cloudActive && !session && <p className="text-xs text-amber-400/90 leading-relaxed">请先登录账号再同步。</p>}
@@ -389,11 +412,11 @@ export function CloudSyncPanel() {
           {fallback && (
             <button
               type="button"
-              onClick={handleRestoreCloud}
+              onClick={handleEnableCloudStorage}
               className="h-9 px-4 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 text-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <RefreshCw className="size-4" />
-              <span>恢复云端连接（以云端数据为准）</span>
+              <span>开启云端存储（以云端数据为准）</span>
             </button>
           )}
         </div>

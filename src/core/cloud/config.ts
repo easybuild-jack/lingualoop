@@ -18,7 +18,7 @@ export interface CloudConfig {
 }
 
 const CONFIG_KEY = 'lingualoop_cloud_config'
-/** 云端连不上时用户选择「临时切到本地模式」的标记 */
+/** 用户在设置里手动关闭云端存储、改用本地模式的标记（配置保留，可手动重新开启） */
 const OFFLINE_FALLBACK_KEY = 'lingualoop_cloud_offline'
 /** 配置或模式发生变化时派发，同页面内监听用 */
 export const CLOUD_CONFIG_CHANGED_EVENT = 'lingualoop_cloud_config_changed'
@@ -143,24 +143,25 @@ export function cloudScopeSignature(): string {
   return `cloud:${config?.url ?? ''}:${getCloudAccountId() ?? 'anonymous'}`
 }
 
-/** 是否处于「配置了数据库、且没有降级到本地」的云模式 */
+/** 是否处于「已配置数据库且已开启云端存储」的云模式 */
 export function isCloudMode(): boolean {
   if (!getCloudConfig()) return false
   if (!canUseStorage()) return false
   return localStorage.getItem(OFFLINE_FALLBACK_KEY) !== '1'
 }
 
-/** 配置了数据库但用户因为断网选择了本地模式 */
+/** 是否已配置数据库（无论当前是否手动关闭了云端存储） */
 export function isCloudConfigured(): boolean {
   return getCloudConfig() !== null
 }
 
+/** 是否手动关闭了云端存储（使用本地模式） */
 export function isOfflineFallback(): boolean {
   if (!canUseStorage()) return false
   return localStorage.getItem(OFFLINE_FALLBACK_KEY) === '1'
 }
 
-/** 云端不可用时，由用户主动选择切到本地模式（配置保留，下次联网可恢复） */
+/** 手动关闭 / 开启云端存储（enabled=true 表示关闭云端存储、改用本地模式；配置保留，可随时重新开启） */
 export function setOfflineFallback(enabled: boolean): void {
   if (!canUseStorage()) return
   if (enabled) {
