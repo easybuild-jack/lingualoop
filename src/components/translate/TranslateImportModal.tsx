@@ -71,7 +71,7 @@ export function TranslateImportModal() {
 
     const finalName = bookName.trim() || `自定义练习句集 (${new Date().toLocaleDateString()})`
 
-    const owner = contentOwnerFor(visibility)
+    const owner = contentOwnerFor(selectedScenario === '工作常用' ? 'personal' : visibility)
     const newBook: TranslationBook = {
       id: `custom_book_${Date.now()}`,
       ...(owner !== undefined ? { accountId: owner } : {}),
@@ -161,7 +161,9 @@ export function TranslateImportModal() {
             </div>
           </div>
 
-          <CloudVisibilityField value={visibility} onChange={setVisibility} label="保存为" />
+          {selectedScenario !== '工作常用' && (
+            <CloudVisibilityField value={visibility} onChange={setVisibility} label="保存为" />
+          )}
 
           {/* 文本内容输入与文件上传 */}
           <div>

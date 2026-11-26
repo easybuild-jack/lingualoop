@@ -217,6 +217,14 @@ export default function ReadingPage() {
     })
   }, [articles, scopeFilter, cloudMode, searchQuery])
 
+  // 如果当前正停留在阅读页，且正文尚未加载（例如后台刷新后文章有更新），自动按需补拉正文
+  useEffect(() => {
+    if (activeTab !== 'reader') return
+    if (!currentArticle || currentArticle.paragraphsLoaded !== false) return
+    if (actionError) return
+    ensureArticleBodyLoaded(currentArticle)
+  }, [activeTab, currentArticle, actionError, ensureArticleBodyLoaded])
+
   // 新增自定义文章：云模式只写这一篇，失败则从列表撤回
   const handleAddArticle = (newArticle: ReadingArticle) => {
     if (!cloudWritable) return
@@ -406,10 +414,7 @@ export default function ReadingPage() {
         <div className={activeTab === 'reader' ? 'animate-fadeIn' : 'hidden'}>
           <ReadingReaderView
             article={currentArticle}
-            isLoading={
-              Boolean(currentArticle) &&
-              (loadingArticleId === currentArticle?.id || currentArticle?.paragraphsLoaded === false)
-            }
+            isLoading={Boolean(currentArticle) && loadingArticleId === currentArticle?.id}
             showPhonetic={showPhonetic}
             onTogglePhonetic={() => setShowPhonetic((v) => !v)}
             showTranslation={showTranslation}
