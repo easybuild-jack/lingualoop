@@ -16,6 +16,9 @@ export interface ReadingArticle {
   paragraphs: ReadingSentence[][]
   isCustom?: boolean
   createdAt: number
+  updatedAt?: number
+  /** 云端列表按需加载标记：false 表示当前仅有元数据，进入阅读页时再拉取 paragraphs */
+  paragraphsLoaded?: boolean
 }
 
 /** 常见高频功能词音标速查表（当离线大词库尚未完成初始化或未收录超短功能词时兜底） */
@@ -233,51 +236,6 @@ export const DEFAULT_READING_ARTICLES: ReadingArticle[] = [
           en: 'Consistent small habits always outweigh occasional bursts of effort.',
           ipa: 'kənˈsɪstənt smɔːl ˈhæbɪts ˈɔːlweɪz ˌaʊtˈweɪ əˈkeɪʒənl bɜːsts ɒv ˈefət',
           zh: '持之以恒的微小习惯，总是胜过偶尔的心血来潮。',
-        },
-      ],
-    ],
-  },
-  {
-    id: 'reading-builtin-2',
-    title: 'How Language Shapes the Way We Think · 语言如何塑造思维',
-    createdAt: 1700000001000,
-    paragraphs: [
-      [
-        {
-          en: 'Every language carries its own unique lens for viewing time and space.',
-          ipa: 'ˈevri ˈlæŋɡwɪdʒ ˈkæriz ɪts əʊn juˈniːk lenz fɔː ˈvjuːɪŋ taɪm ænd speɪs',
-          zh: '每一种语言都带着自己观察时间与空间的独特视角。',
-        },
-        {
-          en: 'Learning a second language is like acquiring a second soul.',
-          ipa: 'ˈlɜːnɪŋ ə ˈsekənd ˈlæŋɡwɪdʒ ɪz laɪk əˈkwaɪərɪŋ ə ˈsekənd səʊl',
-          zh: '学习第二门语言，就像拥有了第二个灵魂。',
-        },
-      ],
-      [
-        {
-          en: 'When we master new words, we notice subtle feelings that once had no name.',
-          ipa: 'wen wiː ˈmɑːstə njuː wɜːdz wiː ˈnəʊtɪs ˈsʌtl ˈfiːlɪŋz ðæt wʌns hæd nəʊ neɪm',
-          zh: '当我们掌握新词汇时，我们会留意到那些曾经无法名状的微妙感受。',
-        },
-      ],
-    ],
-  },
-  {
-    id: 'reading-builtin-3',
-    title: 'Walking Through an Autumn Forest · 漫步秋日森林',
-    createdAt: 1700000002000,
-    paragraphs: [
-      [
-        {
-          en: 'Crisp leaves crunch softly beneath each unhurried step.',
-          ipa: 'krɪsp liːvz krʌntʃ ˈsɒftli bɪˈniːθ iːtʃ ʌnˈhʌrid step',
-          zh: '干脆的落叶在每一个从容的脚步下发出轻柔的沙沙声。',
-        },
-        {
-          en: 'Sunlight filters through golden branches and warms the cool air.',
-          ipa: 'ˈsʌnlaɪt ˈfɪltəz θruː ˈɡəʊldən ˈbrɑːntʃɪz ænd wɔːmz ðə kuːl eə',
-          zh: '阳光穿过金黄的枝叶，温暖了微凉的空气。',
         },
       ],
     ],

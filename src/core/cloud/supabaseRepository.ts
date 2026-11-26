@@ -316,14 +316,30 @@ function translateBookToRow(book: TranslationBook) {
   )
 }
 
-interface ReadingRow {
+interface ReadingSummaryRow {
   id: string
   account_id?: string | null
   title: string
-  paragraphs: ReadingArticle['paragraphs'] | null
   is_custom: boolean | null
   created_at: number
   updated_at: number
+}
+
+interface ReadingRow extends ReadingSummaryRow {
+  paragraphs: ReadingArticle['paragraphs'] | null
+}
+
+function readingSummaryFromRow(row: ReadingSummaryRow): ReadingArticle {
+  return {
+    id: row.id,
+    accountId: row.account_id ?? null,
+    title: row.title,
+    paragraphs: [],
+    isCustom: row.is_custom ?? true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    paragraphsLoaded: false,
+  }
 }
 
 function readingFromRow(row: ReadingRow): ReadingArticle {
@@ -334,6 +350,8 @@ function readingFromRow(row: ReadingRow): ReadingArticle {
     paragraphs: row.paragraphs ?? [],
     isCustom: row.is_custom ?? true,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    paragraphsLoaded: true,
   }
 }
 
@@ -758,6 +776,31 @@ const reading: ReadingRepository = {
       '读取阅读文章失败'
     )
     return rows.map(readingFromRow)
+  },
+  async getArticleSummaries() {
+    const me = accountId()
+    const rows = await selectAllPages<ReadingSummaryRow>(
+      (from, to) =>
+        client()
+          .from('reading_articles')
+          .select('id,account_id,title,is_custom,created_at,updated_at')
+          .or(visibleTo(me))
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+      '读取阅读文章列表失败'
+    )
+    return rows.map(readingSummaryFromRow)
+  },
+  async getArticle(articleId) {
+    const { data, error } = await client()
+      .from('reading_articles')
+      .select('*')
+      .eq('id', articleId)
+      .or(visibleTo(accountId()))
+      .maybeSingle()
+    if (error) fail(error, '读取文章正文失败')
+    return data ? readingFromRow(data as ReadingRow) : undefined
   },
   async putArticle(article) {
     accountId()
