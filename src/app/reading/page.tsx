@@ -11,6 +11,7 @@ import { ReadingHeader } from '@/components/reading/ReadingHeader'
 import { ReadingArticleList } from '@/components/reading/ReadingArticleList'
 import { ReadingReaderView } from '@/components/reading/ReadingReaderView'
 import { ReadingUploadModal } from '@/components/reading/ReadingUploadModal'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { isCloudMode, subscribeCloudMode } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
 import { subscribeCloudRefresh } from '@/core/cloud/realtime'
@@ -61,6 +62,8 @@ export default function ReadingPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const [articleToDelete, setArticleToDelete] = useState<ReadingArticle | null>(null)
+  const [isDeletingArticle, setIsDeletingArticle] = useState(false)
   // 云模式下列表返回前不允许增删，避免基于不完整的列表写库
   const [isCloudLoading, setIsCloudLoading] = useState(() => isCloudMode())
   // 按需加载单篇云端文章正文的状态
@@ -235,28 +238,40 @@ export default function ReadingPage() {
       })
   }
 
-  // 删除文章：固定示例不可删；云模式只删这一篇，失败则恢复
+  // 点击删除：打开二次确认弹窗（固定示例不可删）
   const handleDeleteArticle = (id: string) => {
     if (!cloudWritable) return
-    const removed = articles.find((a) => a.id === id)
-    if (!removed?.isCustom) return
-    const next = articles.filter((a) => a.id !== id)
-    setArticles(next)
-    if (currentId === id) {
-      setCurrentId(next[0]?.id || '')
+    const target = articles.find((a) => a.id === id)
+    if (!target?.isCustom) return
+    setArticleToDelete(target)
+  }
+
+  // 确认永久删除：云模式先真实删库，成功后再更新列表；本地模式同步删除 localStorage
+  const handleConfirmDeleteArticle = async () => {
+    if (!articleToDelete || !cloudWritable) return
+    const target = articleToDelete
+    setIsDeletingArticle(true)
+    setActionError(null)
+    try {
+      if (isCloudMode()) {
+        await getRepositories().reading.deleteArticle(target.id)
+      }
+      const next = articles.filter((a) => a.id !== target.id)
+      setArticles(next)
+      if (currentId === target.id) {
+        setCurrentId(next[0]?.id || '')
+      }
+      if (!isCloudMode()) {
+        saveLocalArticles(next)
+      }
+      setArticleToDelete(null)
+    } catch (error) {
+      console.warn('[reading] failed to delete article:', error)
+      reportCloudError(error, '删除文章')
+      setActionError(`文章删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+    } finally {
+      setIsDeletingArticle(false)
     }
-    if (!isCloudMode()) {
-      saveLocalArticles(next)
-      return
-    }
-    getRepositories()
-      .reading.deleteArticle(id)
-      .catch((error) => {
-        console.warn('[reading] failed to delete article:', error)
-        reportCloudError(error, '删除文章')
-        setArticles((prev) => (prev.some((article) => article.id === id) ? prev : [removed, ...prev]))
-        setActionError(`文章删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
-      })
   }
 
   return (
@@ -410,6 +425,19 @@ export default function ReadingPage() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onAddArticle={handleAddArticle}
+      />
+
+      {/* 删除文章二次确认弹窗 */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(articleToDelete)}
+        title="永久删除自定义文章"
+        targetName={articleToDelete?.title ?? ''}
+        details={[
+          cloudMode ? '该文章将从云端数据库真实删除' : '该文章将从本机存储真实删除',
+        ]}
+        isDeleting={isDeletingArticle}
+        onCancel={() => setArticleToDelete(null)}
+        onConfirm={() => void handleConfirmDeleteArticle()}
       />
     </div>
   )

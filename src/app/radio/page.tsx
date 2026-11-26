@@ -15,6 +15,7 @@ import { RadioFilters } from '@/components/radio/RadioFilters'
 import { RadioMainPlayer } from '@/components/radio/RadioMainPlayer'
 import { RadioCardList } from '@/components/radio/RadioCardList'
 import { RadioUploadModal } from '@/components/radio/RadioUploadModal'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { ArrowLeft, FolderOpen, RefreshCw, X } from 'lucide-react'
 import { isCloudMode } from '@/core/cloud/config'
 import { reportCloudError } from '@/core/cloud/notices'
@@ -679,58 +680,79 @@ export default function RadioPage() {
     return true
   }
 
-  // 删除视频
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; title: string; isLocal: boolean } | null>(null)
+  const [isDeletingItem, setIsDeletingItem] = useState(false)
+
+  // 点击删除视频：先校验并弹出二次确认
   const handleDeleteItem = (id: string) => {
     const removed = items.find((i) => i.id === id) ?? localItems.find((i) => i.id === id)
     if (removed?.isOfficial) return
 
-    // 本机视频：只删除"记忆"和记录，不动磁盘上的文件
-    // 注意要按 allLocalEntries 判断：还没播放过的条目不在 localItems 里
-    if (removed?.isLocal || allLocalEntries.some((entry) => entry.id === id)) {
+    const isLocal = Boolean(removed?.isLocal || allLocalEntries.some((entry) => entry.id === id))
+    if (isLocal) {
       const inFolder = folderVideos.some((entry) => entry.id === id)
       if (inFolder) {
         // 文件夹里的条目是扫描出来的，删单条没意义（下次扫描又回来），引导移除整个文件夹
         setLocalError('文件夹里的视频不需要单独移除，点文件夹标签右侧的「×」可移除整个文件夹。')
         return
       }
-      const url = localUrlsRef.current.get(id)
-      if (url) {
-        URL.revokeObjectURL(url)
-        localUrlsRef.current.delete(id)
-      }
-      setLocalItems((prev) => prev.filter((i) => i.id !== id))
-      setLocalEntries((prev) => prev.filter((entry) => entry.id !== id))
-      deleteLocalVideo(id).catch((error) => {
-        console.warn('[radio] failed to delete local video:', error)
-        setLocalError('删除本地视频记录失败，请重试。')
-      })
-      if (currentId === id) {
-        // 当前这条被移除：清空选中，避免播放器继续持有已释放的 blob URL
-        setCurrentId('')
-        setIsPlaying(false)
-      }
+      const entry = allLocalEntries.find((e) => e.id === id)
+      setItemToDelete({ id, title: removed?.title || entry?.title || '该本地视频', isLocal: true })
       return
     }
 
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    if (isCloudMode() && removed && removed.accountId !== undefined) {
-      getRepositories()
-        .radio.deleteItem(id)
-        .catch((error) => {
-          console.warn('[radio] failed to delete item:', error)
-          reportCloudError(error, '删除视频')
-          setItems((prev) => (prev.some((i) => i.id === id) ? prev : [removed, ...prev]))
-          setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
-        })
-    }
-    if (currentId === id) {
-      const remaining = items.filter((i) => i.id !== id)
-      if (remaining.length > 0) {
-        setCurrentId(remaining[0].id)
-      } else {
-        setCurrentId('')
-        setIsPlaying(false)
+    if (!removed) return
+    setItemToDelete({ id, title: removed.title, isLocal: false })
+  }
+
+  // 确认永久删除视频：云模式先真实删库，成功后再更新列表
+  const handleConfirmDeleteItem = async () => {
+    if (!itemToDelete) return
+    const { id, isLocal } = itemToDelete
+    setIsDeletingItem(true)
+    try {
+      if (isLocal) {
+        await deleteLocalVideo(id)
+        const url = localUrlsRef.current.get(id)
+        if (url) {
+          URL.revokeObjectURL(url)
+          localUrlsRef.current.delete(id)
+        }
+        setLocalItems((prev) => prev.filter((i) => i.id !== id))
+        setLocalEntries((prev) => prev.filter((entry) => entry.id !== id))
+        if (currentId === id) {
+          setCurrentId('')
+          setIsPlaying(false)
+        }
+        setItemToDelete(null)
+        return
       }
+
+      const removed = items.find((i) => i.id === id)
+      if (isCloudMode() && removed && removed.accountId !== undefined) {
+        await getRepositories().radio.deleteItem(id)
+      }
+      const remaining = items.filter((i) => i.id !== id)
+      setItems(remaining)
+      if (currentId === id) {
+        if (remaining.length > 0) {
+          setCurrentId(remaining[0].id)
+        } else {
+          setCurrentId('')
+          setIsPlaying(false)
+        }
+      }
+      setItemToDelete(null)
+    } catch (error) {
+      console.warn('[radio] failed to delete item:', error)
+      if (isLocal) {
+        setLocalError('删除本地视频记录失败，请重试。')
+      } else {
+        reportCloudError(error, '删除视频')
+        setCloudError(`云端视频删除失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+      }
+    } finally {
+      setIsDeletingItem(false)
     }
   }
 
@@ -1032,6 +1054,21 @@ export default function RadioPage() {
         defaultCategory={activeCategory === 'local' ? lastCategoryTab : activeCategory}
         onClose={() => setIsUploadOpen(false)}
         onAddItem={handleAddItem}
+      />
+
+      {/* 删除视频二次确认弹窗 */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(itemToDelete)}
+        title={itemToDelete?.isLocal ? '移除本地视频记录' : '永久删除影音条目'}
+        targetName={itemToDelete?.title ?? ''}
+        details={
+          itemToDelete?.isLocal
+            ? ['将从浏览器记录中真实清除，不会删除电脑磁盘上的原视频文件']
+            : [isCloudMode() ? '该条目将从云端数据库真实删除' : '该条目将从当前列表移除']
+        }
+        isDeleting={isDeletingItem}
+        onCancel={() => setItemToDelete(null)}
+        onConfirm={() => void handleConfirmDeleteItem()}
       />
 
       {/* 原生隐藏式音频播放节点 */}

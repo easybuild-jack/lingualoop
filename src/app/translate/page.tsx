@@ -8,6 +8,7 @@ import { TranslateGroupList } from '@/components/translate/TranslateGroupList'
 import { TranslateCard } from '@/components/translate/TranslateCard'
 import { SentenceGrammarModal } from '@/components/translate/SentenceGrammarModal'
 import { TranslateImportModal } from '@/components/translate/TranslateImportModal'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { useTranslateStore } from '@/store/useTranslateStore'
 import { audioEngine } from '@/core/audioEngine'
 import { isCloudSignedIn, subscribeCloudMode } from '@/core/cloud/config'
@@ -41,9 +42,13 @@ export default function TranslatePage() {
   // 当前激活的 Tab：'list' (句库列表页，默认) | 'practice' (翻译练习页)
   const [activeTab, setActiveTab] = useState<'list' | 'practice'>('list')
 
-  // 场景与搜索检索状态
+  // 场景、归属、分页与搜索检索状态
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedScenario, setSelectedScenario] = useState<string>('all')
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'personal' | 'shared'>('all')
+  const [listPage, setListPage] = useState(1)
+  const [bookToDelete, setBookToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [isDeletingBook, setIsDeletingBook] = useState(false)
 
   const {
     books,
@@ -80,7 +85,17 @@ export default function TranslatePage() {
     return books.reduce((sum, b) => sum + (b.sentences?.length || 0), 0)
   }, [books])
 
-  // 所有可用场景列表 (固定与听力场景分类一致 + 自动提取已有场景)
+  const cloudActive = useSyncExternalStore(subscribeCloudMode, isCloudSignedIn, () => false)
+
+  // 统一归一化场景名（兼容历史别名）
+  const normalizeScenario = useCallback((raw?: string) => {
+    const sc = raw || '日常生活'
+    if (sc === '机场出行') return '旅游出行'
+    if (sc === '工作实战' || sc === '工作沟通') return '工作常用'
+    return sc
+  }, [])
+
+  // 所有可用场景列表 (固定与听力场景分类一致 + 工作常用 + 自动提取已有场景)
   const availableScenarios = useMemo(() => {
     const defaultOrder = [
       '官方示例',
@@ -90,37 +105,77 @@ export default function TranslatePage() {
       '旅游出行',
       '餐饮美食',
       '购物消费',
+      '工作常用',
     ]
     const set = new Set<string>(defaultOrder)
     books.forEach((b) => {
       if (b.scenario && b.scenario !== '影视原声' && b.scenario !== '播客访谈') {
-        const normalized = b.scenario === '机场出行' ? '旅游出行' : b.scenario
-        set.add(normalized)
+        set.add(normalizeScenario(b.scenario))
       }
     })
     return Array.from(set)
-  }, [books])
+  }, [books, normalizeScenario])
 
-  // 各场景下的分组数量
+  // 过滤掉不属于翻译列表的场景
+  const visibleBooks = useMemo(() => {
+    return books.filter((b) => {
+      const sc = normalizeScenario(b.scenario)
+      return sc !== '影视原声' && sc !== '播客访谈'
+    })
+  }, [books, normalizeScenario])
+
+  // 判断句库归属分类（全部 / 个人 / 共享）
+  const matchesScope = useCallback(
+    (book: (typeof books)[number], scope: 'all' | 'personal' | 'shared') => {
+      if (scope === 'all') return true
+      if (scope === 'personal') return Boolean(book.isCustom) && Boolean(book.accountId)
+      if (scope === 'shared') return Boolean(book.isCustom) && !book.accountId
+      return true
+    },
+    []
+  )
+
+  // 各场景下的分组数量（随当前归属筛选联动）
   const scenarioCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    books.forEach((b) => {
-      let sc = b.scenario || '日常生活'
-      if (sc === '机场出行') sc = '旅游出行'
-      if (sc === '影视原声' || sc === '播客访谈') return
+    visibleBooks.forEach((b) => {
+      if (cloudActive && !matchesScope(b, scopeFilter)) return
+      const sc = normalizeScenario(b.scenario)
       counts[sc] = (counts[sc] || 0) + 1
     })
     return counts
-  }, [books])
+  }, [visibleBooks, cloudActive, scopeFilter, matchesScope, normalizeScenario])
 
-  // 根据当前选中的场景与搜索词筛选后的分组列表
+  // 当前场景下各归属分类数量（全部 / 个人 / 共享）
+  const scopeCounts = useMemo(() => {
+    let all = 0
+    let personal = 0
+    let shared = 0
+    visibleBooks.forEach((b) => {
+      const sc = normalizeScenario(b.scenario)
+      if (selectedScenario !== 'all' && sc !== selectedScenario) return
+      all += 1
+      if (b.isCustom) {
+        if (b.accountId) personal += 1
+        else shared += 1
+      }
+    })
+    return { all, personal, shared }
+  }, [visibleBooks, selectedScenario, normalizeScenario])
+
+  const totalScenarioCount = useMemo(() => {
+    if (!cloudActive || scopeFilter === 'all') return visibleBooks.length
+    return visibleBooks.filter((b) => matchesScope(b, scopeFilter)).length
+  }, [visibleBooks, cloudActive, scopeFilter, matchesScope])
+
+  // 根据当前选中的场景、归属与搜索词筛选后的分组列表
   const filteredBooks = useMemo(() => {
-    return books.filter((book) => {
-      let sc = book.scenario || '日常生活'
-      if (sc === '机场出行') sc = '旅游出行'
-      if (sc === '影视原声' || sc === '播客访谈') return false
-
+    return visibleBooks.filter((book) => {
+      const sc = normalizeScenario(book.scenario)
       if (selectedScenario !== 'all' && sc !== selectedScenario) {
+        return false
+      }
+      if (cloudActive && !matchesScope(book, scopeFilter)) {
         return false
       }
       if (searchQuery.trim()) {
@@ -139,7 +194,7 @@ export default function TranslatePage() {
       }
       return true
     })
-  }, [books, selectedScenario, searchQuery])
+  }, [visibleBooks, selectedScenario, cloudActive, scopeFilter, searchQuery, normalizeScenario, matchesScope])
 
   // 选择某个分组后，自动切换到翻译练习页
   const handleSelectGroup = useCallback(
@@ -150,17 +205,21 @@ export default function TranslatePage() {
     [selectBook]
   )
 
-  // 删除自定义分组
-  const handleDeleteCustomGroup = useCallback(
-    (bookId: string, name: string) => {
-      if (window.confirm(`确定删除自定义分组「${name}」吗？`)) {
-        void deleteCustomBook(bookId)
-      }
-    },
-    [deleteCustomBook]
-  )
+  // 打开删除自定义分组二次确认弹窗
+  const handleDeleteCustomGroup = useCallback((bookId: string, name: string) => {
+    setBookToDelete({ id: bookId, name })
+  }, [])
 
-  const cloudActive = useSyncExternalStore(subscribeCloudMode, isCloudSignedIn, () => false)
+  const handleConfirmDeleteGroup = useCallback(async () => {
+    if (!bookToDelete) return
+    setIsDeletingBook(true)
+    try {
+      const ok = await deleteCustomBook(bookToDelete.id)
+      if (ok) setBookToDelete(null)
+    } finally {
+      setIsDeletingBook(false)
+    }
+  }, [bookToDelete, deleteCustomBook])
 
   // 配置了数据库时，进入翻译页与切回列表页都实时从数据库拉取最新句库
   useEffect(() => {
@@ -212,7 +271,10 @@ export default function TranslatePage() {
         {/* 顶部标题、搜索与导入主入口 */}
         <TranslateHeader
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={(q) => {
+            setSearchQuery(q)
+            setListPage(1)
+          }}
           totalGroupsCount={books.length}
           totalSentencesCount={totalSentencesAllBooks}
           onOpenImport={() => setImportModalOpen(true)}
@@ -298,21 +360,62 @@ export default function TranslatePage() {
         </div>
 
         {/* Tab 1 页面内容：句库列表页 (默认展示) */}
-        <div className={activeTab === 'list' ? 'space-y-6 animate-fadeIn' : 'hidden'}>
-          {/* 场景分类页签筛选 (与听力模块分类完全一致) */}
+        <div className={activeTab === 'list' ? 'space-y-4 animate-fadeIn' : 'hidden'}>
+          {/* 场景分类页签筛选 (与听力模块分类一致 + 工作沟通) */}
           <TranslateFilters
             selectedScenario={selectedScenario}
-            onSelectScenario={setSelectedScenario}
+            onSelectScenario={(sc) => {
+              setSelectedScenario(sc)
+              setListPage(1)
+            }}
             availableScenarios={availableScenarios}
             scenarioCounts={scenarioCounts}
-            totalCount={books.length}
+            totalCount={totalScenarioCount}
           />
 
-          {/* 场景分组卡片网格列表 */}
+          {/* 归属筛选：全部 / 个人 / 共享（云模式显示） */}
+          {cloudActive && (
+            <div className="shrink-0 flex items-center gap-1 overflow-x-auto max-w-full custom-scrollbar select-none -ml-2.5">
+              {(
+                [
+                  { id: 'all', label: '全部', count: null },
+                  { id: 'personal', label: '个人', count: scopeCounts.personal },
+                  { id: 'shared', label: '共享', count: scopeCounts.shared },
+                ] as const
+              ).map((tab) => {
+                const active = scopeFilter === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setScopeFilter(tab.id)
+                      setListPage(1)
+                    }}
+                    className={`shrink-0 h-7 px-2.5 rounded-md text-[13px] transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.count !== null && (
+                      <span className="ml-1 text-[12px] font-mono opacity-60">{tab.count}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* 场景分组卡片网格列表（每页最多 30 条） */}
           <TranslateGroupList
             books={filteredBooks}
             currentBookId={currentBookId}
             completedSentenceIds={completedSentenceIds}
+            cloudMode={cloudActive}
+            page={listPage}
+            onPageChange={setListPage}
             onSelectGroup={handleSelectGroup}
             onDeleteCustomGroup={handleDeleteCustomGroup}
           />
@@ -405,6 +508,19 @@ export default function TranslatePage() {
 
       {/* 自定义上传练习语句弹窗 */}
       <TranslateImportModal />
+
+      {/* 删除自定义句库二次确认弹窗 */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(bookToDelete)}
+        title="永久删除自定义句库"
+        targetName={bookToDelete?.name ?? ''}
+        details={[
+          cloudActive ? '该句库及其包含的所有句子将从云端数据库真实删除' : '该句库及其包含的所有句子将从本机存储真实删除',
+        ]}
+        isDeleting={isDeletingBook}
+        onCancel={() => setBookToDelete(null)}
+        onConfirm={() => void handleConfirmDeleteGroup()}
+      />
     </div>
   )
 }

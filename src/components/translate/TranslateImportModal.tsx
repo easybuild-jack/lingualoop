@@ -156,6 +156,7 @@ export function TranslateImportModal() {
                 <option value="旅游出行">旅游出行</option>
                 <option value="餐饮美食">餐饮美食</option>
                 <option value="购物消费">购物消费</option>
+                <option value="工作常用">工作常用</option>
               </select>
             </div>
           </div>

@@ -1292,8 +1292,11 @@ function BooksHubContent() {
                 <h3 className="text-base font-semibold text-white">删除自定义词库</h3>
               </div>
               <p className="mt-3 text-sm text-gray-300 leading-relaxed">
-                确定要删除「<span className="text-white font-medium">{bookToDelete.name}</span>」吗？
+                确定要永久删除「<span className="text-white font-medium">{bookToDelete.name}</span>」吗？
               </p>
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-red-300 leading-relaxed">
+                此操作将真实删除数据，删除后数据不可恢复，请谨慎操作。
+              </div>
               <ul className="mt-3 space-y-1 text-[14px] text-muted-foreground leading-relaxed list-disc pl-5">
                 <li>
                   其中的 <span className="font-mono text-foreground">{bookToDelete.totalWords}</span> 个单词将被永久清除
