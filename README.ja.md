@@ -6,7 +6,7 @@
 
 **最初の発音記号から、最初のリアルな English 会話まで。**
 
-*ローカル利用・マルチデバイス同期・チーム共有に柔軟対応する、オープンソースで完全自由なパーソナル英語学習アシスタント。*
+*ローカル利用・マルチデバイス同期・家族共有に柔軟対応する、ソースコード公開型のパーソナル英語学習アシスタント。個人の非商用利用は無料です。*
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./README.zh-HK.md) · [繁體中文（台灣）](./README.zh-TW.md) · 日本語
 
@@ -18,10 +18,6 @@
 [![GitHub Stars](https://img.shields.io/github/stars/easybuild-jack/lingualoop?style=flat&color=f59e0b)](https://github.com/easybuild-jack/lingualoop/stargazers)
 
 [ライブデモ](https://www.lingualoop.com.cn) · [アーキテクチャ (ZH)](./docs/architecture.md) · [開発者ガイド (ZH)](./docs/development.md) · [SEO ガイド (ZH)](./docs/seo.md)
-
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop プレビュー" width="840" />
 
 </div>
 
@@ -35,9 +31,9 @@
 
 > **基礎固め → 大量インプット → 能動アウトプット** —— 学んだ単語や構文が「わかる・話せる・読める・書ける」まで途切れなく繋がります。
 
-| 5 技能 | 12 モジュール | 50,000+ オフライン語彙 | 100% オープンソース |
+| 5 技能 | 12 モジュール | 50,000+ オフライン語彙 | ソースコード公開 |
 | :---: | :---: | :---: | :---: |
-| 聴く・話す・読む・書く・訳す | すべてが繋がる学習ループ | 内蔵辞書で瞬時に検索 | 自由にカスタマイズ＆自己ホスト |
+| 聴く・話す・読む・書く・訳す | すべてが繋がる学習ループ | 内蔵辞書で瞬時に検索 | 個人利用・セルフホスト無料 |
 
 ---
 
@@ -68,7 +64,7 @@
 
 ---
 
-## 🌐 用途に合わせて完全に自由
+## 🌐 用途に合わせて柔軟に
 
 | モード | 特徴 |
 | --- | --- |
@@ -144,7 +140,18 @@ npm run lint      # ESLint チェック
 
 ## 🤝 フィードバック・Issues
 
-**Fork** してのカスタマイズやセルフホスティングを歓迎します。バグ報告や機能提案は [Issues](https://github.com/easybuild-jack/lingualoop/issues) よりお知らせください。
+[ライセンス](#-ライセンス)の範囲内で、個人・家族利用のための **Fork**、カスタマイズ、セルフホスティングを歓迎します。バグ報告や機能提案は [Issues](https://github.com/easybuild-jack/lingualoop/issues) よりお知らせください。
+
+---
+
+## 📄 ライセンス
+
+LinguaLoop は **OSI の定義する「オープンソース」ではなく、ソースコード公開型（source-available）のプロジェクト**です。ソースコードは [PolyForm Noncommercial License 1.0.0](./LICENSE)（SPDX：`PolyForm-Noncommercial-1.0.0`）のもとで公開されています。
+
+- ✅ **利用可能**：個人での学習、および個人・家族による非商用目的のセルフホスティング。
+- 💼 **作者の事前の書面許諾が必要**：企業での利用、営利の教育・研修機関での利用、有料の製品・サービスへの組み込み、再販売、ホスティングサービスや有料サービスとしての LinguaLoop の提供。
+- 📜 正式な条件は [LICENSE](./LICENSE) ファイルをご確認ください。本概要と LICENSE が異なる場合は LICENSE が優先されます。
+- 📮 **商用ライセンス**：[Issues](https://github.com/easybuild-jack/lingualoop/issues) にて「Commercial License Inquiry」というタイトルの Issue を作成し、作者にお問い合わせください。
 
 ---
 

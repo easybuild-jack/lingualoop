@@ -40,11 +40,11 @@ AI 口语陪练是全局悬浮窗，没有独立路由，因此不单独建页�
 
 ## 技术要点
 
-- **集中配置**：`src/lib/seo.ts` 定义域名、品牌、首页标题/描述、关键词、OG 图、各路由元数据、sitemap 条目和 JSON-LD。新增页面时在 `SEO_ROUTES` 里加一项，并在该路由加 `layout.tsx` 调用 `buildPageMetadata('/路由')`。
+- **集中配置**：`src/lib/seo.ts` 定义域名、品牌、首页标题/描述、关键词、各路由元数据、sitemap 条目和 JSON-LD。新增页面时在 `SEO_ROUTES` 里加一项，并在该路由加 `layout.tsx` 调用 `buildPageMetadata('/路由')`。
 - **域名**：`NEXT_PUBLIC_SITE_URL` 覆盖规范域名，默认 `https://www.lingualoop.com.cn`。这是构建期变量，修改后需重新构建。
-- **根 layout**（`src/app/layout.tsx`）：`metadataBase`、`title.default` + `title.template`、`description`、`keywords`、`canonical`、Open Graph（`zh_CN`）、Twitter `summary_large_image`、`robots`，保留原有 PWA manifest 与图标。
+- **根 layout**（`src/app/layout.tsx`）：`metadataBase`、`title.default` + `title.template`、`description`、`keywords`、`canonical`、Open Graph（`zh_CN`）、Twitter `summary`、`robots`，保留原有 PWA manifest 与图标。
 - **模块页**：学习模块多是 client 组件，元数据写在各路由的 `layout.tsx`（只透传 children），页面本身不改。子级的 `openGraph` / `twitter` 会整体覆盖父级，`canonical` 会被继承，所以 `buildPageMetadata` 每页都给出完整的 canonical、OG 和 Twitter 字段。
-- **OG 图**：`public/og-image.png`，1200×630。
+- **OG 图**：暂不提供自定义 OG / Twitter 分享图，元数据中不含 `images` 字段。
 - **结构化数据**：首页输出 `WebSite` + `SoftwareApplication`（`@graph`），`alternateName` 包含林瓜鲁普及别名。
 - **robots.txt**（`src/app/robots.ts`）：对所有爬虫（含 Baiduspider）`Allow: /`，只禁止 `/api/`、`/login`、`/errors`，并声明 sitemap。
 - **sitemap.xml**（`src/app/sitemap.ts`）：首页与全部可收录的模块页，不含 noindex 页面。

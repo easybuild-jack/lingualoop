@@ -6,7 +6,7 @@
 
 **From your first phonetic symbol to your first real English conversation.**
 
-*An open-source, highly flexible, and completely free personal English learning assistant — supporting offline local use, cross-device sync, and team sharing.*
+*A source-available, highly flexible personal English learning assistant — supporting offline local use, cross-device sync, and family sharing. Free for personal, noncommercial use.*
 
 English · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./README.zh-HK.md) · [繁體中文（台灣）](./README.zh-TW.md) · [日本語](./README.ja.md)
 
@@ -18,10 +18,6 @@ English · [简体中文](./README.zh-CN.md) · [繁體中文（香港）](./REA
 [![GitHub Stars](https://img.shields.io/github/stars/easybuild-jack/lingualoop?style=flat&color=f59e0b)](https://github.com/easybuild-jack/lingualoop/stargazers)
 
 [Live Demo](https://www.lingualoop.com.cn) · [Architecture (ZH)](./docs/architecture.md) · [Developer Guide (ZH)](./docs/development.md) · [SEO Guide (ZH)](./docs/seo.md)
-
-<br />
-
-<img src="./public/og-image.png" alt="LinguaLoop Preview" width="840" />
 
 </div>
 
@@ -35,9 +31,9 @@ Most English apps split learning into disconnected fragments — one app for fla
 
 > **Build the Foundation → Immerse in Input → Activate Output** — so you can truly **understand, speak, read, and write**.
 
-| 5 Core Skills | 12 Learning Modules | 50,000+ Offline Entries | 100% Open Source |
+| 5 Core Skills | 12 Learning Modules | 50,000+ Offline Entries | Source Available |
 | :---: | :---: | :---: | :---: |
-| Listening · Speaking · Reading · Writing · Translation | End-to-end connected loop | Built-in local dictionary | Free to customize & self-host |
+| Listening · Speaking · Reading · Writing · Translation | End-to-end connected loop | Built-in local dictionary | Free for personal use & self-hosting |
 
 ---
 
@@ -68,7 +64,7 @@ Most English apps split learning into disconnected fragments — one app for fla
 
 ---
 
-## 🌐 Built for Total Freedom
+## 🌐 Flexible by Design
 
 | Mode | What You Get |
 | --- | --- |
@@ -144,7 +140,18 @@ npm run lint      # Run ESLint
 
 ## 🤝 Feedback & Issues
 
-You are welcome to **Fork** and customize LinguaLoop for personal, family, or team use. For bug reports or feature suggestions, please open an [Issue](https://github.com/easybuild-jack/lingualoop/issues).
+You are welcome to **Fork**, customize, and self-host LinguaLoop for personal or family use under the [license](#-license). For bug reports or feature suggestions, please open an [Issue](https://github.com/easybuild-jack/lingualoop/issues).
+
+---
+
+## 📄 License
+
+LinguaLoop is **source-available, not open source** in the OSI sense. The source code is publicly available under the [PolyForm Noncommercial License 1.0.0](./LICENSE) (SPDX: `PolyForm-Noncommercial-1.0.0`).
+
+- ✅ **Allowed**: personal learning, and self-hosted use by yourself or your family, with no commercial purpose.
+- 💼 **Requires prior written authorization from the author**: use by companies, commercial training institutions, use in paid products or services, resale, or offering LinguaLoop as a hosted or paid service.
+- 📜 The full terms are in the [LICENSE](./LICENSE) file; if this summary and the LICENSE ever differ, the LICENSE prevails.
+- 📮 **Commercial licensing**: please open an [Issue](https://github.com/easybuild-jack/lingualoop/issues) titled "Commercial License Inquiry" to contact the author.
 
 ---
 
