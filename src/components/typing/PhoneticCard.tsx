@@ -6,6 +6,7 @@ import type { WordItem } from '@/types'
 import { listPhonetics } from '@/lib/wordDisplay'
 import { formatShortcutDisplay, DEFAULT_SHORTCUTS } from '@/lib/shortcuts'
 import { WordCardShell } from '@/components/typing/WordCardShell'
+import { PracticeProgress } from '@/components/typing/PracticeProgress'
 import { InlineIpaKeyboard } from '@/components/typing/InlineIpaKeyboard'
 import { WORD_HEADER_BUTTON_CLASS, WordMeaning } from '@/components/word/WordDisplay'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore'
@@ -16,6 +17,7 @@ interface PhoneticCardProps {
   word: WordItem
   phoneticPreference: 'us' | 'uk'
   remainingLoops?: number
+  isReady?: boolean
 }
 
 function cleanPhoneticDisplay(raw?: string): string {
@@ -36,6 +38,7 @@ export function PhoneticCard({
   word: sourceWord,
   phoneticPreference,
   remainingLoops = 1,
+  isReady = true,
 }: PhoneticCardProps) {
   const word = useEnsureAiWordSections(sourceWord, ['core'])
   const isCoreReady = isAiWordCoreReady(word)
@@ -71,6 +74,7 @@ export function PhoneticCard({
       phoneticPreference={phoneticPreference}
       remainingLoops={remainingLoops}
       className="pt-10 xl:pt-12 pb-3"
+      headerLeft={<PracticeProgress isReady={isReady} />}
       headerActions={
         <button
           type="button"

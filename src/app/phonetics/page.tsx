@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import { HeaderToolbar } from '@/components/layout/HeaderToolbar'
 import { PhoneticStage } from '@/components/typing/PhoneticStage'
-import { PracticeFooter } from '@/components/typing/PracticeFooter'
 import { useWorkspaceStore, ensureWorkspaceHydrated } from '@/store/useWorkspaceStore'
 
 export default function PhoneticsPage() {
@@ -62,8 +61,6 @@ export default function PhoneticsPage() {
       <div className="flex-1 flex items-center justify-center relative w-full px-4 py-2 my-auto shrink-0">
         <PhoneticStage isReady={isReady} />
       </div>
-
-      <PracticeFooter showPeekHint isReady={isReady} />
     </div>
   )
 }
