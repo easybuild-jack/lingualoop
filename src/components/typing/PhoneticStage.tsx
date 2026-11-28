@@ -134,6 +134,7 @@ export function PhoneticStage({ isReady = true }: PhoneticStageProps) {
               word={currentWord}
               phoneticPreference={phoneticPreference}
               remainingLoops={currentWordRemainingLoops}
+              isReady={isReady}
             />
           )}
         </PracticeStageFrame>
